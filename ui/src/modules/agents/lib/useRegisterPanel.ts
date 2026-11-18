@@ -14,6 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { pendingAgentsCountKey } from '@/shared/hooks';
 import { useAgentStreamOptional } from '@/shared/lib';
 import {
+	approveInputId,
 	useAgents,
 	type AgentEntity,
 	type useApproveAgent,
@@ -105,7 +106,7 @@ export function useRegisterPanel({ open, active, approve, deny }: RegisterPanelO
 	// Approve reads as in flight until the roster itself says active.
 	const approving =
 		agent != null &&
-		approve.variables === agent.id &&
+		approveInputId(approve.variables) === agent.id &&
 		(approve.isPending || (approve.isSuccess && agent.status === 'pending'));
 
 	return {

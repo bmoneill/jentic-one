@@ -1955,6 +1955,40 @@ describe('AgentsPage — flat agents surface', () => {
 		expect(buttons[0]).toHaveAccessibleDescription(copy.textContent!);
 	});
 
+	it('approves from the panel with no expiry unless a duration is chosen', async () => {
+		const user = userEvent.setup();
+		const bodies: unknown[] = [];
+		worker.use(
+			http.post('*/agents/:id\\:approve', async ({ request }) => {
+				const text = await request.text();
+				bodies.push(text ? JSON.parse(text) : null);
+				return HttpResponse.json({
+					id: 'agnt_pending_2',
+					name: 'release-notes-bot',
+					registered_by: 'self',
+					status: 'active',
+					created_at: '2026-10-01T10:00:00Z',
+				});
+			}),
+		);
+		renderPage('/?agent=agnt_pending_2');
+		const banner = await screen.findByTestId('agent-state-banner-pending');
+		const preset = within(banner).getByTestId('approve-expiry-duration-preset');
+		// Nothing is chosen up front: there is no default expiry.
+		expect(preset).toHaveValue('');
+
+		await user.selectOptions(preset, '7d');
+		expect(within(banner).getByTestId('approve-expiry-duration-hint')).toHaveTextContent(
+			/the agent stops working around/,
+		);
+		await user.click(within(banner).getByRole('button', { name: 'Approve' }));
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		const { expires_at } = bodies[0] as { expires_at: string };
+		const days = (new Date(expires_at).getTime() - Date.now()) / 86_400_000;
+		expect(days).toBeGreaterThan(6.9);
+		expect(days).toBeLessThanOrEqual(7);
+	});
+
 	it('keeps the deny dialog open and toasts when the panel deny fails', async () => {
 		const user = userEvent.setup();
 		worker.use(createErrorHandler('post', '/agents/:id\\:deny', { status: 500 }));

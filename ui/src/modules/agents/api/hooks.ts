@@ -720,10 +720,25 @@ export function useAgentApiKeyHistory(id: string | null) {
 // Agents — lifecycle mutations
 // ---------------------------------------------------------------------------
 
+/**
+ * What approving takes: the agent's id, or the id with when the approved agent
+ * stops working (`expiresAt`, ISO 8601).
+ */
+export type ApproveAgentInput = string | { id: string; expiresAt?: string };
+
+/** The agent id an approve call is for, whichever form it was given in. */
+export function approveInputId(input: ApproveAgentInput | undefined): string | null {
+	if (input === undefined) return null;
+	return typeof input === 'string' ? input : input.id;
+}
+
 export function useApproveAgent() {
 	const qc = useQueryClient();
 	return useMutation({
-		mutationFn: (id: string) => approveAgent(id),
+		mutationFn: (input: ApproveAgentInput) =>
+			typeof input === 'string'
+				? approveAgent(input)
+				: approveAgent(input.id, { expiresAt: input.expiresAt }),
 		onSuccess: (agent) => {
 			qc.invalidateQueries({ queryKey: agentsKeys.lists() });
 			// Approving removes the agent from the pending pool the

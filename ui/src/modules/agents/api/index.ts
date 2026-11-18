@@ -27,6 +27,7 @@ export {
 	useAgentApiKeyInfo,
 	useAgentApiKeyHistory,
 	useApproveAgent,
+	approveInputId,
 	useDenyAgent,
 	useDisableAgent,
 	useSetAgentServing,
@@ -56,6 +57,7 @@ export type {
 	BindingRuleSummary,
 	BindingRulesState,
 	AgentBindingEffectiveRules,
+	ApproveAgentInput,
 } from '@/modules/agents/api/hooks';
 
 export {
