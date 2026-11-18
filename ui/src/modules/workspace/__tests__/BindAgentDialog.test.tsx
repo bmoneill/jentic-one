@@ -218,6 +218,7 @@ describe('BindAgentDialog — what the agent may call', () => {
 		).toEqual([
 			expect.stringMatching(/^Allow all operations/),
 			expect.stringMatching(/^Read-only \(GET only\)/),
+			expect.stringMatching(/^Ask every time/),
 			expect.stringMatching(/^Custom rules/),
 		]);
 		expect(screen.getByTestId('bind-agent-rules')).toContainElement(group);

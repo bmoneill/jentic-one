@@ -24,6 +24,10 @@ describe('rulesForPreset', () => {
 		expect(rulesForPreset('read', [])).toEqual([{ effect: 'allow', methods: ['GET'] }]);
 	});
 
+	it('Ask every time is one match-all regex require-approval rule — never condition-less', () => {
+		expect(rulesForPreset('ask', [])).toEqual([{ effect: 'require-approval', path: '.*' }]);
+	});
+
 	it('Custom saves the rules as written, in order, cleaned of empty conditions', () => {
 		const deny: PermissionRule = {
 			effect: 'deny',
@@ -53,9 +57,10 @@ describe('rulesForPreset', () => {
 describe('presetOptions / coverageNote', () => {
 	it('Allow all says how far the credential reaches; the others do not change', () => {
 		for (const reach of ['pinned', 'any-version', 'vendor-wide'] as const) {
-			const [all, read, custom] = presetOptions(reach);
+			const [all, read, ask, custom] = presetOptions(reach);
 			expect(all).toMatchObject({ value: 'all', description: ALLOW_ALL_DESCRIPTION[reach] });
 			expect(read).toMatchObject({ value: 'read', label: 'Read-only (GET only)' });
+			expect(ask).toMatchObject({ value: 'ask', label: 'Ask every time' });
 			expect(custom).toMatchObject({ value: 'custom', label: 'Custom rules' });
 		}
 	});
