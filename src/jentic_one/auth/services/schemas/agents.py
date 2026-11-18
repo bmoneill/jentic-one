@@ -45,6 +45,15 @@ class AgentCreatePayload(BaseModel):
     expires_at: datetime | None = None
 
 
+class ApiLastUseView(BaseModel):
+    """When an agent last called one API through a bound credential."""
+
+    api_vendor: str
+    # None when the recorded calls carried no API name.
+    api_name: str | None = None
+    last_used_at: datetime
+
+
 class CredentialBindingView(BaseModel):
     """Read-model for a direct agent↔credential binding (theme 5 phase 1)."""
 
@@ -70,3 +79,9 @@ class CredentialBindingView(BaseModel):
     # The API the bound credential serves (control DB) — the credential-side
     # analogue of the toolkit `serves` list (issue #686).
     serves: list[ServedApiRef] = []
+    # Latest recorded execution by this agent through this credential (admin
+    # ``execution_records``); None when it has never been used.
+    last_used_at: datetime | None = None
+    # The same, per API the agent called through the credential (most recent
+    # first). A vendor-wide binding fans out to one entry per API used.
+    last_used_by_api: list[ApiLastUseView] = []
