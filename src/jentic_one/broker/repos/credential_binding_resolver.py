@@ -13,6 +13,9 @@ Python rather than via a cross-schema JOIN.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from datetime import UTC, datetime
+
 from sqlalchemy import bindparam, text
 
 from jentic_one.shared.broker.protocols import (
@@ -88,6 +91,10 @@ _SUSPENDED_COVERING = text(
 ).bindparams(bindparam("credential_ids", expanding=True))
 
 
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
 def _axes_matched(scope: CredentialScope, *, vendor: str, name: str, version: str) -> int:
     """How many of the operation's axes this scope matches (near-miss ranking).
 
@@ -110,9 +117,19 @@ class CredentialBindingResolver:
     Implements ``CredentialDeriverProtocol``.
     """
 
-    def __init__(self, admin_db: DatabaseSession, control_db: DatabaseSession) -> None:
+    def __init__(
+        self,
+        admin_db: DatabaseSession,
+        control_db: DatabaseSession,
+        *,
+        clock: Callable[[], datetime] = _utc_now,
+    ) -> None:
         self._admin_db = admin_db
         self._control_db = control_db
+        # Wall-clock source for binding-expiry comparisons (injectable for
+        # tests). Nothing sets an expiry yet, so no derivation carries a
+        # ``valid_until``; the read-time check will compare against this clock.
+        self._clock = clock
 
     async def derive_credentials(
         self, *, agent_id: str, vendor: str, name: str, version: str
