@@ -136,6 +136,7 @@ func (CredentialAgentResponse) RequiredFields() []string {
 func (CredentialBindRequest) RequiredFields() []string         { return []string{"credential_id"} }
 func (CredentialBindingEntry) RequiredFields() []string        { return []string{"bound_at", "credential_id"} }
 func (CredentialBindingListResponse) RequiredFields() []string { return []string{"data"} }
+func (CredentialBindingPatchRequest) RequiredFields() []string { return []string{"expires_at"} }
 func (CredentialBindingResponse) RequiredFields() []string {
 	return []string{"agent_id", "bound_at", "credential_id", "id", "suspended"}
 }

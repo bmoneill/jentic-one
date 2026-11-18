@@ -778,6 +778,24 @@ def test_renew_missing_binding_is_404(
     assert resp.json()["type"] == "credential_binding_not_found"
 
 
+def test_renew_without_expires_at_is_422_and_keeps_the_expiry(
+    admin_client: TestClient, binding_agent_id: str, control_credential_id: str
+) -> None:
+    """Leaving ``expires_at`` out is refused, never read as "clear the expiry"."""
+    url = f"/agents/{binding_agent_id}/credentials"
+    expires = datetime.now(UTC) + timedelta(days=1)
+    resp = admin_client.post(
+        url, json={"credential_id": control_credential_id, "expires_at": expires.isoformat()}
+    )
+    assert resp.status_code == 201
+
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={})
+    assert resp.status_code == 422
+
+    (binding,) = admin_client.get(url).json()["data"]
+    assert datetime.fromisoformat(binding["expires_at"]) == expires
+
+
 def test_renew_does_not_resume_a_suspended_binding(
     admin_client: TestClient, binding_agent_id: str, control_credential_id: str
 ) -> None:

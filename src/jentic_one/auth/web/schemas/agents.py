@@ -417,11 +417,18 @@ class ApiKeyHistoryResponse(BaseModel):
 
 
 class CredentialBindingPatchRequest(BaseModel):
-    """Request body for renewing a credential binding: set, move or clear its expiry."""
+    """Request body for renewing a credential binding: set, move or clear its expiry.
+
+    `expires_at` is required but nullable: a body without it is a 422, never read
+    as clearing the expiry.
+    """
 
     expires_at: datetime | None = Field(
-        default=None,
-        description=_BINDING_EXPIRES_AT_DESCRIPTION + " Send null to clear the expiry.",
+        ...,
+        description=(
+            _BINDING_EXPIRES_AT_DESCRIPTION
+            + " Required: send null to clear the expiry; a body without it is a 422."
+        ),
         examples=[_EX_EXPIRES_AT],
     )
 

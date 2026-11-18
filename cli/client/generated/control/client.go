@@ -3982,12 +3982,15 @@ type CredentialBindingListResponse struct {
 
 // CredentialBindingPatchRequest Request body for renewing a credential binding: set, move or clear its expiry.
 //
+// `expires_at` is required but nullable: a body without it is a 422, never read
+// as clearing the expiry.
+//
 // Examples: {"expires_at":"2026-12-31T23:59:00Z"}
 type CredentialBindingPatchRequest struct {
-	// ExpiresAt When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the expiry.
+	// ExpiresAt When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Required: send null to clear the expiry; a body without it is a 422.
 	//
 	// Examples: 2026-12-31T23:59:00Z
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	ExpiresAt *time.Time `json:"expires_at"`
 }
 
 // CredentialBindingResponse Direct agent↔credential binding representation in API responses.

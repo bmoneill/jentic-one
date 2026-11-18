@@ -493,6 +493,9 @@ export class AgentsService {
         credentialId: string,
         /**
          * Request body for renewing a credential binding: set, move or clear its expiry.
+         *
+         * `expires_at` is required but nullable: a body without it is a 422, never read
+         * as clearing the expiry.
          */
         requestBody: CredentialBindingPatchRequest,
     }): CancelablePromise<CredentialBindingResponse> {

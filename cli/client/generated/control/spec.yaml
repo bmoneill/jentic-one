@@ -4220,19 +4220,25 @@ components:
       - data
       type: object
     CredentialBindingPatchRequest:
-      description: 'Request body for renewing a credential binding: set, move or clear its expiry.'
+      description: |-
+        Request body for renewing a credential binding: set, move or clear its expiry.
+
+        `expires_at` is required but nullable: a body without it is a 422, never read
+        as clearing the expiry.
       examples:
       - &id274
         expires_at: '2026-12-31T23:59:00Z'
       properties:
         expires_at:
-          description: When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the expiry.
+          description: 'When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent''s calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Required: send null to clear the expiry; a body without it is a 422.'
           examples:
           - '2026-12-31T23:59:00Z'
           format: date-time
           type:
           - string
           - 'null'
+      required:
+      - expires_at
       type: object
     CredentialBindingResponse:
       description: Direct agent↔credential binding representation in API responses.
@@ -16007,7 +16013,11 @@ paths:
             example: *id274
             schema:
               $ref: '#/components/schemas/CredentialBindingPatchRequest'
-        description: 'Request body for renewing a credential binding: set, move or clear its expiry.'
+        description: |-
+          Request body for renewing a credential binding: set, move or clear its expiry.
+
+          `expires_at` is required but nullable: a body without it is a 422, never read
+          as clearing the expiry.
         required: true
       responses:
         '200':
