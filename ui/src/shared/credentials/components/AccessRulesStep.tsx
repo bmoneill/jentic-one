@@ -1,6 +1,6 @@
 /**
  * AccessRulesStep — "What can this agent call?": the access presets (Allow all
- * operations · Read-only (GET only) · Custom rules) as a radio group, the
+ * operations · Read-only (GET only) · Ask every time · Custom rules) as a radio group, the
  * coverage caveat for a credential that reaches beyond one pinned API, and the
  * shared rules editor under Custom. Optionally, an inline "Try a request" that
  * dry-runs the rules as they stand — unsaved — with the broker's semantics.
@@ -52,6 +52,7 @@ export interface AccessRulesStepProps {
 const PRESET_MATCH: Record<Exclude<RulesPreset, 'custom'>, string> = {
 	all: '— allowed by “Allow all operations”',
 	read: '— allowed by “Read-only (GET only)”',
+	ask: '— held for approval by “Ask every time”',
 };
 
 export function AccessRulesStep({
@@ -88,7 +89,9 @@ export function AccessRulesStep({
 		[preset, customRules],
 	);
 	const describeMatch =
-		preset === 'all' || preset === 'read' ? () => PRESET_MATCH[preset] : undefined;
+		preset === 'all' || preset === 'read' || preset === 'ask'
+			? () => PRESET_MATCH[preset]
+			: undefined;
 
 	return (
 		<div className="space-y-2" data-testid={`${testIdPrefix}-rules`}>

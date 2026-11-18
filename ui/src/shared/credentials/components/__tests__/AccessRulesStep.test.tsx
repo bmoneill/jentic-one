@@ -55,7 +55,7 @@ describe('AccessRulesStep', () => {
 		const group = screen.getByRole('radiogroup', { name: 'What can this agent call?' });
 		const radios = within(group).getAllByRole('radio');
 		for (const radio of radios) expect(radio).not.toBeChecked();
-		expect(radios).toHaveLength(3);
+		expect(radios).toHaveLength(4);
 		expect(screen.queryByRole('button', { name: 'Add rule' })).toBeNull();
 
 		await user.click(within(group).getByRole('radio', { name: /Custom rules/ }));
@@ -96,6 +96,12 @@ describe('AccessRulesStep', () => {
 		);
 		// Announced politely for screen-reader users as it changes.
 		expect(within(tester).getByRole('status')).toHaveTextContent('POST /items: denied');
+		await user.click(screen.getByRole('radio', { name: /Ask every time/ }));
+		await waitFor(() =>
+			expect(within(tester).getByTestId('rule-verdict')).toHaveTextContent(
+				'POST /items — held for approval by “Ask every time”',
+			),
+		);
 	});
 
 	it('passes an accessibility audit with the editor and tester open', async () => {

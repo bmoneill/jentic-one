@@ -326,6 +326,7 @@ export const QUEUE_RULES_NOTICE =
 export const QUEUE_ACCESS_LABELS: Record<QueueAccess, string> = {
 	all: 'Allow all',
 	read: 'Read-only',
+	ask: 'Ask every time',
 	custom: 'Custom rules',
 	later: 'Blocked · no rules',
 };

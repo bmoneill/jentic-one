@@ -6,6 +6,7 @@
  */
 import {
 	allowAllRule,
+	askAllRule,
 	cleanPermissionRule,
 	isEmptyAllowRule,
 	type PermissionRuleInput,
@@ -14,7 +15,7 @@ import type { PermissionRule } from '@/shared/credentials/api/vendors-types';
 import type { apiScopeReach } from '@/shared/credentials/lib/apiIdentity';
 
 /** The access choice; `null` until one is made. */
-export type RulesPreset = 'all' | 'read' | 'custom';
+export type RulesPreset = 'all' | 'read' | 'ask' | 'custom';
 
 /** How far a credential's scope reaches — what "Allow all" spans. */
 export type ScopeReach = ReturnType<typeof apiScopeReach>;
@@ -45,6 +46,12 @@ const PRESET_REST: PresetOption[] = [
 		value: 'read',
 		label: 'Read-only (GET only)',
 		description: 'GET requests only — nothing that changes data.',
+	},
+	{
+		value: 'ask',
+		label: 'Ask every time',
+		description:
+			'Every call waits for a person to approve it before it runs — nothing goes through on its own.',
 	},
 	{
 		value: 'custom',
@@ -101,6 +108,7 @@ export function rulesForPreset(
 ): PermissionRuleInput[] | null {
 	if (preset === 'all') return [cleanPermissionRule(allowAllRule())];
 	if (preset === 'read') return [cleanPermissionRule(readOnlyRule())];
+	if (preset === 'ask') return [cleanPermissionRule(askAllRule())];
 	if (preset === 'custom') {
 		const wire = customRules.map(toWireRule);
 		return wire.length > 0 && !wire.some(isEmptyAllowRule) ? wire : null;
