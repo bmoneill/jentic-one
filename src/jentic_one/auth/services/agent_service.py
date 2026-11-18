@@ -906,12 +906,19 @@ class AgentService:
             return await self._view(session, agent)
 
     async def bind_credential(
-        self, agent_id: str, *, credential_id: str, identity: Identity
+        self,
+        agent_id: str,
+        *,
+        credential_id: str,
+        identity: Identity,
+        expires_at: datetime | None = None,
     ) -> CredentialBindingView:
         """Create a direct agent↔credential binding.
 
         Verifies the caller can see the target credential before writing the
-        binding (control-DB lookup).
+        binding (control-DB lookup). ``expires_at`` (already validated as a
+        future time by the web layer) ends the binding then; ``None`` never
+        expires.
         """
         agent = await self._load_binding_agent(agent_id, identity=identity)
         ref = None
@@ -923,7 +930,11 @@ class AgentService:
         async with self._ctx.admin_db.transaction() as session:
             try:
                 binding = await AgentCredentialBindingRepository.bind(
-                    session, agent_id=agent_id, credential_id=credential_id, created_by=identity.sub
+                    session,
+                    agent_id=agent_id,
+                    credential_id=credential_id,
+                    created_by=identity.sub,
+                    expires_at=expires_at,
                 )
             except IntegrityError:
                 raise CredentialBindingConflictError(agent_id, credential_id) from None
@@ -1117,6 +1128,84 @@ class AgentService:
             )
         self._ctx.invalidate_broker_caches(agent_id=agent_id, credential_id=credential_id)
         view = CredentialBindingView.model_validate(binding)
+        async with self._ctx.admin_db.session() as session:
+            last_uses = await ExecutionRecordRepository.last_used_by_api(
+                session, actor_id=agent_id, credential_ids=[credential_id]
+            )
+        _apply_last_use(view, last_uses)
+        return view
+
+    async def renew_credential(
+        self,
+        agent_id: str,
+        *,
+        credential_id: str,
+        expires_at: datetime | None,
+        identity: Identity,
+    ) -> CredentialBindingView:
+        """Set, move or clear a binding's fixed expiry (``None`` clears it).
+
+        Renewing re-grants the credential, so it takes exactly the checks of
+        :meth:`resume_credential`: the agent check, the credential-ownership
+        check, and an agent can never renew its own binding. It never touches
+        ``suspended``. Audited with before/after, and broker caches are
+        invalidated so the new policy applies on the next call.
+        """
+        agent = await self._load_binding_agent(agent_id, identity=identity)
+        if self._is_own_binding(agent_id, identity):
+            raise CredentialNotVisibleError(credential_id)
+        ref = None
+        if self._ctx.is_db_allowed("control"):
+            async with self._ctx.control_db.session() as session:
+                ref = await CredentialRefRepository.get_by_id(session, credential_id)
+        if ref is None or not self._can_bind_credential(identity, ref.created_by):
+            raise CredentialNotVisibleError(credential_id)
+        async with self._ctx.admin_db.transaction() as session:
+            before = await AgentCredentialBindingRepository.get(
+                session, agent_id=agent_id, credential_id=credential_id
+            )
+            if before is None:
+                raise CredentialBindingNotFoundError(agent_id, credential_id)
+            before_expiry = _audit_value(before.expires_at)
+            await AgentCredentialBindingRepository.set_expires_at(
+                session, agent_id=agent_id, credential_id=credential_id, expires_at=expires_at
+            )
+            await session.refresh(before)
+            binding = before
+            await record_audit(
+                session,
+                action=AuditAction.UPDATE,
+                target_type=AuditTargetType.CREDENTIAL_BINDING,
+                target_id=credential_id,
+                actor_type=identity.actor_type,
+                actor_id=identity.sub,
+                target_parent_id=agent_id,
+                before={"expires_at": before_expiry},
+                after={"expires_at": _audit_value(binding.expires_at)},
+                reason="renew_credential_binding",
+                origin=identity.origin.value,
+            )
+            await emit_event_best_effort(
+                session,
+                type=EventType.CREDENTIAL_BOUND_TO_AGENT,
+                severity=EventSeverity.INFO,
+                summary=(
+                    f"Credential {summary_label(ref.name, credential_id)} binding renewed for "
+                    f"agent {summary_label(agent.name, agent_id)}"
+                ),
+                data={"agent_id": agent_id, "credential_id": credential_id},
+                created_by=agent_id,
+                actor_id=identity.sub,
+                actor_type=identity.actor_type.value,
+            )
+        self._ctx.invalidate_broker_caches(agent_id=agent_id, credential_id=credential_id)
+        view = CredentialBindingView.model_validate(binding)
+        view.name = ref.name
+        view.serves = [
+            ServedApiRef(
+                api_vendor=ref.api_vendor, api_name=ref.api_name, api_version=ref.api_version
+            )
+        ]
         async with self._ctx.admin_db.session() as session:
             last_uses = await ExecutionRecordRepository.last_used_by_api(
                 session, actor_id=agent_id, credential_ids=[credential_id]

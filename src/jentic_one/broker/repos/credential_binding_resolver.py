@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import bindparam, text
 
+from jentic_one.shared.auth.agent_expiry import as_utc
 from jentic_one.shared.broker.protocols import (
     BoundCredential,
     CredentialDerivation,
@@ -32,12 +33,14 @@ from jentic_one.shared.models.api_identity import (
     slugify_api_field,
 )
 
-# admin DB — every direct binding the agent holds, with its suspension flag.
-# Suspended bindings never authorize an execution (suspension is the
-# reversible per-consumer cut-off); they are read in the same round-trip only
-# so a denial can tell a suspended binding from a missing one.
+# admin DB — every direct binding the agent holds, with its suspension flag and
+# fixed expiry. Suspended bindings never authorize an execution (suspension is
+# the reversible per-consumer cut-off), nor do bindings whose ``expires_at`` has
+# passed; both are read in the same round-trip only so a denial can tell them
+# from a missing binding. The expiry is compared in Python against the
+# injectable clock, never in SQL.
 _AGENT_CREDENTIALS = text(
-    "SELECT credential_id, rule_set_id, suspended FROM agent_credential_bindings "
+    "SELECT credential_id, rule_set_id, suspended, expires_at FROM agent_credential_bindings "
     "WHERE agent_id = :agent_id"
 )
 
@@ -127,8 +130,7 @@ class CredentialBindingResolver:
         self._admin_db = admin_db
         self._control_db = control_db
         # Wall-clock source for binding-expiry comparisons (injectable for
-        # tests). Nothing sets an expiry yet, so no derivation carries a
-        # ``valid_until``; the read-time check will compare against this clock.
+        # tests): a binding is expired when ``expires_at <= clock()``.
         self._clock = clock
 
     async def derive_credentials(
@@ -146,8 +148,22 @@ class CredentialBindingResolver:
         """
         async with self._admin_db.session() as session:
             binding_rows = (await session.execute(_AGENT_CREDENTIALS, {"agent_id": agent_id})).all()
-        rule_sets: dict[str, str | None] = {row[0]: row[1] for row in binding_rows if not row[2]}
-        suspended_ids = {row[0] for row in binding_rows if row[2]}
+        now = self._clock()
+        rule_sets: dict[str, str | None] = {}
+        expiries: dict[str, datetime] = {}
+        expired_ids: set[str] = set()
+        suspended_ids: set[str] = set()
+        for credential_id, rule_set_id, suspended, expires_at in binding_rows:
+            if suspended:
+                suspended_ids.add(credential_id)
+                continue
+            expiry = as_utc(expires_at) if expires_at is not None else None
+            if expiry is not None and expiry <= now:
+                expired_ids.add(credential_id)
+                continue
+            rule_sets[credential_id] = rule_set_id
+            if expiry is not None:
+                expiries[credential_id] = expiry
 
         async with self._control_db.session() as session:
             covering_rows = (
@@ -183,6 +199,15 @@ class CredentialBindingResolver:
                 suspended_ids, vendor=vendor, name=name, version=version
             )
 
+        # Likewise an expired binding covering the API: only a renewal helps,
+        # and a new connect would route around the expiry. Suspension is
+        # reported first by the caller.
+        binding_expired = False
+        if not candidates and expired_ids:
+            binding_expired = await self._suspended_covers(
+                expired_ids, vendor=vendor, name=name, version=version
+            )
+
         binding_pending = False
         if not candidates and rule_sets:
             binding_pending = await self._pending_covers(
@@ -196,6 +221,13 @@ class CredentialBindingResolver:
             identity_mismatch=mismatch,
             binding_suspended=binding_suspended,
             binding_pending=binding_pending,
+            binding_expired=binding_expired,
+            # The earliest moment a candidate binding lapses: a cache must not
+            # serve this derivation at or after it.
+            valid_until=min(
+                (expiries[c.credential_id] for c in candidates if c.credential_id in expiries),
+                default=None,
+            ),
         )
 
     async def _pending_covers(

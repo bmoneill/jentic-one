@@ -87,6 +87,7 @@ export type { CredentialAgentListResponse } from './models/CredentialAgentListRe
 export type { CredentialAgentResponse } from './models/CredentialAgentResponse';
 export type { CredentialBindingEntry } from './models/CredentialBindingEntry';
 export type { CredentialBindingListResponse } from './models/CredentialBindingListResponse';
+export type { CredentialBindingPatchRequest } from './models/CredentialBindingPatchRequest';
 export type { CredentialBindingResponse } from './models/CredentialBindingResponse';
 export type { CredentialBindRequest } from './models/CredentialBindRequest';
 export type { CredentialCreateResponse } from './models/CredentialCreateResponse';

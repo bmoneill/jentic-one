@@ -73,6 +73,9 @@ class CredentialBindingView(BaseModel):
     # Why the binding is suspended: None for a manual suspension,
     # ``api_deleted`` when the API its credential serves was deleted.
     suspended_reason: str | None = None
+    # When the binding stops authorizing calls; None never expires. Independent
+    # of ``suspended``.
+    expires_at: datetime | None = None
     # Shared permission rule set the binding points at (control DB, Q-04).
     # None means the binding's inline rules apply.
     rule_set_id: str | None = None
@@ -85,3 +88,8 @@ class CredentialBindingView(BaseModel):
     # The same, per API the agent called through the credential (most recent
     # first). A vendor-wide binding fans out to one entry per API used.
     last_used_by_api: list[ApiLastUseView] = []
+
+    @property
+    def expired(self) -> bool:
+        """Whether ``expires_at`` has passed."""
+        return agent_expired(self.expires_at)

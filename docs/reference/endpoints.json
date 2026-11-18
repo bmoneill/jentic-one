@@ -593,6 +593,30 @@
           "agents:read"
         ]
       },
+      "method": "PATCH",
+      "operation_id": "renewAgentCredentialBinding",
+      "path": "/agents/{agent_id}/credentials/{credential_id}",
+      "public": false,
+      "required_permissions": [
+        "agents:write"
+      ],
+      "summary": "Renew a credential binding",
+      "surface": "agents",
+      "typical_caller": "operator"
+    },
+    {
+      "actor_types": [
+        "user",
+        "agent"
+      ],
+      "auth_note": null,
+      "authenticated": true,
+      "group": "Operator-facing (typically a human operator / admin)",
+      "implied_permissions": {
+        "agents:write": [
+          "agents:read"
+        ]
+      },
       "method": "POST",
       "operation_id": "resumeAgentCredentialBinding",
       "path": "/agents/{agent_id}/credentials/{credential_id}:resume",
@@ -4908,5 +4932,5 @@
     "total": 27
   },
   "schema": "jentic.endpoint-permission-tree/v1",
-  "total": 176
+  "total": 177
 }

@@ -28,7 +28,7 @@ Every API endpoint grouped by its **typical caller**, then by surface, annotated
 
 > The grouping and the _Typical caller_ column are an **advisory hint** at who usually calls a route, inferred from the permission family. They are **not** an enforced restriction: access is gated by the **permission**, not the actor kind, so any actor holding the required permission can call the endpoint.
 
-_Total endpoints: **176**._
+_Total endpoints: **177**._
 
 
 ## Agent-facing (typically an agent) (32)
@@ -111,7 +111,7 @@ _Total endpoints: **176**._
 | GET | `/vendors` | `capabilities:read` | agent | List verified vendors |
 | GET | `/vendors/{vendor_key}/auth-capabilities` | `capabilities:read` | agent | Get a vendor's OAuth flows and scopes |
 
-## Operator-facing (typically a human operator / admin) (45)
+## Operator-facing (typically a human operator / admin) (46)
 
 
 ### `actors`
@@ -132,6 +132,7 @@ _Total endpoints: **176**._
 | GET | `/agents/{agent_id}/api-key/history` | `agents:read` | operator | Get an agent's API key history |
 | POST | `/agents/{agent_id}/credentials` | `agents:write` | operator | Bind a credential to an agent |
 | DELETE | `/agents/{agent_id}/credentials/{credential_id}` | `agents:write` | operator | Suspend or remove a credential binding |
+| PATCH | `/agents/{agent_id}/credentials/{credential_id}` | `agents:write` | operator | Renew a credential binding |
 | POST | `/agents/{agent_id}/credentials/{credential_id}:resume` | `agents:write` | operator | Resume a suspended credential binding |
 | PUT | `/agents/{agent_id}/jwks` | `agents:write` | operator | Replace an agent's JWKS |
 | GET | `/agents/{agent_id}/permissions` | `agents:read` | operator | List an agent's permissions |

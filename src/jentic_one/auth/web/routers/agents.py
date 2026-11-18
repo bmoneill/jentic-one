@@ -29,6 +29,7 @@ from jentic_one.auth.web.schemas.agents import (
     ApiLastUseResponse,
     ClaimRequest,
     CredentialBindingListResponse,
+    CredentialBindingPatchRequest,
     CredentialBindingResponse,
     CredentialBindRequest,
     DenyRequest,
@@ -438,6 +439,8 @@ def _credential_binding_response(view: CredentialBindingView) -> CredentialBindi
         bound_at=view.bound_at,
         suspended=view.suspended,
         suspended_reason=view.suspended_reason,
+        expires_at=view.expires_at,
+        expired=view.expired,
         rule_set_id=view.rule_set_id,
         serves=view.serves,
         last_used_at=view.last_used_at,
@@ -511,11 +514,56 @@ async def bind_credential(
     must be able to see the agent and must own the credential (or hold
     `org:admin`). A credential that does not exist or that the caller does
     not own returns 404; binding the same credential twice returns 409
-    (`credential_binding_conflict`).
-    Returns the new binding.
+    (`credential_binding_conflict`). An optional `expires_at` (future only,
+    otherwise 422) ends the binding at that time; omit it for a binding that
+    never expires. Returns the new binding.
     """
     binding = await agent_svc.bind_credential(
-        agent_id, credential_id=body.credential_id, identity=identity
+        agent_id,
+        credential_id=body.credential_id,
+        expires_at=body.expires_at,
+        identity=identity,
+    )
+    return _credential_binding_response(binding)
+
+
+@router.patch(
+    "/agents/{agent_id}/credentials/{credential_id}",
+    status_code=200,
+    operation_id="renewAgentCredentialBinding",
+    summary="Renew a credential binding",
+    responses=with_responses(
+        not_found(
+            "No binding exists (`credential_binding_not_found`), the agent is not "
+            "visible to the caller (`actor_not_found`), or the credential is not "
+            "owned by the caller — including an agent renewing its own binding "
+            "(`credential_not_found`)"
+        )
+    ),
+)
+async def renew_credential_binding(
+    agent_id: AgentIdPath,
+    credential_id: CredentialIdPath,
+    body: CredentialBindingPatchRequest,
+    identity: Identity = get_current_identity(required_permissions=["agents:write"]),
+    agent_svc: AgentService = Depends(get_agent_service),
+) -> CredentialBindingResponse:
+    """Set, extend or clear when a binding stops authorizing calls.
+
+    `expires_at` (future only, otherwise 422) sets or moves the end date; null
+    clears it, so the binding never expires. This is how an expired binding is
+    renewed, and it never changes `suspended`: renewing does not resume a
+    suspension, and resuming does not extend an expiry. Renewing re-grants the
+    credential, so it takes the same checks as `:resume`: the caller must own
+    the credential (or hold `org:admin`) as well as see the agent, and an agent
+    cannot renew its own binding. Audited; broker caches are invalidated, so
+    the change takes effect at once. Returns the binding.
+    """
+    binding = await agent_svc.renew_credential(
+        agent_id,
+        credential_id=credential_id,
+        expires_at=body.expires_at,
+        identity=identity,
     )
     return _credential_binding_response(binding)
 

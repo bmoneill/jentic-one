@@ -6834,7 +6834,8 @@
         "description": "Request body for directly binding a credential to an agent.",
         "examples": [
           {
-            "credential_id": "cred_6968b39855d91a3561684b32"
+            "credential_id": "cred_6968b39855d91a3561684b32",
+            "expires_at": "2026-12-31T23:59:00Z"
           }
         ],
         "properties": {
@@ -6846,6 +6847,21 @@
             "maxLength": 255,
             "minLength": 1,
             "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Omit for a binding that never expires.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
+            ]
           }
         },
         "required": [
@@ -6859,6 +6875,8 @@
           {
             "bound_at": "2026-01-15T09:30:00Z",
             "credential_id": "cred_6968b39855d91a3561684b32",
+            "expired": false,
+            "expires_at": "2026-12-31T23:59:00Z",
             "name": "Stripe production key",
             "rule_set_id": "prs_6968b3987c22b63e87e79f05",
             "serves": [
@@ -6888,6 +6906,29 @@
               "cred_6968b39855d91a3561684b32"
             ],
             "type": "string"
+          },
+          "expired": {
+            "default": false,
+            "description": "Whether `expires_at` has passed; the agent cannot execute through an expired binding until its operator renews it.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the binding stops authorizing calls (RFC 3339); null if it never expires.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
+            ]
           },
           "name": {
             "anyOf": [
@@ -6986,6 +7027,8 @@
                 "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
                 "bound_at": "2026-01-15T09:30:00Z",
                 "credential_id": "cred_6968b39855d91a3561684b32",
+                "expired": false,
+                "expires_at": "2026-12-31T23:59:00Z",
                 "id": "acb_6968b3989a4f1c2e7d3b5a60",
                 "last_used_at": "2026-02-03T14:05:00Z",
                 "last_used_by_api": [
@@ -7019,6 +7062,8 @@
                   "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
                   "bound_at": "2026-01-15T09:30:00Z",
                   "credential_id": "cred_6968b39855d91a3561684b32",
+                  "expired": false,
+                  "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "last_used_by_api": [
@@ -7053,6 +7098,32 @@
         ],
         "type": "object"
       },
+      "CredentialBindingPatchRequest": {
+        "description": "Request body for renewing a credential binding: set, move or clear its expiry.",
+        "examples": [
+          {
+            "expires_at": "2026-12-31T23:59:00Z"
+          }
+        ],
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the expiry.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "CredentialBindingResponse": {
         "description": "Direct agent↔credential binding representation in API responses.",
         "examples": [
@@ -7060,6 +7131,8 @@
             "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
             "bound_at": "2026-01-15T09:30:00Z",
             "credential_id": "cred_6968b39855d91a3561684b32",
+            "expired": false,
+            "expires_at": "2026-12-31T23:59:00Z",
             "id": "acb_6968b3989a4f1c2e7d3b5a60",
             "last_used_at": "2026-02-03T14:05:00Z",
             "last_used_by_api": [
@@ -7104,6 +7177,29 @@
               "cred_6968b39855d91a3561684b32"
             ],
             "type": "string"
+          },
+          "expired": {
+            "default": false,
+            "description": "Whether `expires_at` has passed.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the binding stops authorizing calls (RFC 3339); null if it never expires.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
+            ]
           },
           "id": {
             "description": "Unique ID of the binding.",
@@ -12600,6 +12696,8 @@
               {
                 "bound_at": "2026-01-15T09:30:00Z",
                 "credential_id": "cred_6968b39855d91a3561684b32",
+                "expired": false,
+                "expires_at": "2026-12-31T23:59:00Z",
                 "name": "Stripe production key",
                 "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                 "serves": [
@@ -12652,6 +12750,8 @@
                 {
                   "bound_at": "2026-01-15T09:30:00Z",
                   "credential_id": "cred_6968b39855d91a3561684b32",
+                  "expired": false,
+                  "expires_at": "2026-12-31T23:59:00Z",
                   "name": "Stripe production key",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "serves": [
@@ -26590,6 +26690,8 @@
                       "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
                       "bound_at": "2026-01-15T09:30:00Z",
                       "credential_id": "cred_6968b39855d91a3561684b32",
+                      "expired": false,
+                      "expires_at": "2026-12-31T23:59:00Z",
                       "id": "acb_6968b3989a4f1c2e7d3b5a60",
                       "last_used_at": "2026-02-03T14:05:00Z",
                       "last_used_by_api": [
@@ -26670,7 +26772,7 @@
         ]
       },
       "post": {
-        "description": "Let an agent use a credential by binding it directly.\n\nA new binding starts with no permission rules, so the agent can make no\ncalls with it until rules are set or a rule set is attached. The caller\nmust be able to see the agent and must own the credential (or hold\n`org:admin`). A credential that does not exist or that the caller does\nnot own returns 404; binding the same credential twice returns 409\n(`credential_binding_conflict`).\nReturns the new binding.",
+        "description": "Let an agent use a credential by binding it directly.\n\nA new binding starts with no permission rules, so the agent can make no\ncalls with it until rules are set or a rule set is attached. The caller\nmust be able to see the agent and must own the credential (or hold\n`org:admin`). A credential that does not exist or that the caller does\nnot own returns 404; binding the same credential twice returns 409\n(`credential_binding_conflict`). An optional `expires_at` (future only,\notherwise 422) ends the binding at that time; omit it for a binding that\nnever expires. Returns the new binding.",
         "operationId": "bindAgentCredential",
         "parameters": [
           {
@@ -26698,7 +26800,8 @@
           "content": {
             "application/json": {
               "example": {
-                "credential_id": "cred_6968b39855d91a3561684b32"
+                "credential_id": "cred_6968b39855d91a3561684b32",
+                "expires_at": "2026-12-31T23:59:00Z"
               },
               "schema": {
                 "$ref": "#/components/schemas/CredentialBindRequest"
@@ -26716,6 +26819,8 @@
                   "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
                   "bound_at": "2026-01-15T09:30:00Z",
                   "credential_id": "cred_6968b39855d91a3561684b32",
+                  "expired": false,
+                  "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "last_used_by_api": [
@@ -26932,8 +27037,154 @@
           "Agents"
         ]
       },
-      "description": "`DELETE`: Suspend or remove a credential binding.",
-      "summary": "Suspend or remove a credential binding"
+      "description": "`PATCH`: Renew a credential binding. `DELETE`: Suspend or remove a credential binding.",
+      "patch": {
+        "description": "Set, extend or clear when a binding stops authorizing calls.\n\n`expires_at` (future only, otherwise 422) sets or moves the end date; null\nclears it, so the binding never expires. This is how an expired binding is\nrenewed, and it never changes `suspended`: renewing does not resume a\nsuspension, and resuming does not extend an expiry. Renewing re-grants the\ncredential, so it takes the same checks as `:resume`: the caller must own\nthe credential (or hold `org:admin`) as well as see the agent, and an agent\ncannot renew its own binding. Audited; broker caches are invalidated, so\nthe change takes effect at once. Returns the binding.",
+        "operationId": "renewAgentCredentialBinding",
+        "parameters": [
+          {
+            "description": "ID of the agent.",
+            "examples": {
+              "example": {
+                "summary": "Agent ID",
+                "value": "agnt_6968b3984d1c238dbe7e2e29"
+              }
+            },
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "description": "ID of the agent.",
+              "examples": [
+                "agnt_6968b3984d1c238dbe7e2e29"
+              ],
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "ID of the credential bound to the agent.",
+            "examples": {
+              "example": {
+                "summary": "Credential ID",
+                "value": "cred_6968b39855d91a3561684b32"
+              }
+            },
+            "in": "path",
+            "name": "credential_id",
+            "required": true,
+            "schema": {
+              "description": "ID of the credential bound to the agent.",
+              "examples": [
+                "cred_6968b39855d91a3561684b32"
+              ],
+              "title": "Credential Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "example": {
+                "expires_at": "2026-12-31T23:59:00Z"
+              },
+              "schema": {
+                "$ref": "#/components/schemas/CredentialBindingPatchRequest"
+              }
+            }
+          },
+          "description": "Request body for renewing a credential binding: set, move or clear its expiry.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
+                  "bound_at": "2026-01-15T09:30:00Z",
+                  "credential_id": "cred_6968b39855d91a3561684b32",
+                  "expired": false,
+                  "expires_at": "2026-12-31T23:59:00Z",
+                  "id": "acb_6968b3989a4f1c2e7d3b5a60",
+                  "last_used_at": "2026-02-03T14:05:00Z",
+                  "last_used_by_api": [
+                    {
+                      "api_name": "github",
+                      "api_vendor": "github.com",
+                      "last_used_at": "2026-02-03T14:05:00Z"
+                    }
+                  ],
+                  "name": "Stripe production key",
+                  "rule_set_id": "prs_6968b3987c22b63e87e79f05",
+                  "serves": [
+                    {
+                      "api_name": "stripe",
+                      "api_vendor": "stripe.com",
+                      "api_version": "2024-04-10"
+                    }
+                  ],
+                  "suspended": false,
+                  "suspended_reason": "api_deleted"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialBindingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "example": {
+                  "detail": "The requested resource does not exist or is not visible to you.",
+                  "instance": "/example/path",
+                  "status": 404,
+                  "title": "Not Found",
+                  "type": "not_found"
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "No binding exists (`credential_binding_not_found`), the agent is not visible to the caller (`actor_not_found`), or the credential is not owned by the caller — including an agent renewing its own binding (`credential_not_found`)"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "OAuth2": []
+          }
+        ],
+        "summary": "Renew a credential binding",
+        "tags": [
+          "Agents"
+        ]
+      },
+      "summary": "Renew a credential binding; Suspend or remove a credential binding"
     },
     "/agents/{agent_id}/credentials/{credential_id}:resume": {
       "description": "`POST`: Resume a suspended credential binding.",
@@ -26990,6 +27241,8 @@
                   "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
                   "bound_at": "2026-01-15T09:30:00Z",
                   "credential_id": "cred_6968b39855d91a3561684b32",
+                  "expired": false,
+                  "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "last_used_by_api": [

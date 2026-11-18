@@ -25,6 +25,7 @@ import structlog
 from jentic_one.broker.core.denial import DenialReason
 from jentic_one.broker.core.directives import (
     AgentDirective,
+    credential_binding_expired_directive,
     credential_binding_suspended_directive,
     credential_pending_directive,
     direct_action_denied_directive,
@@ -35,6 +36,7 @@ from jentic_one.broker.core.directives import (
 from jentic_one.broker.core.errors import (
     ActionDeniedError,
     BrokerError,
+    CredentialBindingExpiredError,
     CredentialBindingSuspendedError,
     CredentialIdentityMismatchError,
     CredentialPendingError,
@@ -182,6 +184,29 @@ def _suspended_binding_denial(api: APIReference, *, instance: str) -> BrokerErro
     )
 
 
+def _expired_binding_denial(api: APIReference, *, instance: str) -> BrokerError:
+    """The denial for an agent whose only binding covering the API has expired.
+
+    Like the suspended case, its recovery is the operator's alone (a renewal),
+    so the directive carries no connect suggestion.
+    """
+    _authz_denied.add(
+        1,
+        {
+            "reason": DenialReason.CREDENTIAL_BINDING_EXPIRED.value,
+            "mode": "direct",
+            "vendor": api.vendor,
+        },
+    )
+    return CredentialBindingExpiredError(
+        "The credential binding for this API has expired",
+        instance=instance,
+        directive=credential_binding_expired_directive(
+            vendor=api.vendor, name=api.name, version=api.version
+        ),
+    )
+
+
 def _pending_credential_denial(
     api: APIReference, *, instance: str, provisioning_url: str | None
 ) -> BrokerError:
@@ -291,6 +316,8 @@ async def derive_credential_bindings(
     if not derivation.credentials:
         if derivation.binding_suspended:
             raise _suspended_binding_denial(api, instance=instance)
+        if derivation.binding_expired:
+            raise _expired_binding_denial(api, instance=instance)
         if derivation.binding_pending:
             raise _pending_credential_denial(
                 api,

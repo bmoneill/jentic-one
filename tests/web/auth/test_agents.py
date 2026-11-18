@@ -7,6 +7,7 @@ import hashlib
 import json
 from collections.abc import AsyncGenerator, Iterator
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -714,6 +715,116 @@ def test_agent_cannot_resume_its_own_suspended_binding(
     resp = owner_client.post(f"{url}/{control_credential_id}:resume")
     assert resp.status_code == 200
     assert resp.json()["suspended"] is False
+
+
+def _binding_row(client: TestClient, agent_id: str, credential_id: str) -> dict[str, Any]:
+    rows = client.get(f"/agents/{agent_id}/credentials").json()["data"]
+    return next(b for b in rows if b["credential_id"] == credential_id)
+
+
+def test_bind_with_expiry_and_renew_binding(
+    admin_client: TestClient, binding_agent_id: str, control_credential_id: str
+) -> None:
+    """A binding takes a future expiry at creation; PATCH moves and clears it."""
+    url = f"/agents/{binding_agent_id}/credentials"
+    first = (datetime.now(UTC) + timedelta(days=1)).replace(microsecond=0)
+    resp = admin_client.post(
+        url, json={"credential_id": control_credential_id, "expires_at": first.isoformat()}
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["expired"] is False
+    assert datetime.fromisoformat(body["expires_at"]) == first
+
+    later = (datetime.now(UTC) + timedelta(days=30)).replace(microsecond=0)
+    resp = admin_client.patch(
+        f"{url}/{control_credential_id}", json={"expires_at": later.isoformat()}
+    )
+    assert resp.status_code == 200
+    assert datetime.fromisoformat(resp.json()["expires_at"]) == later
+    row = _binding_row(admin_client, binding_agent_id, control_credential_id)
+    assert datetime.fromisoformat(row["expires_at"]) == later
+
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={"expires_at": None})
+    assert resp.status_code == 200
+    assert resp.json()["expires_at"] is None
+    assert resp.json()["expired"] is False
+
+
+def test_binding_expiry_must_be_in_the_future(
+    admin_client: TestClient, binding_agent_id: str, control_credential_id: str
+) -> None:
+    url = f"/agents/{binding_agent_id}/credentials"
+    past = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
+    resp = admin_client.post(url, json={"credential_id": control_credential_id, "expires_at": past})
+    assert resp.status_code == 422
+    assert admin_client.get(url).json()["data"] == []
+
+    assert admin_client.post(url, json={"credential_id": control_credential_id}).status_code == 201
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={"expires_at": past})
+    assert resp.status_code == 422
+    assert _binding_row(admin_client, binding_agent_id, control_credential_id)["expires_at"] is None
+
+
+def test_renew_missing_binding_is_404(
+    admin_client: TestClient, binding_agent_id: str, control_credential_id: str
+) -> None:
+    future = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    resp = admin_client.patch(
+        f"/agents/{binding_agent_id}/credentials/{control_credential_id}",
+        json={"expires_at": future},
+    )
+    assert resp.status_code == 404
+    assert resp.json()["type"] == "credential_binding_not_found"
+
+
+def test_renew_does_not_resume_a_suspended_binding(
+    admin_client: TestClient, binding_agent_id: str, control_credential_id: str
+) -> None:
+    url = f"/agents/{binding_agent_id}/credentials"
+    assert admin_client.post(url, json={"credential_id": control_credential_id}).status_code == 201
+    assert admin_client.delete(f"{url}/{control_credential_id}").status_code == 204
+    future = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={"expires_at": future})
+    assert resp.status_code == 200
+    assert resp.json()["suspended"] is True
+
+
+def test_agent_cannot_renew_its_own_binding(
+    owner_client: TestClient,
+    self_agent_client: TestClient,
+    binding_agent_id: str,
+    control_credential_id: str,
+) -> None:
+    """Renewal is re-certification: the agent cannot extend its own binding (404)."""
+    url = f"/agents/{binding_agent_id}/credentials"
+    soon = (datetime.now(UTC) + timedelta(hours=1)).replace(microsecond=0)
+    assert (
+        owner_client.post(
+            url, json={"credential_id": control_credential_id, "expires_at": soon.isoformat()}
+        ).status_code
+        == 201
+    )
+    later = (datetime.now(UTC) + timedelta(days=90)).isoformat()
+    resp = self_agent_client.patch(f"{url}/{control_credential_id}", json={"expires_at": later})
+    assert resp.status_code == 404
+    assert resp.json()["type"] == "credential_not_found"
+    row = _binding_row(owner_client, binding_agent_id, control_credential_id)
+    assert datetime.fromisoformat(row["expires_at"]) == soon
+
+
+def test_owner_without_rights_on_credential_cannot_renew(
+    owner_client: TestClient,
+    admin_client: TestClient,
+    binding_agent_id: str,
+    foreign_credential_id: str,
+) -> None:
+    url = f"/agents/{binding_agent_id}/credentials"
+    assert admin_client.post(url, json={"credential_id": foreign_credential_id}).status_code == 201
+    future = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    resp = owner_client.patch(f"{url}/{foreign_credential_id}", json={"expires_at": future})
+    assert resp.status_code == 404
+    assert resp.json()["type"] == "credential_not_found"
 
 
 def test_agent_cannot_purge_its_own_binding(

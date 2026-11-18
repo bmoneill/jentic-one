@@ -293,6 +293,19 @@ class CredentialBindingSuspendedError(BrokerError):
     default_type = "credential_binding_suspended"
 
 
+class CredentialBindingExpiredError(BrokerError):
+    """The agent's binding to a credential covering this API has expired (403).
+
+    Shaped like :class:`CredentialBindingSuspendedError`: only the operator can
+    restore access (renew the binding), and the directive never suggests a new
+    connect, which is refused while the expired binding stands. Distinct from
+    ``action_denied`` (no rule change brings it back) and from suspension
+    (resuming would not help).
+    """
+
+    default_type = "credential_binding_expired"
+
+
 class CredentialPendingError(BrokerError):
     """A bound credential is waiting for its connect flow to finish (403).
 

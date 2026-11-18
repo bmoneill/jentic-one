@@ -16,6 +16,14 @@ export type CredentialBindingEntry = {
      */
     credential_id: string;
     /**
+     * Whether `expires_at` has passed; the agent cannot execute through an expired binding until its operator renews it.
+     */
+    expired?: boolean;
+    /**
+     * When the binding stops authorizing calls (RFC 3339); null if it never expires.
+     */
+    expires_at?: (string | null);
+    /**
      * Name of the bound credential; null if it no longer exists or cannot be resolved.
      */
     name?: (string | null);

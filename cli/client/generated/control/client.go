@@ -3902,17 +3902,22 @@ type CredentialAgentResponse struct {
 
 // CredentialBindRequest Request body for directly binding a credential to an agent.
 //
-// Examples: {"credential_id":"cred_6968b39855d91a3561684b32"}
+// Examples: {"credential_id":"cred_6968b39855d91a3561684b32","expires_at":"2026-12-31T23:59:00Z"}
 type CredentialBindRequest struct {
 	// CredentialId ID of the credential to bind to the agent.
 	//
 	// Examples: cred_6968b39855d91a3561684b32
 	CredentialId string `json:"credential_id"`
+
+	// ExpiresAt When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Omit for a binding that never expires.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // CredentialBindingEntry Direct agent↔credential binding summary for the /me response (theme 5 phase 1).
 //
-// Examples: {"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}
+// Examples: {"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expires_at":"2026-12-31T23:59:00Z","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}
 type CredentialBindingEntry struct {
 	// BoundAt When the credential was bound (RFC 3339).
 	//
@@ -3923,6 +3928,16 @@ type CredentialBindingEntry struct {
 	//
 	// Examples: cred_6968b39855d91a3561684b32
 	CredentialId string `json:"credential_id"`
+
+	// Expired Whether `expires_at` has passed; the agent cannot execute through an expired binding until its operator renews it.
+	//
+	// Examples: false
+	Expired *bool `json:"expired,omitempty"`
+
+	// ExpiresAt When the binding stops authorizing calls (RFC 3339); null if it never expires.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// Name Name of the bound credential; null if it no longer exists or cannot be resolved.
 	//
@@ -3957,17 +3972,27 @@ type CredentialBindingEntry struct {
 
 // CredentialBindingListResponse List of direct credential bindings.
 //
-// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]}
+// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]}
 type CredentialBindingListResponse struct {
 	// Data The agent's direct credential bindings.
 	//
-	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]
+	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]
 	Data []CredentialBindingResponse `json:"data"`
+}
+
+// CredentialBindingPatchRequest Request body for renewing a credential binding: set, move or clear its expiry.
+//
+// Examples: {"expires_at":"2026-12-31T23:59:00Z"}
+type CredentialBindingPatchRequest struct {
+	// ExpiresAt When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the expiry.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 // CredentialBindingResponse Direct agent↔credential binding representation in API responses.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}
 type CredentialBindingResponse struct {
 	// AgentId ID of the agent the credential is bound to.
 	//
@@ -3983,6 +4008,16 @@ type CredentialBindingResponse struct {
 	//
 	// Examples: cred_6968b39855d91a3561684b32
 	CredentialId string `json:"credential_id"`
+
+	// Expired Whether `expires_at` has passed.
+	//
+	// Examples: false
+	Expired *bool `json:"expired,omitempty"`
+
+	// ExpiresAt When the binding stops authorizing calls (RFC 3339); null if it never expires.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// Id Unique ID of the binding.
 	//
@@ -5914,7 +5949,7 @@ type McpConfigRuntime string
 
 // MeAgent Identity response for an agent actor.
 //
-// Examples: {"approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","credential_bindings":[{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}],"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","permissions":["apis:read","capabilities:execute"],"status":"active","token_permissions":["apis:read","capabilities:execute"],"type":"agent"}
+// Examples: {"approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","credential_bindings":[{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expires_at":"2026-12-31T23:59:00Z","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}],"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","permissions":["apis:read","capabilities:execute"],"status":"active","token_permissions":["apis:read","capabilities:execute"],"type":"agent"}
 type MeAgent struct {
 	// ApprovedBy ID of the user who approved the agent; null if not approved.
 	//
@@ -5923,7 +5958,7 @@ type MeAgent struct {
 
 	// CredentialBindings Credentials bound directly to the agent.
 	//
-	// Examples: [{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}]
+	// Examples: [{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expires_at":"2026-12-31T23:59:00Z","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}]
 	CredentialBindings *[]CredentialBindingEntry `json:"credential_bindings,omitempty"`
 
 	// Id Unique ID of the agent.
@@ -10771,6 +10806,9 @@ type UpdateAgentJSONRequestBody = AgentPatchRequest
 // BindAgentCredentialJSONRequestBody defines body for BindAgentCredential for application/json ContentType.
 type BindAgentCredentialJSONRequestBody = CredentialBindRequest
 
+// RenewAgentCredentialBindingJSONRequestBody defines body for RenewAgentCredentialBinding for application/json ContentType.
+type RenewAgentCredentialBindingJSONRequestBody = CredentialBindingPatchRequest
+
 // UpdateAgentJwksJSONRequestBody defines body for UpdateAgentJwks for application/json ContentType.
 type UpdateAgentJwksJSONRequestBody = JwksUpdateRequest
 
@@ -12721,8 +12759,9 @@ type ClientInterface interface {
 	// must be able to see the agent and must own the credential (or hold
 	// `org:admin`). A credential that does not exist or that the caller does
 	// not own returns 404; binding the same credential twice returns 409
-	// (`credential_binding_conflict`).
-	// Returns the new binding.
+	// (`credential_binding_conflict`). An optional `expires_at` (future only,
+	// otherwise 422) ends the binding at that time; omit it for a binding that
+	// never expires. Returns the new binding.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -12738,8 +12777,9 @@ type ClientInterface interface {
 	// must be able to see the agent and must own the credential (or hold
 	// `org:admin`). A credential that does not exist or that the caller does
 	// not own returns 404; binding the same credential twice returns 409
-	// (`credential_binding_conflict`).
-	// Returns the new binding.
+	// (`credential_binding_conflict`). An optional `expires_at` (future only,
+	// otherwise 422) ends the binding at that time; omit it for a binding that
+	// never expires. Returns the new binding.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -12760,6 +12800,42 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /agents/{agent_id}/credentials/{credential_id} (the `UnbindAgentCredential` operationId).
 	UnbindAgentCredential(ctx context.Context, agentId string, credentialId string, params *UnbindAgentCredentialParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RenewAgentCredentialBindingWithBody Renew a credential binding
+	//
+	// Set, extend or clear when a binding stops authorizing calls.
+	//
+	// `expires_at` (future only, otherwise 422) sets or moves the end date; null
+	// clears it, so the binding never expires. This is how an expired binding is
+	// renewed, and it never changes `suspended`: renewing does not resume a
+	// suspension, and resuming does not extend an expiry. Renewing re-grants the
+	// credential, so it takes the same checks as `:resume`: the caller must own
+	// the credential (or hold `org:admin`) as well as see the agent, and an agent
+	// cannot renew its own binding. Audited; broker caches are invalidated, so
+	// the change takes effect at once. Returns the binding.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /agents/{agent_id}/credentials/{credential_id} (the `RenewAgentCredentialBinding` operationId).
+	RenewAgentCredentialBindingWithBody(ctx context.Context, agentId string, credentialId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RenewAgentCredentialBinding Renew a credential binding
+	//
+	// Set, extend or clear when a binding stops authorizing calls.
+	//
+	// `expires_at` (future only, otherwise 422) sets or moves the end date; null
+	// clears it, so the binding never expires. This is how an expired binding is
+	// renewed, and it never changes `suspended`: renewing does not resume a
+	// suspension, and resuming does not extend an expiry. Renewing re-grants the
+	// credential, so it takes the same checks as `:resume`: the caller must own
+	// the credential (or hold `org:admin`) as well as see the agent, and an agent
+	// cannot renew its own binding. Audited; broker caches are invalidated, so
+	// the change takes effect at once. Returns the binding.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /agents/{agent_id}/credentials/{credential_id} (the `RenewAgentCredentialBinding` operationId).
+	RenewAgentCredentialBinding(ctx context.Context, agentId string, credentialId string, body RenewAgentCredentialBindingJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ResumeAgentCredentialBinding Resume a suspended credential binding
 	//
@@ -16099,8 +16175,9 @@ func (c *Client) ListAgentCredentials(ctx context.Context, agentId string, reqEd
 // must be able to see the agent and must own the credential (or hold
 // `org:admin`). A credential that does not exist or that the caller does
 // not own returns 404; binding the same credential twice returns 409
-// (`credential_binding_conflict`).
-// Returns the new binding.
+// (`credential_binding_conflict`). An optional `expires_at` (future only,
+// otherwise 422) ends the binding at that time; omit it for a binding that
+// never expires. Returns the new binding.
 //
 // Takes any type of body and a specified content type.
 //
@@ -16126,8 +16203,9 @@ func (c *Client) BindAgentCredentialWithBody(ctx context.Context, agentId string
 // must be able to see the agent and must own the credential (or hold
 // `org:admin`). A credential that does not exist or that the caller does
 // not own returns 404; binding the same credential twice returns 409
-// (`credential_binding_conflict`).
-// Returns the new binding.
+// (`credential_binding_conflict`). An optional `expires_at` (future only,
+// otherwise 422) ends the binding at that time; omit it for a binding that
+// never expires. Returns the new binding.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -16159,6 +16237,62 @@ func (c *Client) BindAgentCredential(ctx context.Context, agentId string, body B
 // Corresponds with DELETE /agents/{agent_id}/credentials/{credential_id} (the `UnbindAgentCredential` operationId).
 func (c *Client) UnbindAgentCredential(ctx context.Context, agentId string, credentialId string, params *UnbindAgentCredentialParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUnbindAgentCredentialRequest(c.Server, agentId, credentialId, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RenewAgentCredentialBindingWithBody Renew a credential binding
+//
+// Set, extend or clear when a binding stops authorizing calls.
+//
+// `expires_at` (future only, otherwise 422) sets or moves the end date; null
+// clears it, so the binding never expires. This is how an expired binding is
+// renewed, and it never changes `suspended`: renewing does not resume a
+// suspension, and resuming does not extend an expiry. Renewing re-grants the
+// credential, so it takes the same checks as `:resume`: the caller must own
+// the credential (or hold `org:admin`) as well as see the agent, and an agent
+// cannot renew its own binding. Audited; broker caches are invalidated, so
+// the change takes effect at once. Returns the binding.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /agents/{agent_id}/credentials/{credential_id} (the `RenewAgentCredentialBinding` operationId).
+func (c *Client) RenewAgentCredentialBindingWithBody(ctx context.Context, agentId string, credentialId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRenewAgentCredentialBindingRequestWithBody(c.Server, agentId, credentialId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RenewAgentCredentialBinding Renew a credential binding
+//
+// Set, extend or clear when a binding stops authorizing calls.
+//
+// `expires_at` (future only, otherwise 422) sets or moves the end date; null
+// clears it, so the binding never expires. This is how an expired binding is
+// renewed, and it never changes `suspended`: renewing does not resume a
+// suspension, and resuming does not extend an expiry. Renewing re-grants the
+// credential, so it takes the same checks as `:resume`: the caller must own
+// the credential (or hold `org:admin`) as well as see the agent, and an agent
+// cannot renew its own binding. Audited; broker caches are invalidated, so
+// the change takes effect at once. Returns the binding.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /agents/{agent_id}/credentials/{credential_id} (the `RenewAgentCredentialBinding` operationId).
+func (c *Client) RenewAgentCredentialBinding(ctx context.Context, agentId string, credentialId string, body RenewAgentCredentialBindingJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRenewAgentCredentialBindingRequest(c.Server, agentId, credentialId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -21944,6 +22078,60 @@ func NewUnbindAgentCredentialRequest(server string, agentId string, credentialId
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewRenewAgentCredentialBindingRequest calls the generic RenewAgentCredentialBinding builder with application/json body
+func NewRenewAgentCredentialBindingRequest(server string, agentId string, credentialId string, body RenewAgentCredentialBindingJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRenewAgentCredentialBindingRequestWithBody(server, agentId, credentialId, "application/json", bodyReader)
+}
+
+// NewRenewAgentCredentialBindingRequestWithBody constructs an http.Request for the RenewAgentCredentialBinding method, with any body, and a specified content type
+func NewRenewAgentCredentialBindingRequestWithBody(server string, agentId string, credentialId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "agent_id", agentId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "credential_id", credentialId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/%s/credentials/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -30145,8 +30333,9 @@ type ClientWithResponsesInterface interface {
 	// must be able to see the agent and must own the credential (or hold
 	// `org:admin`). A credential that does not exist or that the caller does
 	// not own returns 404; binding the same credential twice returns 409
-	// (`credential_binding_conflict`).
-	// Returns the new binding.
+	// (`credential_binding_conflict`). An optional `expires_at` (future only,
+	// otherwise 422) ends the binding at that time; omit it for a binding that
+	// never expires. Returns the new binding.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -30162,8 +30351,9 @@ type ClientWithResponsesInterface interface {
 	// must be able to see the agent and must own the credential (or hold
 	// `org:admin`). A credential that does not exist or that the caller does
 	// not own returns 404; binding the same credential twice returns 409
-	// (`credential_binding_conflict`).
-	// Returns the new binding.
+	// (`credential_binding_conflict`). An optional `expires_at` (future only,
+	// otherwise 422) ends the binding at that time; omit it for a binding that
+	// never expires. Returns the new binding.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -30186,6 +30376,42 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /agents/{agent_id}/credentials/{credential_id} (the `UnbindAgentCredential` operationId).
 	UnbindAgentCredentialWithResponse(ctx context.Context, agentId string, credentialId string, params *UnbindAgentCredentialParams, reqEditors ...RequestEditorFn) (*UnbindAgentCredentialHTTPResp, error)
+
+	// RenewAgentCredentialBindingWithBodyWithResponse Renew a credential binding
+	//
+	// Set, extend or clear when a binding stops authorizing calls.
+	//
+	// `expires_at` (future only, otherwise 422) sets or moves the end date; null
+	// clears it, so the binding never expires. This is how an expired binding is
+	// renewed, and it never changes `suspended`: renewing does not resume a
+	// suspension, and resuming does not extend an expiry. Renewing re-grants the
+	// credential, so it takes the same checks as `:resume`: the caller must own
+	// the credential (or hold `org:admin`) as well as see the agent, and an agent
+	// cannot renew its own binding. Audited; broker caches are invalidated, so
+	// the change takes effect at once. Returns the binding.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /agents/{agent_id}/credentials/{credential_id} (the `RenewAgentCredentialBinding` operationId).
+	RenewAgentCredentialBindingWithBodyWithResponse(ctx context.Context, agentId string, credentialId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RenewAgentCredentialBindingHTTPResp, error)
+
+	// RenewAgentCredentialBindingWithResponse Renew a credential binding
+	//
+	// Set, extend or clear when a binding stops authorizing calls.
+	//
+	// `expires_at` (future only, otherwise 422) sets or moves the end date; null
+	// clears it, so the binding never expires. This is how an expired binding is
+	// renewed, and it never changes `suspended`: renewing does not resume a
+	// suspension, and resuming does not extend an expiry. Renewing re-grants the
+	// credential, so it takes the same checks as `:resume`: the caller must own
+	// the credential (or hold `org:admin`) as well as see the agent, and an agent
+	// cannot renew its own binding. Audited; broker caches are invalidated, so
+	// the change takes effect at once. Returns the binding.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /agents/{agent_id}/credentials/{credential_id} (the `RenewAgentCredentialBinding` operationId).
+	RenewAgentCredentialBindingWithResponse(ctx context.Context, agentId string, credentialId string, body RenewAgentCredentialBindingJSONRequestBody, reqEditors ...RequestEditorFn) (*RenewAgentCredentialBindingHTTPResp, error)
 
 	// ResumeAgentCredentialBindingWithResponse Resume a suspended credential binding
 	//
@@ -35409,6 +35635,103 @@ func (r UnbindAgentCredentialHTTPResp) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r UnbindAgentCredentialHTTPResp) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RenewAgentCredentialBindingHTTPResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *CredentialBindingResponse
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *BadRequest
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Unauthorized
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *ProblemDetail
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *UnprocessableEntity
+	// ApplicationproblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationproblemJSON500 *InternalServerError
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *ServiceUnavailable
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *UnexpectedError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RenewAgentCredentialBindingHTTPResp) GetJSON200() *CredentialBindingResponse {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r RenewAgentCredentialBindingHTTPResp) GetApplicationproblemJSON400() *BadRequest {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r RenewAgentCredentialBindingHTTPResp) GetApplicationproblemJSON401() *Unauthorized {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r RenewAgentCredentialBindingHTTPResp) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r RenewAgentCredentialBindingHTTPResp) GetApplicationproblemJSON404() *ProblemDetail {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r RenewAgentCredentialBindingHTTPResp) GetApplicationproblemJSON422() *UnprocessableEntity {
+	return r.ApplicationproblemJSON422
+}
+
+// GetApplicationproblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r RenewAgentCredentialBindingHTTPResp) GetApplicationproblemJSON500() *InternalServerError {
+	return r.ApplicationproblemJSON500
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r RenewAgentCredentialBindingHTTPResp) GetApplicationproblemJSON503() *ServiceUnavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r RenewAgentCredentialBindingHTTPResp) GetApplicationproblemJSONDefault() *UnexpectedError {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r RenewAgentCredentialBindingHTTPResp) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RenewAgentCredentialBindingHTTPResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RenewAgentCredentialBindingHTTPResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RenewAgentCredentialBindingHTTPResp) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -49497,8 +49820,9 @@ func (c *ClientWithResponses) ListAgentCredentialsWithResponse(ctx context.Conte
 // must be able to see the agent and must own the credential (or hold
 // `org:admin`). A credential that does not exist or that the caller does
 // not own returns 404; binding the same credential twice returns 409
-// (`credential_binding_conflict`).
-// Returns the new binding.
+// (`credential_binding_conflict`). An optional `expires_at` (future only,
+// otherwise 422) ends the binding at that time; omit it for a binding that
+// never expires. Returns the new binding.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -49520,8 +49844,9 @@ func (c *ClientWithResponses) BindAgentCredentialWithBodyWithResponse(ctx contex
 // must be able to see the agent and must own the credential (or hold
 // `org:admin`). A credential that does not exist or that the caller does
 // not own returns 404; binding the same credential twice returns 409
-// (`credential_binding_conflict`).
-// Returns the new binding.
+// (`credential_binding_conflict`). An optional `expires_at` (future only,
+// otherwise 422) ends the binding at that time; omit it for a binding that
+// never expires. Returns the new binding.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -49555,6 +49880,54 @@ func (c *ClientWithResponses) UnbindAgentCredentialWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseUnbindAgentCredentialHTTPResp(rsp)
+}
+
+// RenewAgentCredentialBindingWithBodyWithResponse Renew a credential binding
+//
+// Set, extend or clear when a binding stops authorizing calls.
+//
+// `expires_at` (future only, otherwise 422) sets or moves the end date; null
+// clears it, so the binding never expires. This is how an expired binding is
+// renewed, and it never changes `suspended`: renewing does not resume a
+// suspension, and resuming does not extend an expiry. Renewing re-grants the
+// credential, so it takes the same checks as `:resume`: the caller must own
+// the credential (or hold `org:admin`) as well as see the agent, and an agent
+// cannot renew its own binding. Audited; broker caches are invalidated, so
+// the change takes effect at once. Returns the binding.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /agents/{agent_id}/credentials/{credential_id} (the `RenewAgentCredentialBinding` operationId).
+func (c *ClientWithResponses) RenewAgentCredentialBindingWithBodyWithResponse(ctx context.Context, agentId string, credentialId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RenewAgentCredentialBindingHTTPResp, error) {
+	rsp, err := c.RenewAgentCredentialBindingWithBody(ctx, agentId, credentialId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRenewAgentCredentialBindingHTTPResp(rsp)
+}
+
+// RenewAgentCredentialBindingWithResponse Renew a credential binding
+//
+// Set, extend or clear when a binding stops authorizing calls.
+//
+// `expires_at` (future only, otherwise 422) sets or moves the end date; null
+// clears it, so the binding never expires. This is how an expired binding is
+// renewed, and it never changes `suspended`: renewing does not resume a
+// suspension, and resuming does not extend an expiry. Renewing re-grants the
+// credential, so it takes the same checks as `:resume`: the caller must own
+// the credential (or hold `org:admin`) as well as see the agent, and an agent
+// cannot renew its own binding. Audited; broker caches are invalidated, so
+// the change takes effect at once. Returns the binding.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /agents/{agent_id}/credentials/{credential_id} (the `RenewAgentCredentialBinding` operationId).
+func (c *ClientWithResponses) RenewAgentCredentialBindingWithResponse(ctx context.Context, agentId string, credentialId string, body RenewAgentCredentialBindingJSONRequestBody, reqEditors ...RequestEditorFn) (*RenewAgentCredentialBindingHTTPResp, error) {
+	rsp, err := c.RenewAgentCredentialBinding(ctx, agentId, credentialId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRenewAgentCredentialBindingHTTPResp(rsp)
 }
 
 // ResumeAgentCredentialBindingWithResponse Resume a suspended credential binding
@@ -55508,6 +55881,88 @@ func ParseUnbindAgentCredentialHTTPResp(rsp *http.Response) (*UnbindAgentCredent
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ProblemDetail
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest UnexpectedError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRenewAgentCredentialBindingHTTPResp parses an HTTP response from a RenewAgentCredentialBindingWithResponse call
+func ParseRenewAgentCredentialBindingHTTPResp(rsp *http.Response) (*RenewAgentCredentialBindingHTTPResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RenewAgentCredentialBindingHTTPResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest CredentialBindingResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest BadRequest

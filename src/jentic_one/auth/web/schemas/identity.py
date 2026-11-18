@@ -60,6 +60,21 @@ class CredentialBindingEntry(BaseModel):
         ),
         examples=["api_deleted"],
     )
+    expires_at: datetime | None = Field(
+        default=None,
+        description=(
+            "When the binding stops authorizing calls (RFC 3339); null if it never expires."
+        ),
+        examples=["2026-12-31T23:59:00Z"],
+    )
+    expired: bool = Field(
+        default=False,
+        description=(
+            "Whether `expires_at` has passed; the agent cannot execute through an expired"
+            " binding until its operator renews it."
+        ),
+        examples=[False],
+    )
     # Shared permission rule set this binding points at (None = inline rules)
     # — tells the agent which policy object governs it (theme 5, Q-04).
     rule_set_id: str | None = Field(

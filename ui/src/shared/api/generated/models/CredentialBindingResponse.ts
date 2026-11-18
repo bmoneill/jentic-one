@@ -21,6 +21,14 @@ export type CredentialBindingResponse = {
      */
     credential_id: string;
     /**
+     * Whether `expires_at` has passed.
+     */
+    expired?: boolean;
+    /**
+     * When the binding stops authorizing calls (RFC 3339); null if it never expires.
+     */
+    expires_at?: (string | null);
+    /**
      * Unique ID of the binding.
      */
     id: string;

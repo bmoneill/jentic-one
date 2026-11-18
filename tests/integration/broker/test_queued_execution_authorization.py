@@ -278,6 +278,30 @@ async def test_binding_suspended_after_enqueue_is_denied(
     assert verdict.allowed_credential_ids == ()
 
 
+async def test_binding_expired_after_enqueue_is_denied(
+    integration_context: Context, clean_tables: None
+) -> None:
+    """A binding whose expiry passes between enqueue and run is refused at worker time."""
+    agent_id, credential_id = await _seed_bound_agent(integration_context)
+    async with integration_context.admin_db.session() as session:
+        await session.execute(
+            update(AgentCredentialBinding)
+            .where(AgentCredentialBinding.agent_id == agent_id)
+            .values(expires_at=datetime.now(UTC) - timedelta(seconds=1))
+        )
+        await session.commit()
+
+    verdict = await build_queued_execution_authorizer(integration_context).authorize(
+        _request(agent_id, credential_id)
+    )
+
+    assert verdict.allowed is False
+    assert verdict.problem is not None
+    assert verdict.problem["status"] == 403
+    assert verdict.problem["type"].endswith("credential_binding_expired")
+    assert verdict.allowed_credential_ids == ()
+
+
 async def test_binding_removed_after_enqueue_is_denied(
     integration_context: Context, clean_tables: None
 ) -> None:

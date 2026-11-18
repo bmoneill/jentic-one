@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,10 +21,14 @@ class AgentCredentialBindingRepository:
         agent_id: str,
         credential_id: str,
         created_by: str,
+        expires_at: datetime | None = None,
     ) -> AgentCredentialBinding:
         await lock_credential_bindings(session, credential_id)
         binding = AgentCredentialBinding(
-            agent_id=agent_id, credential_id=credential_id, created_by=created_by
+            agent_id=agent_id,
+            credential_id=credential_id,
+            created_by=created_by,
+            expires_at=expires_at,
         )
         session.add(binding)
         await session.flush()
@@ -60,6 +66,21 @@ class AgentCredentialBindingRepository:
             .where(AgentCredentialBinding.agent_id == agent_id)
             .where(AgentCredentialBinding.credential_id == credential_id)
             .values(**values)
+        )
+        result = await session.execute(stmt)
+        await session.flush()
+        return int(result.rowcount) > 0  # type: ignore[attr-defined]
+
+    @staticmethod
+    async def set_expires_at(
+        session: AsyncSession, *, agent_id: str, credential_id: str, expires_at: datetime | None
+    ) -> bool:
+        """Set, move or clear the fixed expiry; returns False when no binding exists."""
+        stmt = (
+            update(AgentCredentialBinding)
+            .where(AgentCredentialBinding.agent_id == agent_id)
+            .where(AgentCredentialBinding.credential_id == credential_id)
+            .values(expires_at=expires_at)
         )
         result = await session.execute(stmt)
         await session.flush()

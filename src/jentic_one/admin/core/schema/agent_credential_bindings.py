@@ -78,3 +78,8 @@ class AgentCredentialBinding(AuditableMixin, AdminBase):
     # credential serves is deleted, so a later re-import under the same
     # identity does not silently re-adopt the binding. Cleared on resume.
     suspended_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # When the binding stops authorizing calls (fixed expiry). NULL never
+    # expires. Enforced at read time by the broker resolver, never by a sweep,
+    # and independent of ``suspended``: resuming never extends it and renewing
+    # never resumes. A renewal (PATCH) sets, moves or clears it.
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)

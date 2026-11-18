@@ -219,6 +219,9 @@ class CredentialDerivation:
     - ``binding_pending`` — an active binding covers the API through a credential
       whose connect flow is still pending. Recovery completes that existing flow;
       the credential's identity is not a mismatch.
+    - ``binding_expired`` — the agent holds an *expired* (fixed-expiry) binding to a
+      credential covering the API and no other binding authorizes the call.
+      Only the operator can renew it; suspension is reported first.
     - ``valid_until`` — the earliest moment (timezone-aware) at which one of the
       candidate credentials' bindings expires, or ``None`` when none expires.
       A cache must never serve this derivation at or after it.
@@ -230,6 +233,7 @@ class CredentialDerivation:
     identity_mismatch: IdentityMismatch | None
     binding_suspended: bool = False
     binding_pending: bool = False
+    binding_expired: bool = False
     valid_until: datetime | None = None
 
 

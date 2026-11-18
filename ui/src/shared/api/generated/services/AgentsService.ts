@@ -14,6 +14,7 @@ import type { ApiKeyInfoResponse } from '../models/ApiKeyInfoResponse';
 import type { ApiKeyResponse } from '../models/ApiKeyResponse';
 import type { ClaimRequest } from '../models/ClaimRequest';
 import type { CredentialBindingListResponse } from '../models/CredentialBindingListResponse';
+import type { CredentialBindingPatchRequest } from '../models/CredentialBindingPatchRequest';
 import type { CredentialBindingResponse } from '../models/CredentialBindingResponse';
 import type { CredentialBindRequest } from '../models/CredentialBindRequest';
 import type { DenyRequest } from '../models/DenyRequest';
@@ -370,8 +371,9 @@ export class AgentsService {
      * must be able to see the agent and must own the credential (or hold
      * `org:admin`). A credential that does not exist or that the caller does
      * not own returns 404; binding the same credential twice returns 409
-     * (`credential_binding_conflict`).
-     * Returns the new binding.
+     * (`credential_binding_conflict`). An optional `expires_at` (future only,
+     * otherwise 422) ends the binding at that time; omit it for a binding that
+     * never expires. Returns the new binding.
      * @returns CredentialBindingResponse Successful Response
      * @throws ApiError
      */
@@ -455,6 +457,59 @@ export class AgentsService {
                 401: `Unauthorized`,
                 403: `Forbidden`,
                 404: `The agent is not visible to the caller (\`actor_not_found\`), or a missing binding (\`credential_binding_not_found\`) — also returned when an agent tries to purge its own binding, which it may only suspend`,
+                422: `Unprocessable Entity`,
+                500: `Internal Server Error`,
+                503: `Service Unavailable`,
+            },
+        });
+    }
+    /**
+     * Renew a credential binding
+     * Set, extend or clear when a binding stops authorizing calls.
+     *
+     * `expires_at` (future only, otherwise 422) sets or moves the end date; null
+     * clears it, so the binding never expires. This is how an expired binding is
+     * renewed, and it never changes `suspended`: renewing does not resume a
+     * suspension, and resuming does not extend an expiry. Renewing re-grants the
+     * credential, so it takes the same checks as `:resume`: the caller must own
+     * the credential (or hold `org:admin`) as well as see the agent, and an agent
+     * cannot renew its own binding. Audited; broker caches are invalidated, so
+     * the change takes effect at once. Returns the binding.
+     * @returns CredentialBindingResponse Successful Response
+     * @throws ApiError
+     */
+    public static renewAgentCredentialBinding({
+        agentId,
+        credentialId,
+        requestBody,
+    }: {
+        /**
+         * ID of the agent.
+         */
+        agentId: string,
+        /**
+         * ID of the credential bound to the agent.
+         */
+        credentialId: string,
+        /**
+         * Request body for renewing a credential binding: set, move or clear its expiry.
+         */
+        requestBody: CredentialBindingPatchRequest,
+    }): CancelablePromise<CredentialBindingResponse> {
+        return __request(OpenAPI, {
+            method: 'PATCH',
+            url: '/agents/{agent_id}/credentials/{credential_id}',
+            path: {
+                'agent_id': agentId,
+                'credential_id': credentialId,
+            },
+            body: requestBody,
+            mediaType: 'application/json',
+            errors: {
+                400: `Bad Request`,
+                401: `Unauthorized`,
+                403: `Forbidden`,
+                404: `No binding exists (\`credential_binding_not_found\`), the agent is not visible to the caller (\`actor_not_found\`), or the credential is not owned by the caller — including an agent renewing its own binding (\`credential_not_found\`)`,
                 422: `Unprocessable Entity`,
                 500: `Internal Server Error`,
                 503: `Service Unavailable`,

@@ -38,6 +38,14 @@ def _require_future(value: datetime | None) -> datetime | None:
     return aware
 
 
+_BINDING_EXPIRES_AT_DESCRIPTION = (
+    "When the binding stops authorizing calls (RFC 3339, in the future). After this"
+    " moment the broker refuses the agent's calls through it with 403"
+    " `credential_binding_expired`, whatever its token. The binding keeps its permission"
+    " rules; an owner renews it by setting a later time or null."
+)
+
+
 class AgentResponse(BaseModel):
     """Agent representation in API responses."""
 
@@ -199,6 +207,18 @@ class CredentialBindingResponse(BaseModel):
             " when the API the credential serves was deleted; cleared on resume."
         ),
         examples=["api_deleted"],
+    )
+    expires_at: datetime | None = Field(
+        default=None,
+        description=(
+            "When the binding stops authorizing calls (RFC 3339); null if it never expires."
+        ),
+        examples=[_EX_EXPIRES_AT],
+    )
+    expired: bool = Field(
+        default=False,
+        description="Whether `expires_at` has passed.",
+        examples=[False],
     )
     # Shared permission rule set the binding points at (None = inline rules).
     rule_set_id: str | None = Field(
@@ -396,6 +416,18 @@ class ApiKeyHistoryResponse(BaseModel):
     data: list[ApiKeyHistoryEntryResponse] = Field(description="API key events, newest first.")
 
 
+class CredentialBindingPatchRequest(BaseModel):
+    """Request body for renewing a credential binding: set, move or clear its expiry."""
+
+    expires_at: datetime | None = Field(
+        default=None,
+        description=_BINDING_EXPIRES_AT_DESCRIPTION + " Send null to clear the expiry.",
+        examples=[_EX_EXPIRES_AT],
+    )
+
+    _check_expires_at = field_validator("expires_at")(_require_future)
+
+
 class CredentialBindRequest(BaseModel):
     """Request body for directly binding a credential to an agent."""
 
@@ -405,6 +437,13 @@ class CredentialBindRequest(BaseModel):
         description="ID of the credential to bind to the agent.",
         examples=[ex.CREDENTIAL_ID],
     )
+    expires_at: datetime | None = Field(
+        default=None,
+        description=_BINDING_EXPIRES_AT_DESCRIPTION + " Omit for a binding that never expires.",
+        examples=[_EX_EXPIRES_AT],
+    )
+
+    _check_expires_at = field_validator("expires_at")(_require_future)
 
 
 class JwksUpdateRequest(BaseModel):
