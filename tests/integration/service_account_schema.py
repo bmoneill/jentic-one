@@ -58,6 +58,8 @@ _ASSERTION_JTIS_HEAD = "bf1a695f4db0"  # pragma: allowlist secret
 #: Refresh-token ``family_issued_at`` column, stacked on the assertion ``jti`` table.
 _REFRESH_FAMILY_ISSUED_AT_HEAD = "c7d2e9a41b30"  # pragma: allowlist secret
 _AGENT_EXPIRES_AT_HEAD = "d4a8f1c2b9e5"  # pragma: allowlist secret
+#: Binding ``expires_at`` column, stacked on the agent ``expires_at`` column.
+_BINDING_EXPIRES_AT_HEAD = "e5b1c7d3a9f2"  # pragma: allowlist secret
 
 
 def _create_tables(op: Operations, *, pg: bool) -> None:
@@ -233,6 +235,7 @@ def restore_pre_sa_drop_admin(integration_config: AppConfig) -> None:
         [_ASSERTION_JTIS_HEAD],
         [_REFRESH_FAMILY_ISSUED_AT_HEAD],
         [_AGENT_EXPIRES_AT_HEAD],
+        [_BINDING_EXPIRES_AT_HEAD],
     ), f"extend restore_pre_sa_drop_admin for new heads {heads}"
     if not asyncio.run(_has_service_account_tables(db_config)):
         command.downgrade(cfg, _SA_DROP)
