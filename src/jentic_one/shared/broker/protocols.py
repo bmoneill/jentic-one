@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
 
@@ -218,6 +219,9 @@ class CredentialDerivation:
     - ``binding_pending`` — an active binding covers the API through a credential
       whose connect flow is still pending. Recovery completes that existing flow;
       the credential's identity is not a mismatch.
+    - ``valid_until`` — the earliest moment (timezone-aware) at which one of the
+      candidate credentials' bindings expires, or ``None`` when none expires.
+      A cache must never serve this derivation at or after it.
     """
 
     credentials: tuple[BoundCredential, ...]
@@ -226,6 +230,7 @@ class CredentialDerivation:
     identity_mismatch: IdentityMismatch | None
     binding_suspended: bool = False
     binding_pending: bool = False
+    valid_until: datetime | None = None
 
 
 @runtime_checkable

@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import time
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import structlog
 
@@ -43,6 +45,10 @@ DEFAULT_CREDENTIAL_CACHE_TTL_SECONDS = 30.0
 # can't grow the cache without limit. Derivation keys are low-cardinality in
 # practice (bounded by active agents times APIs), so this is generous headroom.
 DEFAULT_MAX_CACHE_ENTRIES = 10_000
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
 
 
 @dataclass(slots=True)
@@ -67,6 +73,11 @@ class CachingCredentialDeriver:
     list; those drive recovery guidance, never authorization, so bounded
     staleness is acceptable — the same argument that justifies caching the
     candidate list.
+
+    An entry whose derivation carries ``valid_until`` is never served at or
+    after that moment, even inside the TTL, so a binding's expiry is exact
+    rather than bounded by the TTL. ``clock`` (wall-clock, timezone-aware) is
+    injectable so tests can cross the boundary without sleeping.
     """
 
     def __init__(
@@ -75,12 +86,14 @@ class CachingCredentialDeriver:
         *,
         cache_ttl_seconds: float = DEFAULT_CREDENTIAL_CACHE_TTL_SECONDS,
         max_entries: int = DEFAULT_MAX_CACHE_ENTRIES,
+        clock: Callable[[], datetime] = _utc_now,
     ) -> None:
         if max_entries < 1:
             raise ValueError("max_entries must be >= 1")
         self._inner = inner
         self._cache_ttl_seconds = cache_ttl_seconds
         self._max_entries = max_entries
+        self._clock = clock
         self._cache: OrderedDict[str, _CacheEntry] = OrderedDict()
         self._single_flight: SingleFlight[CredentialDerivation] = SingleFlight()
 
@@ -92,7 +105,7 @@ class CachingCredentialDeriver:
         now = time.monotonic()
 
         cached = self._cache.get(key)
-        if cached is not None and (now - cached.cached_at) < self._cache_ttl_seconds:
+        if cached is not None and self._is_fresh(cached, now):
             self._cache.move_to_end(key)
             _cache_hits.add(1)
             return cached.value
@@ -107,6 +120,13 @@ class CachingCredentialDeriver:
             return result
 
         return await self._single_flight.do(key, _load)
+
+    def _is_fresh(self, entry: _CacheEntry, now: float) -> bool:
+        """Within the TTL and strictly before the derivation's ``valid_until``."""
+        if (now - entry.cached_at) >= self._cache_ttl_seconds:
+            return False
+        valid_until = entry.value.valid_until
+        return valid_until is None or self._clock() < valid_until
 
     def _store(self, key: str, entry: _CacheEntry) -> None:
         self._cache[key] = entry

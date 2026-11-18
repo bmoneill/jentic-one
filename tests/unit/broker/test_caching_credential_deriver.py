@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from jentic_one.broker.repos.caching_credential_deriver import CachingCredentialDeriver
@@ -118,3 +121,54 @@ async def test_invalidate_credential_evicts_cached_derivations() -> None:
 
     await cached.derive_credentials(agent_id="agt_1", vendor="acme.com", name="p", version="v1")
     assert inner.calls == 2
+
+
+class _Clock:
+    def __init__(self, now: datetime) -> None:
+        self.now = now
+
+    def __call__(self) -> datetime:
+        return self.now
+
+
+class _ExpiringDeriver(_CountingDeriver):
+    def __init__(self, valid_until: datetime | None) -> None:
+        super().__init__()
+        self._valid_until = valid_until
+
+    async def derive_credentials(
+        self, *, agent_id: str, vendor: str, name: str, version: str
+    ) -> CredentialDerivation:
+        base = await super().derive_credentials(
+            agent_id=agent_id, vendor=vendor, name=name, version=version
+        )
+        return replace(base, valid_until=self._valid_until)
+
+
+_KW = {"agent_id": "agt_1", "vendor": "acme.com", "name": "pets", "version": "v1"}
+_T0 = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+@pytest.mark.asyncio
+async def test_entry_not_served_at_or_past_valid_until() -> None:
+    clock = _Clock(_T0)
+    inner = _ExpiringDeriver(_T0 + timedelta(seconds=10))
+    cached = CachingCredentialDeriver(inner, cache_ttl_seconds=300.0, clock=clock)
+    await cached.derive_credentials(**_KW)
+    clock.now = _T0 + timedelta(seconds=9)
+    await cached.derive_credentials(**_KW)
+    assert inner.calls == 1  # still served inside valid_until
+    clock.now = _T0 + timedelta(seconds=10)  # exactly at valid_until
+    await cached.derive_credentials(**_KW)
+    assert inner.calls == 2  # refetched despite TTL not lapsing
+
+
+@pytest.mark.asyncio
+async def test_no_valid_until_uses_ttl_only() -> None:
+    clock = _Clock(_T0)
+    inner = _ExpiringDeriver(None)
+    cached = CachingCredentialDeriver(inner, cache_ttl_seconds=300.0, clock=clock)
+    await cached.derive_credentials(**_KW)
+    clock.now = _T0 + timedelta(days=365)
+    await cached.derive_credentials(**_KW)
+    assert inner.calls == 1
