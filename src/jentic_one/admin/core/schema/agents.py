@@ -51,6 +51,9 @@ class Agent(AuditableMixin, AdminBase):
     denial_reason: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     denied_by: Mapped[str | None] = mapped_column(String(30), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # When the agent stops working: once passed it is refused new tokens and its
+    # issued tokens stop resolving as active. NULL means it never expires.
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     jwks: Mapped[dict[str, Any] | None] = mapped_column(JSON(), nullable=True)
     registration_access_token_hash: Mapped[str | None] = mapped_column(
         String(64), nullable=True, index=True

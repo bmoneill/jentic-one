@@ -31,6 +31,14 @@ export type AgentResponse = {
      */
     description?: (string | null);
     /**
+     * Whether `expires_at` has passed.
+     */
+    expired?: boolean;
+    /**
+     * When the agent stops working (RFC 3339); null if it never expires. Once passed, the agent is refused new tokens and its issued tokens stop working.
+     */
+    expires_at?: (string | null);
+    /**
      * Whether the agent currently has an active API key.
      */
     has_api_key?: boolean;

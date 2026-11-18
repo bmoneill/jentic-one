@@ -97,12 +97,17 @@ def _make_refresh_token_row(
 
 
 def _make_agent_row(
-    *, status: str = "active", owner_id: str = "usr_owner", name: str = "billing-bot"
+    *,
+    status: str = "active",
+    owner_id: str = "usr_owner",
+    name: str = "billing-bot",
+    expires_at: datetime | None = None,
 ) -> MagicMock:
     row = MagicMock()
     row.id = "agnt_x"
     row.status = status
     row.owner_id = owner_id
+    row.expires_at = expires_at
     # ``name`` is reserved on the MagicMock constructor, so it has to be
     # configured after construction; the resolver reads it to carry the agent's
     # display name onto the Identity (#1543).
@@ -602,6 +607,30 @@ async def test_resolve_active_agent_with_inactive_owner_is_inactive(
     assert resolved is not None
     assert resolved.active is False
     assert resolved.parent_actor_id == "usr_owner"
+
+
+@patch("jentic_one.auth.services.token_service.ActorPermissionGrantRepository")
+@patch("jentic_one.auth.services.token_service.AgentRepository")
+@patch("jentic_one.auth.services.token_service.AccessTokenRepository")
+async def test_resolve_expired_agent_token_is_inactive(
+    mock_at_repo: MagicMock,
+    mock_agent_repo: MagicMock,
+    mock_grant_repo: MagicMock,
+) -> None:
+    """An issued token stops resolving as active once its agent's ``expires_at`` passes."""
+    ctx = _make_ctx()
+    at_row = _make_access_token_row(actor_id="agnt_x", actor_type="agent")
+    mock_at_repo.get_by_hash = AsyncMock(return_value=at_row)
+    expired = _make_agent_row(status="active", expires_at=datetime.now(UTC) - timedelta(minutes=1))
+    mock_agent_repo.get_with_owner_active = AsyncMock(
+        return_value=_with_owner(expired, owner_active=True)
+    )
+    mock_grant_repo.list_for_actor = AsyncMock(return_value=[])
+
+    resolved = await TokenService(ctx).resolve_access_token("at_agenttoken")
+
+    assert resolved is not None
+    assert resolved.active is False
 
 
 @patch("jentic_one.auth.services.token_service.ActorPermissionGrantRepository")

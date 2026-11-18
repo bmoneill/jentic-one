@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { AgentApproveRequest } from '../models/AgentApproveRequest';
 import type { AgentCreateRequest } from '../models/AgentCreateRequest';
 import type { AgentListResponse } from '../models/AgentListResponse';
 import type { AgentPatchRequest } from '../models/AgentPatchRequest';
@@ -199,7 +200,7 @@ export class AgentsService {
     }
     /**
      * Update an agent
-     * Partially update an agent's `name`, `description` or `owner_id`.
+     * Partially update an agent's `name`, `description`, `owner_id` or `expires_at`.
      *
      * Only the fields present in the body change; an empty body returns the
      * agent unchanged. Allowed for the agent's owner or an `org:admin` (anyone
@@ -209,7 +210,9 @@ export class AgentsService {
      * active credential bindings to credentials outside the new owner's
      * ownership, and revokes agent permission grants above the new owner's
      * permission ceiling (grant those permissions to the new owner first to
-     * keep them on the agent). The agent's API key is unaffected. An archived
+     * keep them on the agent). The agent's API key is unaffected. Setting `expires_at`
+     * (future only, otherwise 422) makes the agent stop working at that time; send
+     * null to clear it, or a later time to renew a lapsed agent. An archived
      * agent cannot be updated (409). Returns the updated agent.
      * @returns AgentResponse Successful Response
      * @throws ApiError
@@ -686,17 +689,23 @@ export class AgentsService {
      * status, so the response does not reveal agents outside the caller's
      * ownership. Self-requested permissions above the owner's permission ceiling
      * are dropped on approval; an explicit grant above the owner's ceiling
-     * fails with 409 (``agent_permission_exceeds_owner``).
+     * fails with 409 (``agent_permission_exceeds_owner``). The optional body's
+     * ``expires_at`` sets when the agent stops working.
      * @returns AgentResponse Successful Response
      * @throws ApiError
      */
     public static approveAgent({
         agentId,
+        requestBody,
     }: {
         /**
          * ID of the agent.
          */
         agentId: string,
+        /**
+         * Request payload for the `approveAgent` operation.
+         */
+        requestBody?: (AgentApproveRequest | null),
     }): CancelablePromise<AgentResponse> {
         return __request(OpenAPI, {
             method: 'POST',
@@ -704,6 +713,8 @@ export class AgentsService {
             path: {
                 'agent_id': agentId,
             },
+            body: requestBody,
+            mediaType: 'application/json',
             errors: {
                 400: `Bad Request`,
                 401: `Unauthorized`,

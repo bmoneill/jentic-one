@@ -38,6 +38,8 @@ export { ApiPicker } from '@/shared/credentials/components/ApiPicker';
 export type { ApiPickerProps } from '@/shared/credentials/components/ApiPicker';
 export { AccessRulesStep } from '@/shared/credentials/components/AccessRulesStep';
 export type { AccessRulesStepProps } from '@/shared/credentials/components/AccessRulesStep';
+export { BindingDurationField } from '@/shared/credentials/components/BindingDurationField';
+export type { BindingDurationFieldProps } from '@/shared/credentials/components/BindingDurationField';
 export { RuleListEditor } from '@/shared/credentials/components/RuleListEditor';
 export {
 	MatchedRuleText,

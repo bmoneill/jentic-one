@@ -365,6 +365,8 @@
               "denial_reason": "Requested permissions exceed the agent's stated purpose.",
               "denied_by": "usr_6968b3987ee4c3ec0b4ee3b9",
               "description": "Reconciles Stripe invoices against the ledger every night.",
+              "expired": false,
+              "expires_at": "2026-12-31T23:59:00Z",
               "has_api_key": true,
               "id": "agnt_6968b3984d1c238dbe7e2e29",
               "name": "invoice-reconciler",
@@ -801,12 +803,39 @@
         ],
         "type": "string"
       },
+      "AgentApproveRequest": {
+        "description": "Optional request body for approving an agent.",
+        "examples": [
+          {
+            "expires_at": "2026-12-31T23:59:00Z"
+          }
+        ],
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the agent stops working (RFC 3339, in the future). After this moment it is refused new tokens and the tokens it already holds stop working. The agent is not deleted and keeps its grants; set a later time or null to restore it. Omit to leave the agent's expiry as it is.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
+            ]
+          }
+        },
+        "type": "object"
+      },
       "AgentCreateRequest": {
         "additionalProperties": false,
         "description": "Request body for creating an agent manually.",
         "examples": [
           {
             "description": "Reconciles Stripe invoices against the ledger every night.",
+            "expires_at": "2026-12-31T23:59:00Z",
             "name": "invoice-reconciler",
             "permissions": [
               "apis:read",
@@ -828,6 +857,21 @@
             "description": "Optional free-text description of the agent.",
             "examples": [
               "Reconciles Stripe invoices against the ledger every night."
+            ]
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the agent stops working (RFC 3339, in the future). After this moment it is refused new tokens and the tokens it already holds stop working. The agent is not deleted and keeps its grants; set a later time or null to restore it. Omit for an agent that never expires.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
             ]
           },
           "name": {
@@ -881,6 +925,8 @@
                 "denial_reason": "Requested permissions exceed the agent's stated purpose.",
                 "denied_by": "usr_6968b3987ee4c3ec0b4ee3b9",
                 "description": "Reconciles Stripe invoices against the ledger every night.",
+                "expired": false,
+                "expires_at": "2026-12-31T23:59:00Z",
                 "has_api_key": true,
                 "id": "agnt_6968b3984d1c238dbe7e2e29",
                 "name": "invoice-reconciler",
@@ -906,6 +952,8 @@
                   "denial_reason": "Requested permissions exceed the agent's stated purpose.",
                   "denied_by": "usr_6968b3987ee4c3ec0b4ee3b9",
                   "description": "Reconciles Stripe invoices against the ledger every night.",
+                  "expired": false,
+                  "expires_at": "2026-12-31T23:59:00Z",
                   "has_api_key": true,
                   "id": "agnt_6968b3984d1c238dbe7e2e29",
                   "name": "invoice-reconciler",
@@ -954,6 +1002,7 @@
         "examples": [
           {
             "description": "Reconciles Stripe invoices against the ledger every night.",
+            "expires_at": "2026-12-31T23:59:00Z",
             "name": "invoice-reconciler",
             "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9"
           }
@@ -972,6 +1021,21 @@
             "description": "New description for the agent.",
             "examples": [
               "Reconciles Stripe invoices against the ledger every night."
+            ]
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the agent stops working (RFC 3339, in the future). After this moment it is refused new tokens and the tokens it already holds stop working. The agent is not deleted and keeps its grants; set a later time or null to restore it. Send null to clear the expiry.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
             ]
           },
           "name": {
@@ -1084,6 +1148,8 @@
             "denial_reason": "Requested permissions exceed the agent's stated purpose.",
             "denied_by": "usr_6968b3987ee4c3ec0b4ee3b9",
             "description": "Reconciles Stripe invoices against the ledger every night.",
+            "expired": false,
+            "expires_at": "2026-12-31T23:59:00Z",
             "has_api_key": true,
             "id": "agnt_6968b3984d1c238dbe7e2e29",
             "name": "invoice-reconciler",
@@ -1171,6 +1237,29 @@
             "description": "Free-text description of the agent; null if not set.",
             "examples": [
               "Reconciles Stripe invoices against the ledger every night."
+            ]
+          },
+          "expired": {
+            "default": false,
+            "description": "Whether `expires_at` has passed.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the agent stops working (RFC 3339); null if it never expires. Once passed, the agent is refused new tokens and its issued tokens stop working.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
             ]
           },
           "has_api_key": {
@@ -25750,6 +25839,8 @@
                       "denial_reason": "Requested permissions exceed the agent's stated purpose.",
                       "denied_by": "usr_6968b3987ee4c3ec0b4ee3b9",
                       "description": "Reconciles Stripe invoices against the ledger every night.",
+                      "expired": false,
+                      "expires_at": "2026-12-31T23:59:00Z",
                       "has_api_key": true,
                       "id": "agnt_6968b3984d1c238dbe7e2e29",
                       "name": "invoice-reconciler",
@@ -25809,6 +25900,7 @@
             "application/json": {
               "example": {
                 "description": "Reconciles Stripe invoices against the ledger every night.",
+                "expires_at": "2026-12-31T23:59:00Z",
                 "name": "invoice-reconciler",
                 "permissions": [
                   "apis:read",
@@ -25834,6 +25926,8 @@
                   "denial_reason": "Requested permissions exceed the agent's stated purpose.",
                   "denied_by": "usr_6968b3987ee4c3ec0b4ee3b9",
                   "description": "Reconciles Stripe invoices against the ledger every night.",
+                  "expired": false,
+                  "expires_at": "2026-12-31T23:59:00Z",
                   "has_api_key": true,
                   "id": "agnt_6968b3984d1c238dbe7e2e29",
                   "name": "invoice-reconciler",
@@ -26063,7 +26157,7 @@
         ]
       },
       "patch": {
-        "description": "Partially update an agent's `name`, `description` or `owner_id`.\n\nOnly the fields present in the body change; an empty body returns the\nagent unchanged. Allowed for the agent's owner or an `org:admin` (anyone\nelse gets 404). Changing `owner_id` transfers ownership, is\n`org:admin`-only, revokes every active OAuth client grant bound to the\nagent (so the new owner must re-consent any connected client), suspends\nactive credential bindings to credentials outside the new owner's\nownership, and revokes agent permission grants above the new owner's\npermission ceiling (grant those permissions to the new owner first to\nkeep them on the agent). The agent's API key is unaffected. An archived\nagent cannot be updated (409). Returns the updated agent.",
+        "description": "Partially update an agent's `name`, `description`, `owner_id` or `expires_at`.\n\nOnly the fields present in the body change; an empty body returns the\nagent unchanged. Allowed for the agent's owner or an `org:admin` (anyone\nelse gets 404). Changing `owner_id` transfers ownership, is\n`org:admin`-only, revokes every active OAuth client grant bound to the\nagent (so the new owner must re-consent any connected client), suspends\nactive credential bindings to credentials outside the new owner's\nownership, and revokes agent permission grants above the new owner's\npermission ceiling (grant those permissions to the new owner first to\nkeep them on the agent). The agent's API key is unaffected. Setting `expires_at`\n(future only, otherwise 422) makes the agent stop working at that time; send\nnull to clear it, or a later time to renew a lapsed agent. An archived\nagent cannot be updated (409). Returns the updated agent.",
         "operationId": "updateAgent",
         "parameters": [
           {
@@ -26092,6 +26186,7 @@
             "application/json": {
               "example": {
                 "description": "Reconciles Stripe invoices against the ledger every night.",
+                "expires_at": "2026-12-31T23:59:00Z",
                 "name": "invoice-reconciler",
                 "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9"
               },
@@ -27310,7 +27405,7 @@
     "/agents/{agent_id}:approve": {
       "description": "`POST`: Approve an agent.",
       "post": {
-        "description": "Approve a pending agent.\n\nAllowed for the agent's owner or an ``org:admin``. An agent with no owner\n(an unclaimed self-registration) can be approved only by an ``org:admin``,\nwho becomes its owner. Any other caller gets a 404, whatever the agent's\nstatus, so the response does not reveal agents outside the caller's\nownership. Self-requested permissions above the owner's permission ceiling\nare dropped on approval; an explicit grant above the owner's ceiling\nfails with 409 (``agent_permission_exceeds_owner``).",
+        "description": "Approve a pending agent.\n\nAllowed for the agent's owner or an ``org:admin``. An agent with no owner\n(an unclaimed self-registration) can be approved only by an ``org:admin``,\nwho becomes its owner. Any other caller gets a 404, whatever the agent's\nstatus, so the response does not reveal agents outside the caller's\nownership. Self-requested permissions above the owner's permission ceiling\nare dropped on approval; an explicit grant above the owner's ceiling\nfails with 409 (``agent_permission_exceeds_owner``). The optional body's\n``expires_at`` sets when the agent stops working.",
         "operationId": "approveAgent",
         "parameters": [
           {
@@ -27334,6 +27429,24 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AgentApproveRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          },
+          "description": "Request payload for the `approveAgent` operation."
+        },
         "responses": {
           "200": {
             "$ref": "#/components/responses/Status200"

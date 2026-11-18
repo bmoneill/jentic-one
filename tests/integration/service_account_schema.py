@@ -57,6 +57,7 @@ _EXTERNAL_IDENTITIES_ISSUER_HEAD = "e5c9f3a7b802"  # pragma: allowlist secret
 _ASSERTION_JTIS_HEAD = "bf1a695f4db0"  # pragma: allowlist secret
 #: Refresh-token ``family_issued_at`` column, stacked on the assertion ``jti`` table.
 _REFRESH_FAMILY_ISSUED_AT_HEAD = "c7d2e9a41b30"  # pragma: allowlist secret
+_AGENT_EXPIRES_AT_HEAD = "d4a8f1c2b9e5"  # pragma: allowlist secret
 
 
 def _create_tables(op: Operations, *, pg: bool) -> None:
@@ -231,6 +232,7 @@ def restore_pre_sa_drop_admin(integration_config: AppConfig) -> None:
         [_EXTERNAL_IDENTITIES_ISSUER_HEAD],
         [_ASSERTION_JTIS_HEAD],
         [_REFRESH_FAMILY_ISSUED_AT_HEAD],
+        [_AGENT_EXPIRES_AT_HEAD],
     ), f"extend restore_pre_sa_drop_admin for new heads {heads}"
     if not asyncio.run(_has_service_account_tables(db_config)):
         command.downgrade(cfg, _SA_DROP)
@@ -251,7 +253,7 @@ class PreDropApiKeyResolver(ApiKeyResolver):
         key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
         stmt = text(
             "SELECT a.id AS agent_id, a.name, a.status, a.owner_id, u.active AS owner_active,"
-            " g.scope AS permission"
+            " g.scope AS permission, NULL AS expires_at"
             " FROM agent_credentials ac"
             " JOIN agents a ON a.id = ac.agent_id"
             " LEFT JOIN users u ON u.id = a.owner_id"

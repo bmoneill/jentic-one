@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from jentic_one.shared.schemas import ServedApiRef
 from jentic_one.shared.web import openapi_examples as ex
@@ -18,6 +18,24 @@ _EX_AGENT_DESCRIPTION = "Reconciles Stripe invoices against the ledger every nig
 _EX_PERMISSIONS = ["apis:read", "capabilities:execute"]
 _EX_DENIAL_REASON = "Requested permissions exceed the agent's stated purpose."
 _EX_CREDENTIAL_NAME = "Stripe production key"
+
+
+_EX_EXPIRES_AT = "2026-12-31T23:59:00Z"
+_EXPIRES_AT_DESCRIPTION = (
+    "When the agent stops working (RFC 3339, in the future). After this moment it is"
+    " refused new tokens and the tokens it already holds stop working. The agent is"
+    " not deleted and keeps its grants; set a later time or null to restore it."
+)
+
+
+def _require_future(value: datetime | None) -> datetime | None:
+    """Reject an ``expires_at`` that is not in the future (naive values read as UTC)."""
+    if value is None:
+        return None
+    aware = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    if aware <= datetime.now(UTC):
+        raise ValueError("expires_at must be in the future")
+    return aware
 
 
 class AgentResponse(BaseModel):
@@ -73,6 +91,19 @@ class AgentResponse(BaseModel):
         default=None,
         description="When the agent was approved (RFC 3339); null if not approved.",
         examples=["2026-01-15T09:45:00Z"],
+    )
+    expires_at: datetime | None = Field(
+        default=None,
+        description=(
+            "When the agent stops working (RFC 3339); null if it never expires."
+            " Once passed, the agent is refused new tokens and its issued tokens stop working."
+        ),
+        examples=[_EX_EXPIRES_AT],
+    )
+    expired: bool = Field(
+        default=False,
+        description="Whether `expires_at` has passed.",
+        examples=[False],
     )
     has_api_key: bool = Field(
         default=False,
@@ -196,6 +227,25 @@ class AgentPatchRequest(BaseModel):
         description="ID of the user to transfer ownership to; `org:admin` only.",
         examples=[ex.USER_ID],
     )
+    expires_at: datetime | None = Field(
+        default=None,
+        description=_EXPIRES_AT_DESCRIPTION + " Send null to clear the expiry.",
+        examples=[_EX_EXPIRES_AT],
+    )
+
+    _check_expires_at = field_validator("expires_at")(_require_future)
+
+
+class AgentApproveRequest(BaseModel):
+    """Optional request body for approving an agent."""
+
+    expires_at: datetime | None = Field(
+        default=None,
+        description=_EXPIRES_AT_DESCRIPTION + " Omit to leave the agent's expiry as it is.",
+        examples=[_EX_EXPIRES_AT],
+    )
+
+    _check_expires_at = field_validator("expires_at")(_require_future)
 
 
 class AgentCreateRequest(BaseModel):
@@ -227,6 +277,13 @@ class AgentCreateRequest(BaseModel):
         ),
         examples=[_EX_PERMISSIONS],
     )
+    expires_at: datetime | None = Field(
+        default=None,
+        description=_EXPIRES_AT_DESCRIPTION + " Omit for an agent that never expires.",
+        examples=[_EX_EXPIRES_AT],
+    )
+
+    _check_expires_at = field_validator("expires_at")(_require_future)
 
 
 class AgentPermissionsRequest(BaseModel):

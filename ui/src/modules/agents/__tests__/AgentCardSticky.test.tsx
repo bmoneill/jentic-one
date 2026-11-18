@@ -81,6 +81,8 @@ const agent = (over: Partial<AgentEntity> = {}): AgentEntity => ({
 	denialReason: null,
 	createdAt: '2026-10-01T10:00:00Z',
 	approvedAt: '2026-10-01T10:00:00Z',
+	expiresAt: null,
+	expired: false,
 	attribution: { registeredBy: 'self', approvedBy: null, deniedBy: null },
 	hasApiKey: true,
 	...over,

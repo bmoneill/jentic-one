@@ -21,6 +21,8 @@ function pendingRow(id: string, name: string, minutesAgo: number): AgentEntity {
 		denialReason: null,
 		createdAt: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
 		approvedAt: null,
+		expiresAt: null,
+		expired: false,
 		attribution: { registeredBy: 'self', approvedBy: null, deniedBy: null },
 		hasApiKey: false,
 	};

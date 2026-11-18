@@ -1,0 +1,30 @@
+"""add expires_at to agents
+
+Adds a nullable ``expires_at`` timestamp to ``agents``. An agent whose
+``expires_at`` has passed is refused new tokens and its issued tokens stop
+resolving as active. Existing rows stay ``NULL`` (never expires); no backfill
+or index is required.
+
+Revision ID: d4a8f1c2b9e5
+Revises: c7d2e9a41b30
+Create Date: 2026-11-18
+
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "d4a8f1c2b9e5"  # pragma: allowlist secret
+down_revision: str | None = "c7d2e9a41b30"  # pragma: allowlist secret
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.add_column("agents", sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True))
+
+
+def downgrade() -> None:
+    op.drop_column("agents", "expires_at")

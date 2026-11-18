@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 from sqlalchemy.exc import IntegrityError
@@ -100,6 +101,11 @@ _ROW_LOCKED_VERBS: frozenset[ActorVerb] = frozenset({ActorVerb.APPROVE, ActorVer
 _PURGE_AUDIT_REASON = "agent purged"
 
 
+def _audit_value(value: Any) -> Any:
+    """A field value as the audit log stores it (datetimes as RFC 3339 strings)."""
+    return value.isoformat() if isinstance(value, datetime) else value
+
+
 class AgentService:
     """Manages agent lifecycle: create, list, get, approve, deny, disable, enable, archive.
 
@@ -149,6 +155,7 @@ class AgentService:
                 description=payload.description,
                 created_by=identity.sub,
                 status=status,
+                expires_at=payload.expires_at,
             )
             for permission in permissions_to_grant:
                 await ActorPermissionGrantRepository.grant(
@@ -278,12 +285,20 @@ class AgentService:
             return view
         raise ActorNotFoundError(agent_id)
 
-    async def approve(self, agent_id: str, *, identity: Identity) -> AgentView:
+    async def approve(
+        self,
+        agent_id: str,
+        *,
+        identity: Identity,
+        expires_at: datetime | None = None,
+    ) -> AgentView:
         """Activate a pending agent.
 
         Allowed for the agent's owner or an ``org:admin``; an unowned agent
         (an unclaimed self-registration) only for an ``org:admin``, who becomes
-        its owner. Anyone else gets ``ActorNotFoundError``.
+        its owner. Anyone else gets ``ActorNotFoundError``. ``expires_at`` sets
+        when the approved agent stops working; omitted, an expiry the agent
+        already has (set before approval) is kept.
         """
         async with self._ctx.admin_db.transaction() as session:
             agent = await self._check_transition(
@@ -366,7 +381,9 @@ class AgentService:
                 identity=identity,
                 owner_effective=owner_effective,
             )
-            agent = await AgentRepository.set_approval(session, agent_id, approved_by=identity.sub)
+            agent = await AgentRepository.set_approval(
+                session, agent_id, approved_by=identity.sub, expires_at=expires_at
+            )
             if not existing_grants:
                 for permission in DEFAULT_AGENT_PERMISSIONS:
                     await ActorPermissionGrantRepository.grant(
@@ -401,6 +418,7 @@ class AgentService:
                     "owner_id": agent.owner_id,
                     "permissions": [g.permission for g in existing_grants]
                     or list(DEFAULT_AGENT_PERMISSIONS),
+                    "expires_at": _audit_value(agent.expires_at),
                 },
                 origin=identity.origin.value,
             )
@@ -1161,7 +1179,7 @@ class AgentService:
         self,
         agent_id: str,
         *,
-        update_data: dict[str, str | None],
+        update_data: dict[str, Any],
         identity: Identity,
     ) -> AgentView:
         """Partially update an agent; an ``owner_id`` change is a transfer.
@@ -1195,14 +1213,14 @@ class AgentService:
                 )
                 if agent.status == ActorStatus.ARCHIVED:
                     raise InvalidTransitionError(agent_id, ActorStatus.ARCHIVED, "update")
-                before = {k: getattr(agent, k) for k in update_data}
+                before = {k: _audit_value(getattr(agent, k)) for k in update_data}
                 owner_transferred = (
                     "owner_id" in update_data and update_data["owner_id"] != agent.owner_id
                 )
                 if owner_transferred and ORG_ADMIN not in identity.permissions:
                     raise OwnerTransferForbiddenError(agent_id)
                 agent = await AgentRepository.update_agent(session, agent_id, **update_data)
-                after = {k: getattr(agent, k) for k in update_data}
+                after = {k: _audit_value(getattr(agent, k)) for k in update_data}
                 if owner_transferred:
                     await revoke_active_grants_for_agent(
                         session, agent_id, identity=identity, agent_name=agent.name
@@ -1225,7 +1243,7 @@ class AgentService:
                 view = await self._view(session, agent)
         except DatabaseIntegrityError:
             raise InvalidOwnerError(update_data.get("owner_id") or "") from None
-        if owner_transferred:
+        if owner_transferred or "expires_at" in update_data:
             self._ctx.invalidate_broker_caches(agent_id=agent_id)
         return view
 

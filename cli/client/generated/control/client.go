@@ -1799,14 +1799,29 @@ type ActorSummaryResponse struct {
 // issued; treat unrecognised values as opaque labels.
 type ActorType string
 
+// AgentApproveRequest Optional request body for approving an agent.
+//
+// Examples: {"expires_at":"2026-12-31T23:59:00Z"}
+type AgentApproveRequest struct {
+	// ExpiresAt When the agent stops working (RFC 3339, in the future). After this moment it is refused new tokens and the tokens it already holds stop working. The agent is not deleted and keeps its grants; set a later time or null to restore it. Omit to leave the agent's expiry as it is.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
 // AgentCreateRequest Request body for creating an agent manually.
 //
-// Examples: {"description":"Reconciles Stripe invoices against the ledger every night.","name":"invoice-reconciler","permissions":["apis:read","capabilities:execute"]}
+// Examples: {"description":"Reconciles Stripe invoices against the ledger every night.","expires_at":"2026-12-31T23:59:00Z","name":"invoice-reconciler","permissions":["apis:read","capabilities:execute"]}
 type AgentCreateRequest struct {
 	// Description Optional free-text description of the agent.
 	//
 	// Examples: Reconciles Stripe invoices against the ledger every night.
 	Description *string `json:"description,omitempty"`
+
+	// ExpiresAt When the agent stops working (RFC 3339, in the future). After this moment it is refused new tokens and the tokens it already holds stop working. The agent is not deleted and keeps its grants; set a later time or null to restore it. Omit for an agent that never expires.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// Name Human-readable name of the agent.
 	//
@@ -1821,11 +1836,11 @@ type AgentCreateRequest struct {
 
 // AgentListResponse List of agents.
 //
-// Examples: {"data":[{"approved_at":"2026-01-15T09:45:00Z","approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","created_at":"2026-01-15T09:30:00Z","denial_reason":"Requested permissions exceed the agent's stated purpose.","denied_by":"usr_6968b3987ee4c3ec0b4ee3b9","description":"Reconciles Stripe invoices against the ledger every night.","has_api_key":true,"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","registered_by":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"}],"has_more":true,"next_cursor":"eyJ0IjogIjIwMjYtMDEtMTVUMDk6MzA6MDArMDA6MDAiLCAiaWQiOiAiM2YyYjhjMWUtN2Q0YS00ZTliLWE2YzUtMWQyZTNmNGE1YjZjIn0="}
+// Examples: {"data":[{"approved_at":"2026-01-15T09:45:00Z","approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","created_at":"2026-01-15T09:30:00Z","denial_reason":"Requested permissions exceed the agent's stated purpose.","denied_by":"usr_6968b3987ee4c3ec0b4ee3b9","description":"Reconciles Stripe invoices against the ledger every night.","expired":false,"expires_at":"2026-12-31T23:59:00Z","has_api_key":true,"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","registered_by":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"}],"has_more":true,"next_cursor":"eyJ0IjogIjIwMjYtMDEtMTVUMDk6MzA6MDArMDA6MDAiLCAiaWQiOiAiM2YyYjhjMWUtN2Q0YS00ZTliLWE2YzUtMWQyZTNmNGE1YjZjIn0="}
 type AgentListResponse struct {
 	// Data The page of agents.
 	//
-	// Examples: [{"approved_at":"2026-01-15T09:45:00Z","approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","created_at":"2026-01-15T09:30:00Z","denial_reason":"Requested permissions exceed the agent's stated purpose.","denied_by":"usr_6968b3987ee4c3ec0b4ee3b9","description":"Reconciles Stripe invoices against the ledger every night.","has_api_key":true,"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","registered_by":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"}]
+	// Examples: [{"approved_at":"2026-01-15T09:45:00Z","approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","created_at":"2026-01-15T09:30:00Z","denial_reason":"Requested permissions exceed the agent's stated purpose.","denied_by":"usr_6968b3987ee4c3ec0b4ee3b9","description":"Reconciles Stripe invoices against the ledger every night.","expired":false,"expires_at":"2026-12-31T23:59:00Z","has_api_key":true,"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","registered_by":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"}]
 	Data []AgentResponse `json:"data"`
 
 	// HasMore Whether more results exist after this page.
@@ -1841,12 +1856,17 @@ type AgentListResponse struct {
 
 // AgentPatchRequest Request body for partially updating an agent.
 //
-// Examples: {"description":"Reconciles Stripe invoices against the ledger every night.","name":"invoice-reconciler","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9"}
+// Examples: {"description":"Reconciles Stripe invoices against the ledger every night.","expires_at":"2026-12-31T23:59:00Z","name":"invoice-reconciler","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9"}
 type AgentPatchRequest struct {
 	// Description New description for the agent.
 	//
 	// Examples: Reconciles Stripe invoices against the ledger every night.
 	Description *string `json:"description,omitempty"`
+
+	// ExpiresAt When the agent stops working (RFC 3339, in the future). After this moment it is refused new tokens and the tokens it already holds stop working. The agent is not deleted and keeps its grants; set a later time or null to restore it. Send null to clear the expiry.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// Name New name for the agent.
 	//
@@ -1881,7 +1901,7 @@ type AgentPermissionsResponse struct {
 
 // AgentResponse Agent representation in API responses.
 //
-// Examples: {"approved_at":"2026-01-15T09:45:00Z","approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","created_at":"2026-01-15T09:30:00Z","denial_reason":"Requested permissions exceed the agent's stated purpose.","denied_by":"usr_6968b3987ee4c3ec0b4ee3b9","description":"Reconciles Stripe invoices against the ledger every night.","has_api_key":true,"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","registered_by":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"}
+// Examples: {"approved_at":"2026-01-15T09:45:00Z","approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","created_at":"2026-01-15T09:30:00Z","denial_reason":"Requested permissions exceed the agent's stated purpose.","denied_by":"usr_6968b3987ee4c3ec0b4ee3b9","description":"Reconciles Stripe invoices against the ledger every night.","expired":false,"expires_at":"2026-12-31T23:59:00Z","has_api_key":true,"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","registered_by":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"}
 type AgentResponse struct {
 	// ApprovedAt When the agent was approved (RFC 3339); null if not approved.
 	//
@@ -1912,6 +1932,16 @@ type AgentResponse struct {
 	//
 	// Examples: Reconciles Stripe invoices against the ledger every night.
 	Description *string `json:"description,omitempty"`
+
+	// Expired Whether `expires_at` has passed.
+	//
+	// Examples: false
+	Expired *bool `json:"expired,omitempty"`
+
+	// ExpiresAt When the agent stops working (RFC 3339); null if it never expires. Once passed, the agent is refused new tokens and its issued tokens stop working.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// HasApiKey Whether the agent currently has an active API key.
 	//
@@ -9956,7 +9986,7 @@ type ServiceUnavailable = ProblemDetail
 
 // Status200 Agent representation in API responses.
 //
-// Examples: {"approved_at":"2026-01-15T09:45:00Z","approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","created_at":"2026-01-15T09:30:00Z","denial_reason":"Requested permissions exceed the agent's stated purpose.","denied_by":"usr_6968b3987ee4c3ec0b4ee3b9","description":"Reconciles Stripe invoices against the ledger every night.","has_api_key":true,"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","registered_by":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"}
+// Examples: {"approved_at":"2026-01-15T09:45:00Z","approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","created_at":"2026-01-15T09:30:00Z","denial_reason":"Requested permissions exceed the agent's stated purpose.","denied_by":"usr_6968b3987ee4c3ec0b4ee3b9","description":"Reconciles Stripe invoices against the ledger every night.","expired":false,"expires_at":"2026-12-31T23:59:00Z","has_api_key":true,"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","registered_by":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"}
 type Status200 = AgentResponse
 
 // Status2002 Access token response after successful authentication.
@@ -10088,6 +10118,9 @@ type ListAgentOauthGrantsParams struct {
 
 // ListAgentOauthGrantsParamsStatus defines parameters for ListAgentOauthGrants.
 type ListAgentOauthGrantsParamsStatus string
+
+// ApproveAgentJSONBody defines parameters for ApproveAgent.
+type ApproveAgentJSONBody = AgentApproveRequest
 
 // ListApisParams defines parameters for ListApis.
 type ListApisParams struct {
@@ -10708,6 +10741,9 @@ type UpdateAgentJwksJSONRequestBody = JwksUpdateRequest
 
 // ReplaceAgentPermissionsJSONRequestBody defines body for ReplaceAgentPermissions for application/json ContentType.
 type ReplaceAgentPermissionsJSONRequestBody = AgentPermissionsRequest
+
+// ApproveAgentJSONRequestBody defines body for ApproveAgent for application/json ContentType.
+type ApproveAgentJSONRequestBody = ApproveAgentJSONBody
 
 // ClaimAgentJSONRequestBody defines body for ClaimAgent for application/json ContentType.
 type ClaimAgentJSONRequestBody = ClaimRequest
@@ -12558,7 +12594,7 @@ type ClientInterface interface {
 
 	// UpdateAgentWithBody Update an agent
 	//
-	// Partially update an agent's `name`, `description` or `owner_id`.
+	// Partially update an agent's `name`, `description`, `owner_id` or `expires_at`.
 	//
 	// Only the fields present in the body change; an empty body returns the
 	// agent unchanged. Allowed for the agent's owner or an `org:admin` (anyone
@@ -12568,7 +12604,9 @@ type ClientInterface interface {
 	// active credential bindings to credentials outside the new owner's
 	// ownership, and revokes agent permission grants above the new owner's
 	// permission ceiling (grant those permissions to the new owner first to
-	// keep them on the agent). The agent's API key is unaffected. An archived
+	// keep them on the agent). The agent's API key is unaffected. Setting `expires_at`
+	// (future only, otherwise 422) makes the agent stop working at that time; send
+	// null to clear it, or a later time to renew a lapsed agent. An archived
 	// agent cannot be updated (409). Returns the updated agent.
 	//
 	// Takes any type of body and a specified content type.
@@ -12578,7 +12616,7 @@ type ClientInterface interface {
 
 	// UpdateAgent Update an agent
 	//
-	// Partially update an agent's `name`, `description` or `owner_id`.
+	// Partially update an agent's `name`, `description`, `owner_id` or `expires_at`.
 	//
 	// Only the fields present in the body change; an empty body returns the
 	// agent unchanged. Allowed for the agent's owner or an `org:admin` (anyone
@@ -12588,7 +12626,9 @@ type ClientInterface interface {
 	// active credential bindings to credentials outside the new owner's
 	// ownership, and revokes agent permission grants above the new owner's
 	// permission ceiling (grant those permissions to the new owner first to
-	// keep them on the agent). The agent's API key is unaffected. An archived
+	// keep them on the agent). The agent's API key is unaffected. Setting `expires_at`
+	// (future only, otherwise 422) makes the agent stop working at that time; send
+	// null to clear it, or a later time to renew a lapsed agent. An archived
 	// agent cannot be updated (409). Returns the updated agent.
 	//
 	// Takes a body of the `application/json` content type.
@@ -12772,6 +12812,24 @@ type ClientInterface interface {
 	// Corresponds with PUT /agents/{agent_id}/permissions (the `ReplaceAgentPermissions` operationId).
 	ReplaceAgentPermissions(ctx context.Context, agentId string, body ReplaceAgentPermissionsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ApproveAgentWithBody Approve an agent
+	//
+	// Approve a pending agent.
+	//
+	// Allowed for the agent's owner or an ``org:admin``. An agent with no owner
+	// (an unclaimed self-registration) can be approved only by an ``org:admin``,
+	// who becomes its owner. Any other caller gets a 404, whatever the agent's
+	// status, so the response does not reveal agents outside the caller's
+	// ownership. Self-requested permissions above the owner's permission ceiling
+	// are dropped on approval; an explicit grant above the owner's ceiling
+	// fails with 409 (``agent_permission_exceeds_owner``). The optional body's
+	// ``expires_at`` sets when the agent stops working.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /agents/{agent_id}:approve (the `ApproveAgent` operationId).
+	ApproveAgentWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ApproveAgent Approve an agent
 	//
 	// Approve a pending agent.
@@ -12782,10 +12840,13 @@ type ClientInterface interface {
 	// status, so the response does not reveal agents outside the caller's
 	// ownership. Self-requested permissions above the owner's permission ceiling
 	// are dropped on approval; an explicit grant above the owner's ceiling
-	// fails with 409 (``agent_permission_exceeds_owner``).
+	// fails with 409 (``agent_permission_exceeds_owner``). The optional body's
+	// ``expires_at`` sets when the agent stops working.
+	//
+	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /agents/{agent_id}:approve (the `ApproveAgent` operationId).
-	ApproveAgent(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	ApproveAgent(ctx context.Context, agentId string, body ApproveAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ClaimAgentWithBody Claim an agent
 	//
@@ -15858,7 +15919,7 @@ func (c *Client) GetAgent(ctx context.Context, agentId string, reqEditors ...Req
 
 // UpdateAgentWithBody Update an agent
 //
-// Partially update an agent's `name`, `description` or `owner_id`.
+// Partially update an agent's `name`, `description`, `owner_id` or `expires_at`.
 //
 // Only the fields present in the body change; an empty body returns the
 // agent unchanged. Allowed for the agent's owner or an `org:admin` (anyone
@@ -15868,7 +15929,9 @@ func (c *Client) GetAgent(ctx context.Context, agentId string, reqEditors ...Req
 // active credential bindings to credentials outside the new owner's
 // ownership, and revokes agent permission grants above the new owner's
 // permission ceiling (grant those permissions to the new owner first to
-// keep them on the agent). The agent's API key is unaffected. An archived
+// keep them on the agent). The agent's API key is unaffected. Setting `expires_at`
+// (future only, otherwise 422) makes the agent stop working at that time; send
+// null to clear it, or a later time to renew a lapsed agent. An archived
 // agent cannot be updated (409). Returns the updated agent.
 //
 // Takes any type of body and a specified content type.
@@ -15888,7 +15951,7 @@ func (c *Client) UpdateAgentWithBody(ctx context.Context, agentId string, conten
 
 // UpdateAgent Update an agent
 //
-// Partially update an agent's `name`, `description` or `owner_id`.
+// Partially update an agent's `name`, `description`, `owner_id` or `expires_at`.
 //
 // Only the fields present in the body change; an empty body returns the
 // agent unchanged. Allowed for the agent's owner or an `org:admin` (anyone
@@ -15898,7 +15961,9 @@ func (c *Client) UpdateAgentWithBody(ctx context.Context, agentId string, conten
 // active credential bindings to credentials outside the new owner's
 // ownership, and revokes agent permission grants above the new owner's
 // permission ceiling (grant those permissions to the new owner first to
-// keep them on the agent). The agent's API key is unaffected. An archived
+// keep them on the agent). The agent's API key is unaffected. Setting `expires_at`
+// (future only, otherwise 422) makes the agent stop working at that time; send
+// null to clear it, or a later time to renew a lapsed agent. An archived
 // agent cannot be updated (409). Returns the updated agent.
 //
 // Takes a body of the `application/json` content type.
@@ -16222,6 +16287,34 @@ func (c *Client) ReplaceAgentPermissions(ctx context.Context, agentId string, bo
 	return c.Client.Do(req)
 }
 
+// ApproveAgentWithBody Approve an agent
+//
+// Approve a pending agent.
+//
+// Allowed for the agent's owner or an “org:admin“. An agent with no owner
+// (an unclaimed self-registration) can be approved only by an “org:admin“,
+// who becomes its owner. Any other caller gets a 404, whatever the agent's
+// status, so the response does not reveal agents outside the caller's
+// ownership. Self-requested permissions above the owner's permission ceiling
+// are dropped on approval; an explicit grant above the owner's ceiling
+// fails with 409 (“agent_permission_exceeds_owner“). The optional body's
+// “expires_at“ sets when the agent stops working.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /agents/{agent_id}:approve (the `ApproveAgent` operationId).
+func (c *Client) ApproveAgentWithBody(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApproveAgentRequestWithBody(c.Server, agentId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // ApproveAgent Approve an agent
 //
 // Approve a pending agent.
@@ -16232,11 +16325,14 @@ func (c *Client) ReplaceAgentPermissions(ctx context.Context, agentId string, bo
 // status, so the response does not reveal agents outside the caller's
 // ownership. Self-requested permissions above the owner's permission ceiling
 // are dropped on approval; an explicit grant above the owner's ceiling
-// fails with 409 (“agent_permission_exceeds_owner“).
+// fails with 409 (“agent_permission_exceeds_owner“). The optional body's
+// “expires_at“ sets when the agent stops working.
+//
+// Takes a body of the `application/json` content type.
 //
 // Corresponds with POST /agents/{agent_id}:approve (the `ApproveAgent` operationId).
-func (c *Client) ApproveAgent(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApproveAgentRequest(c.Server, agentId)
+func (c *Client) ApproveAgent(ctx context.Context, agentId string, body ApproveAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewApproveAgentRequest(c.Server, agentId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -22065,8 +22161,19 @@ func NewReplaceAgentPermissionsRequestWithBody(server string, agentId string, co
 	return req, nil
 }
 
-// NewApproveAgentRequest constructs an http.Request for the ApproveAgent method
-func NewApproveAgentRequest(server string, agentId string) (*http.Request, error) {
+// NewApproveAgentRequest calls the generic ApproveAgent builder with application/json body
+func NewApproveAgentRequest(server string, agentId string, body ApproveAgentJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewApproveAgentRequestWithBody(server, agentId, "application/json", bodyReader)
+}
+
+// NewApproveAgentRequestWithBody constructs an http.Request for the ApproveAgent method, with any body, and a specified content type
+func NewApproveAgentRequestWithBody(server string, agentId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -22091,10 +22198,12 @@ func NewApproveAgentRequest(server string, agentId string) (*http.Request, error
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -29897,7 +30006,7 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateAgentWithBodyWithResponse Update an agent
 	//
-	// Partially update an agent's `name`, `description` or `owner_id`.
+	// Partially update an agent's `name`, `description`, `owner_id` or `expires_at`.
 	//
 	// Only the fields present in the body change; an empty body returns the
 	// agent unchanged. Allowed for the agent's owner or an `org:admin` (anyone
@@ -29907,7 +30016,9 @@ type ClientWithResponsesInterface interface {
 	// active credential bindings to credentials outside the new owner's
 	// ownership, and revokes agent permission grants above the new owner's
 	// permission ceiling (grant those permissions to the new owner first to
-	// keep them on the agent). The agent's API key is unaffected. An archived
+	// keep them on the agent). The agent's API key is unaffected. Setting `expires_at`
+	// (future only, otherwise 422) makes the agent stop working at that time; send
+	// null to clear it, or a later time to renew a lapsed agent. An archived
 	// agent cannot be updated (409). Returns the updated agent.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -29917,7 +30028,7 @@ type ClientWithResponsesInterface interface {
 
 	// UpdateAgentWithResponse Update an agent
 	//
-	// Partially update an agent's `name`, `description` or `owner_id`.
+	// Partially update an agent's `name`, `description`, `owner_id` or `expires_at`.
 	//
 	// Only the fields present in the body change; an empty body returns the
 	// agent unchanged. Allowed for the agent's owner or an `org:admin` (anyone
@@ -29927,7 +30038,9 @@ type ClientWithResponsesInterface interface {
 	// active credential bindings to credentials outside the new owner's
 	// ownership, and revokes agent permission grants above the new owner's
 	// permission ceiling (grant those permissions to the new owner first to
-	// keep them on the agent). The agent's API key is unaffected. An archived
+	// keep them on the agent). The agent's API key is unaffected. Setting `expires_at`
+	// (future only, otherwise 422) makes the agent stop working at that time; send
+	// null to clear it, or a later time to renew a lapsed agent. An archived
 	// agent cannot be updated (409). Returns the updated agent.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -30125,6 +30238,24 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PUT /agents/{agent_id}/permissions (the `ReplaceAgentPermissions` operationId).
 	ReplaceAgentPermissionsWithResponse(ctx context.Context, agentId string, body ReplaceAgentPermissionsJSONRequestBody, reqEditors ...RequestEditorFn) (*ReplaceAgentPermissionsHTTPResp, error)
 
+	// ApproveAgentWithBodyWithResponse Approve an agent
+	//
+	// Approve a pending agent.
+	//
+	// Allowed for the agent's owner or an ``org:admin``. An agent with no owner
+	// (an unclaimed self-registration) can be approved only by an ``org:admin``,
+	// who becomes its owner. Any other caller gets a 404, whatever the agent's
+	// status, so the response does not reveal agents outside the caller's
+	// ownership. Self-requested permissions above the owner's permission ceiling
+	// are dropped on approval; an explicit grant above the owner's ceiling
+	// fails with 409 (``agent_permission_exceeds_owner``). The optional body's
+	// ``expires_at`` sets when the agent stops working.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /agents/{agent_id}:approve (the `ApproveAgent` operationId).
+	ApproveAgentWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApproveAgentHTTPResp, error)
+
 	// ApproveAgentWithResponse Approve an agent
 	//
 	// Approve a pending agent.
@@ -30135,12 +30266,13 @@ type ClientWithResponsesInterface interface {
 	// status, so the response does not reveal agents outside the caller's
 	// ownership. Self-requested permissions above the owner's permission ceiling
 	// are dropped on approval; an explicit grant above the owner's ceiling
-	// fails with 409 (``agent_permission_exceeds_owner``).
+	// fails with 409 (``agent_permission_exceeds_owner``). The optional body's
+	// ``expires_at`` sets when the agent stops working.
 	//
-	// Returns a wrapper object for the known response body format(s).
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /agents/{agent_id}:approve (the `ApproveAgent` operationId).
-	ApproveAgentWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*ApproveAgentHTTPResp, error)
+	ApproveAgentWithResponse(ctx context.Context, agentId string, body ApproveAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*ApproveAgentHTTPResp, error)
 
 	// ClaimAgentWithBodyWithResponse Claim an agent
 	//
@@ -49193,7 +49325,7 @@ func (c *ClientWithResponses) GetAgentWithResponse(ctx context.Context, agentId 
 
 // UpdateAgentWithBodyWithResponse Update an agent
 //
-// Partially update an agent's `name`, `description` or `owner_id`.
+// Partially update an agent's `name`, `description`, `owner_id` or `expires_at`.
 //
 // Only the fields present in the body change; an empty body returns the
 // agent unchanged. Allowed for the agent's owner or an `org:admin` (anyone
@@ -49203,7 +49335,9 @@ func (c *ClientWithResponses) GetAgentWithResponse(ctx context.Context, agentId 
 // active credential bindings to credentials outside the new owner's
 // ownership, and revokes agent permission grants above the new owner's
 // permission ceiling (grant those permissions to the new owner first to
-// keep them on the agent). The agent's API key is unaffected. An archived
+// keep them on the agent). The agent's API key is unaffected. Setting `expires_at`
+// (future only, otherwise 422) makes the agent stop working at that time; send
+// null to clear it, or a later time to renew a lapsed agent. An archived
 // agent cannot be updated (409). Returns the updated agent.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -49219,7 +49353,7 @@ func (c *ClientWithResponses) UpdateAgentWithBodyWithResponse(ctx context.Contex
 
 // UpdateAgentWithResponse Update an agent
 //
-// Partially update an agent's `name`, `description` or `owner_id`.
+// Partially update an agent's `name`, `description`, `owner_id` or `expires_at`.
 //
 // Only the fields present in the body change; an empty body returns the
 // agent unchanged. Allowed for the agent's owner or an `org:admin` (anyone
@@ -49229,7 +49363,9 @@ func (c *ClientWithResponses) UpdateAgentWithBodyWithResponse(ctx context.Contex
 // active credential bindings to credentials outside the new owner's
 // ownership, and revokes agent permission grants above the new owner's
 // permission ceiling (grant those permissions to the new owner first to
-// keep them on the agent). The agent's API key is unaffected. An archived
+// keep them on the agent). The agent's API key is unaffected. Setting `expires_at`
+// (future only, otherwise 422) makes the agent stop working at that time; send
+// null to clear it, or a later time to renew a lapsed agent. An archived
 // agent cannot be updated (409). Returns the updated agent.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
@@ -49511,6 +49647,30 @@ func (c *ClientWithResponses) ReplaceAgentPermissionsWithResponse(ctx context.Co
 	return ParseReplaceAgentPermissionsHTTPResp(rsp)
 }
 
+// ApproveAgentWithBodyWithResponse Approve an agent
+//
+// Approve a pending agent.
+//
+// Allowed for the agent's owner or an “org:admin“. An agent with no owner
+// (an unclaimed self-registration) can be approved only by an “org:admin“,
+// who becomes its owner. Any other caller gets a 404, whatever the agent's
+// status, so the response does not reveal agents outside the caller's
+// ownership. Self-requested permissions above the owner's permission ceiling
+// are dropped on approval; an explicit grant above the owner's ceiling
+// fails with 409 (“agent_permission_exceeds_owner“). The optional body's
+// “expires_at“ sets when the agent stops working.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /agents/{agent_id}:approve (the `ApproveAgent` operationId).
+func (c *ClientWithResponses) ApproveAgentWithBodyWithResponse(ctx context.Context, agentId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApproveAgentHTTPResp, error) {
+	rsp, err := c.ApproveAgentWithBody(ctx, agentId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseApproveAgentHTTPResp(rsp)
+}
+
 // ApproveAgentWithResponse Approve an agent
 //
 // Approve a pending agent.
@@ -49521,13 +49681,14 @@ func (c *ClientWithResponses) ReplaceAgentPermissionsWithResponse(ctx context.Co
 // status, so the response does not reveal agents outside the caller's
 // ownership. Self-requested permissions above the owner's permission ceiling
 // are dropped on approval; an explicit grant above the owner's ceiling
-// fails with 409 (“agent_permission_exceeds_owner“).
+// fails with 409 (“agent_permission_exceeds_owner“). The optional body's
+// “expires_at“ sets when the agent stops working.
 //
-// Returns a wrapper object for the known response body format(s).
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /agents/{agent_id}:approve (the `ApproveAgent` operationId).
-func (c *ClientWithResponses) ApproveAgentWithResponse(ctx context.Context, agentId string, reqEditors ...RequestEditorFn) (*ApproveAgentHTTPResp, error) {
-	rsp, err := c.ApproveAgent(ctx, agentId, reqEditors...)
+func (c *ClientWithResponses) ApproveAgentWithResponse(ctx context.Context, agentId string, body ApproveAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*ApproveAgentHTTPResp, error) {
+	rsp, err := c.ApproveAgent(ctx, agentId, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}

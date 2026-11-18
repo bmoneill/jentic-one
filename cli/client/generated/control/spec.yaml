@@ -265,6 +265,8 @@ components:
             denial_reason: Requested permissions exceed the agent's stated purpose.
             denied_by: usr_6968b3987ee4c3ec0b4ee3b9
             description: Reconciles Stripe invoices against the ledger every night.
+            expired: false
+            expires_at: '2026-12-31T23:59:00Z'
             has_api_key: true
             id: agnt_6968b3984d1c238dbe7e2e29
             name: invoice-reconciler
@@ -560,12 +562,27 @@ components:
       - user
       - agent
       type: string
+    AgentApproveRequest:
+      description: Optional request body for approving an agent.
+      examples:
+      - expires_at: '2026-12-31T23:59:00Z'
+      properties:
+        expires_at:
+          description: When the agent stops working (RFC 3339, in the future). After this moment it is refused new tokens and the tokens it already holds stop working. The agent is not deleted and keeps its grants; set a later time or null to restore it. Omit to leave the agent's expiry as it is.
+          examples:
+          - '2026-12-31T23:59:00Z'
+          format: date-time
+          type:
+          - string
+          - 'null'
+      type: object
     AgentCreateRequest:
       additionalProperties: false
       description: Request body for creating an agent manually.
       examples:
       - &id264
         description: Reconciles Stripe invoices against the ledger every night.
+        expires_at: '2026-12-31T23:59:00Z'
         name: invoice-reconciler
         permissions: &id004
         - apis:read
@@ -576,6 +593,14 @@ components:
           examples:
           - Reconciles Stripe invoices against the ledger every night.
           maxLength: 1024
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: When the agent stops working (RFC 3339, in the future). After this moment it is refused new tokens and the tokens it already holds stop working. The agent is not deleted and keeps its grants; set a later time or null to restore it. Omit for an agent that never expires.
+          examples:
+          - '2026-12-31T23:59:00Z'
+          format: date-time
           type:
           - string
           - 'null'
@@ -613,6 +638,8 @@ components:
           denial_reason: Requested permissions exceed the agent's stated purpose.
           denied_by: usr_6968b3987ee4c3ec0b4ee3b9
           description: Reconciles Stripe invoices against the ledger every night.
+          expired: false
+          expires_at: '2026-12-31T23:59:00Z'
           has_api_key: true
           id: agnt_6968b3984d1c238dbe7e2e29
           name: invoice-reconciler
@@ -651,6 +678,7 @@ components:
       examples:
       - &id267
         description: Reconciles Stripe invoices against the ledger every night.
+        expires_at: '2026-12-31T23:59:00Z'
         name: invoice-reconciler
         owner_id: usr_6968b3987ee4c3ec0b4ee3b9
       properties:
@@ -659,6 +687,14 @@ components:
           examples:
           - Reconciles Stripe invoices against the ledger every night.
           maxLength: 1024
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: When the agent stops working (RFC 3339, in the future). After this moment it is refused new tokens and the tokens it already holds stop working. The agent is not deleted and keeps its grants; set a later time or null to restore it. Send null to clear the expiry.
+          examples:
+          - '2026-12-31T23:59:00Z'
+          format: date-time
           type:
           - string
           - 'null'
@@ -766,6 +802,20 @@ components:
           description: Free-text description of the agent; null if not set.
           examples:
           - Reconciles Stripe invoices against the ledger every night.
+          type:
+          - string
+          - 'null'
+        expired:
+          default: false
+          description: Whether `expires_at` has passed.
+          examples:
+          - false
+          type: boolean
+        expires_at:
+          description: When the agent stops working (RFC 3339); null if it never expires. Once passed, the agent is refused new tokens and its issued tokens stop working.
+          examples:
+          - '2026-12-31T23:59:00Z'
+          format: date-time
           type:
           - string
           - 'null'
@@ -15368,7 +15418,7 @@ paths:
       - Agents
     patch:
       description: |-
-        Partially update an agent's `name`, `description` or `owner_id`.
+        Partially update an agent's `name`, `description`, `owner_id` or `expires_at`.
 
         Only the fields present in the body change; an empty body returns the
         agent unchanged. Allowed for the agent's owner or an `org:admin` (anyone
@@ -15378,7 +15428,9 @@ paths:
         active credential bindings to credentials outside the new owner's
         ownership, and revokes agent permission grants above the new owner's
         permission ceiling (grant those permissions to the new owner first to
-        keep them on the agent). The agent's API key is unaffected. An archived
+        keep them on the agent). The agent's API key is unaffected. Setting `expires_at`
+        (future only, otherwise 422) makes the agent stop working at that time; send
+        null to clear it, or a later time to renew a lapsed agent. An archived
         agent cannot be updated (409). Returns the updated agent.
       operationId: updateAgent
       parameters:
@@ -16170,7 +16222,8 @@ paths:
         status, so the response does not reveal agents outside the caller's
         ownership. Self-requested permissions above the owner's permission ceiling
         are dropped on approval; an explicit grant above the owner's ceiling
-        fails with 409 (``agent_permission_exceeds_owner``).
+        fails with 409 (``agent_permission_exceeds_owner``). The optional body's
+        ``expires_at`` sets when the agent stops working.
       operationId: approveAgent
       parameters:
       - description: ID of the agent.
@@ -16187,6 +16240,15 @@ paths:
           - agnt_6968b3984d1c238dbe7e2e29
           title: Agent Id
           type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/AgentApproveRequest'
+              - type: 'null'
+              title: Body
+        description: Request payload for the `approveAgent` operation.
       responses:
         '200':
           $ref: '#/components/responses/Status200'

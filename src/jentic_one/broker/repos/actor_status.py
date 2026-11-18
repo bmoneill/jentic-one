@@ -47,6 +47,7 @@ from sqlalchemy import Boolean, Integer, String, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jentic_one.shared.auth.actor_status import read_user_status
+from jentic_one.shared.auth.agent_expiry import agent_expired
 from jentic_one.shared.auth.agent_permission_ceiling import cap_agent_permissions
 from jentic_one.shared.auth.owner_status import log_agent_owner_inactive
 from jentic_one.shared.auth.permission_catalog import compute_effective
@@ -70,10 +71,11 @@ _AGENT_STATUS_SQL = (
     f" ELSE '{_OWNER_INACTIVE}' END"
 )
 _AGENT_STATUS = text(
-    f"SELECT {_AGENT_STATUS_SQL} AS status, a.owner_id FROM agents a WHERE a.id = :actor_id"
+    f"SELECT {_AGENT_STATUS_SQL} AS status, a.owner_id, a.expires_at FROM agents a"
+    " WHERE a.id = :actor_id"
 )
 _AGENT_AUTHORITY = text(
-    f"SELECT {_AGENT_STATUS_SQL} AS status, a.owner_id,"
+    f"SELECT {_AGENT_STATUS_SQL} AS status, a.owner_id, a.expires_at,"
     " EXISTS (SELECT 1 FROM actor_permission_grants g"
     "  WHERE g.actor_id = a.id AND g.actor_type = 'agent' AND g.permission = :permission)"
     " AS granted,"
@@ -156,7 +158,7 @@ class ActorStatusResolver:
                 return False
             if row.status == _OWNER_INACTIVE:
                 log_agent_owner_inactive(actor_id, row.owner_id)
-            return bool(row.status == "active")
+            return bool(row.status == "active") and not agent_expired(row.expires_at)
         if actor_type == ActorType.USER.value:
             status = await read_user_status(self._admin_db, actor_id)
             return status is not None and status.accepts_credentials
@@ -201,7 +203,8 @@ class ActorStatusResolver:
                     row.granted and cap_agent_permissions([permission], owner_effective)
                 )
                 base = ActorAuthority(
-                    active=row.status == "active", holds_permission=holds_permission
+                    active=row.status == "active" and not agent_expired(row.expires_at),
+                    holds_permission=holds_permission,
                 )
                 if not base.active or not has_channel_lineage:
                     return base

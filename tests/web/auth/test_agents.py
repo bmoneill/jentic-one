@@ -91,6 +91,56 @@ def test_approve_agent(admin_client: TestClient, test_agent_id: str) -> None:
     assert data["approved_at"] is not None
 
 
+def test_approve_agent_with_expiry(admin_client: TestClient, test_agent_id: str) -> None:
+    expires_at = (datetime.now(UTC) + timedelta(days=7)).isoformat()
+    resp = admin_client.post(f"/agents/{test_agent_id}:approve", json={"expires_at": expires_at})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "active"
+    assert data["expires_at"] is not None
+    assert data["expired"] is False
+
+
+def test_approve_agent_past_expiry_is_422(admin_client: TestClient, test_agent_id: str) -> None:
+    past = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
+    resp = admin_client.post(f"/agents/{test_agent_id}:approve", json={"expires_at": past})
+    assert resp.status_code == 422
+    assert admin_client.get(f"/agents/{test_agent_id}").json()["status"] == "pending"
+
+
+def test_agent_expiry_set_changed_and_cleared(admin_client: TestClient, test_agent_id: str) -> None:
+    assert admin_client.get(f"/agents/{test_agent_id}").json()["expires_at"] is None
+    first = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    resp = admin_client.patch(f"/agents/{test_agent_id}", json={"expires_at": first})
+    assert resp.status_code == 200
+    assert resp.json()["expires_at"] is not None
+    assert resp.json()["expired"] is False
+
+    later = (datetime.now(UTC) + timedelta(days=30)).isoformat()
+    resp = admin_client.patch(f"/agents/{test_agent_id}", json={"expires_at": later})
+    assert resp.status_code == 200
+
+    resp = admin_client.patch(f"/agents/{test_agent_id}", json={"expires_at": None})
+    assert resp.status_code == 200
+    assert resp.json()["expires_at"] is None
+
+
+def test_agent_patch_past_expiry_is_422(admin_client: TestClient, test_agent_id: str) -> None:
+    past = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
+    resp = admin_client.patch(f"/agents/{test_agent_id}", json={"expires_at": past})
+    assert resp.status_code == 422
+
+
+def test_create_agent_with_expiry(admin_client: TestClient) -> None:
+    expires_at = (datetime.now(UTC) + timedelta(days=3)).isoformat()
+    resp = admin_client.post("/agents", json={"name": "expiring", "expires_at": expires_at})
+    assert resp.status_code == 201
+    assert resp.json()["expires_at"] is not None
+    past = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    resp = admin_client.post("/agents", json={"name": "lapsed", "expires_at": past})
+    assert resp.status_code == 422
+
+
 def test_approve_agent_invalid_state(admin_client: TestClient, test_agent_id: str) -> None:
     admin_client.post(f"/agents/{test_agent_id}:approve")
     resp = admin_client.post(f"/agents/{test_agent_id}:approve")

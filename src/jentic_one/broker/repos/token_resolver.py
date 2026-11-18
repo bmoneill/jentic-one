@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, text
 
+from jentic_one.shared.auth.agent_expiry import agent_expired
 from jentic_one.shared.auth.agent_permission_ceiling import cap_agent_permissions
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.owner_status import log_agent_owner_inactive
@@ -96,6 +97,10 @@ class InProcessTokenResolver:
             # Only read to name the owner in the ``agent_owner_inactive`` log.
             " (SELECT a.owner_id FROM agents a WHERE a.id = t.actor_id"
             "   AND t.actor_type = 'agent') AS actor_owner_id,"
+            # Read in Python (``agent_expired``), not compared in SQL: the
+            # stored timestamp format differs between SQLite and PostgreSQL.
+            " (SELECT a.expires_at FROM agents a WHERE a.id = t.actor_id"
+            "   AND t.actor_type = 'agent') AS actor_expires_at,"
             " (SELECT c.active FROM oauth_clients c"
             "  WHERE c.client_id = t.oauth_client_id) AS oauth_client_active,"
             " (SELECT c.approval_status = 'approved' FROM oauth_clients c"
@@ -214,6 +219,7 @@ class InProcessTokenResolver:
             revoked_at is None
             and expires_at > now
             and row.actor_status == "active"
+            and not agent_expired(row.actor_expires_at, now=now)
             and client_active
             and grant_active
         )

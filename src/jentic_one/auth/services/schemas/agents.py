@@ -6,6 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from jentic_one.shared.auth.agent_expiry import agent_expired
 from jentic_one.shared.schemas import ServedApiRef
 
 
@@ -26,7 +27,13 @@ class AgentView(BaseModel):
     denied_by: str | None = None
     created_at: datetime
     approved_at: datetime | None = None
+    expires_at: datetime | None = None
     has_api_key: bool = False
+
+    @property
+    def expired(self) -> bool:
+        """Whether ``expires_at`` has passed."""
+        return agent_expired(self.expires_at)
 
 
 class AgentCreatePayload(BaseModel):
@@ -35,6 +42,7 @@ class AgentCreatePayload(BaseModel):
     name: str
     description: str | None = None
     permissions: list[str] | None = None
+    expires_at: datetime | None = None
 
 
 class CredentialBindingView(BaseModel):

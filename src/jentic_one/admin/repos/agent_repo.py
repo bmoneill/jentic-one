@@ -32,6 +32,7 @@ class AgentRepository:
         parent_agent_id: str | None = None,
         created_by: str,
         status: ActorStatus = ActorStatus.PENDING,
+        expires_at: datetime | None = None,
     ) -> Agent:
         agent = Agent(
             name=name,
@@ -41,6 +42,7 @@ class AgentRepository:
             parent_agent_id=parent_agent_id,
             created_by=created_by,
             status=status,
+            expires_at=expires_at,
         )
         session.add(agent)
         await session.flush()
@@ -143,7 +145,13 @@ class AgentRepository:
         return agent
 
     @staticmethod
-    async def set_approval(session: AsyncSession, agent_id: str, *, approved_by: str) -> Agent:
+    async def set_approval(
+        session: AsyncSession,
+        agent_id: str,
+        *,
+        approved_by: str,
+        expires_at: datetime | None = None,
+    ) -> Agent:
         # Lock the row: approval sets owner_id only when still unowned, and a
         # concurrent `:claim` (which locks + commits owner_id) can interleave
         # under READ COMMITTED. Taking the same row lock serializes the two, so
@@ -157,6 +165,8 @@ class AgentRepository:
         agent.status = ActorStatus.ACTIVE
         agent.approved_by = approved_by
         agent.approved_at = datetime.now(UTC)
+        if expires_at is not None:
+            agent.expires_at = expires_at
         if agent.owner_id is None:
             agent.owner_id = approved_by
         # Invalidate RAT in the same flush — approval and RAT clearing are one
@@ -227,7 +237,7 @@ class AgentRepository:
         await session.flush()
         return agent
 
-    _UPDATABLE_FIELDS = frozenset({"name", "description", "owner_id"})
+    _UPDATABLE_FIELDS = frozenset({"name", "description", "owner_id", "expires_at"})
 
     @staticmethod
     async def update_agent(

@@ -56,6 +56,7 @@ from jentic_one.auth.services.token_service import (
     resolve_effective_scopes,
 )
 from jentic_one.shared.audit import AuditAction, AuditTargetType, record_audit
+from jentic_one.shared.auth.agent_expiry import agent_expired
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.owner_status import log_agent_owner_inactive
 from jentic_one.shared.auth.permission_catalog import USER_OAUTH_PASSTHROUGH_SCOPES
@@ -912,7 +913,11 @@ class AuthorizeService:
                     raise InvalidGrantError("issuing OAuth client is not active")
                 found = await AgentRepository.get_with_owner_active(session, grant.agent_id)
                 agent, owner_active = found if found is not None else (None, False)
-                if agent is None or agent.status != ActorStatus.ACTIVE.value:
+                if (
+                    agent is None
+                    or agent.status != ActorStatus.ACTIVE.value
+                    or agent_expired(agent.expires_at)
+                ):
                     raise InvalidGrantError("granted agent is not active")
                 if not owner_active:
                     # An owned agent follows its owner's account status (a

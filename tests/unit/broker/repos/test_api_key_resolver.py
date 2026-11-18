@@ -18,8 +18,8 @@ from jentic_one.shared.models import ActorType
 # default here so only the tests that care about them have to mention them.
 AgentRow = namedtuple(
     "AgentRow",
-    ["agent_id", "status", "owner_id", "name", "owner_active", "permission"],
-    defaults=(None, True, None),
+    ["agent_id", "status", "owner_id", "name", "owner_active", "permission", "expires_at"],
+    defaults=(None, True, None, None),
 )
 
 

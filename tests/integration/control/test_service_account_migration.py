@@ -33,7 +33,6 @@ from alembic import command
 from sqlalchemy import inspect, text
 
 from jentic_one.admin.core.schema.agent_credentials import AgentCredential
-from jentic_one.admin.core.schema.agents import Agent
 from jentic_one.admin.core.schema.audit import AuditEntry
 from jentic_one.admin.repos.agent_credential_repo import AgentCredentialRepository
 from jentic_one.control.core.schema.agent_permission_rules import AgentPermissionRule
@@ -758,17 +757,20 @@ async def test_concurrent_double_run_mints_no_duplicate_digest_row(
     # Simulate the concurrent loser's view: the digest already landed on an
     # agent (what a winning parallel run's insert does).
     async with admin_db.session() as session:
-        session.add(
-            Agent(
-                id="agnt_t8m_race_winner",
-                name="race-winner",
-                owner_id=_OWNER,
-                registered_by="system:theme8-sa-migration",
-                status="active",
-                created_by="system:theme8-sa-migration",
-            )
+        # Raw SQL, not the ORM ``Agent``: admin sits at the pre-drop revision
+        # here, below the ``agents.expires_at`` column the model now maps.
+        await session.execute(
+            text(
+                "INSERT INTO agents (id, name, owner_id, registered_by, status, created_by)"
+                " VALUES (:id, :name, :owner, :registered_by, 'active', :registered_by)"
+            ),
+            {
+                "id": "agnt_t8m_race_winner",
+                "name": "race-winner",
+                "owner": _OWNER,
+                "registered_by": "system:theme8-sa-migration",
+            },
         )
-        await session.flush()
         session.add(
             AgentCredential(
                 id="agc_t8m_race_winner",

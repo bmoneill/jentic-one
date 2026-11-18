@@ -15,6 +15,7 @@ import structlog
 from sqlalchemy import Boolean, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from jentic_one.shared.auth.agent_expiry import agent_expired
 from jentic_one.shared.auth.agent_permission_ceiling import cap_agent_permissions
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.owner_status import log_agent_owner_inactive
@@ -73,7 +74,7 @@ class _InactiveAgent:
 
 
 _AGENT_CREDENTIAL_LOOKUP = text(
-    "SELECT a.id AS agent_id, a.name, a.status, a.owner_id,"
+    "SELECT a.id AS agent_id, a.name, a.status, a.owner_id, a.expires_at,"
     " CASE WHEN u.deleted_at IS NULL THEN u.active ELSE FALSE END AS owner_active,"
     " g.permission, og.permission AS owner_permission"
     " FROM agent_credentials ac"
@@ -236,7 +237,7 @@ class ApiKeyResolver:
         if not rows:
             return _AgentArm.MISS
         row = rows[0]
-        if row.status != "active":
+        if row.status != "active" or agent_expired(row.expires_at):
             return _InactiveAgent(agent_id=row.agent_id)
         if row.owner_id is not None and not row.owner_active:
             # The owner is disabled or deleted, or its row is missing:

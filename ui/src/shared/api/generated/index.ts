@@ -12,6 +12,7 @@ export type { ActorLookupEntryResponse } from './models/ActorLookupEntryResponse
 export type { ActorLookupResponse } from './models/ActorLookupResponse';
 export type { ActorSummaryResponse } from './models/ActorSummaryResponse';
 export { ActorType } from './models/ActorType';
+export type { AgentApproveRequest } from './models/AgentApproveRequest';
 export type { AgentCreateRequest } from './models/AgentCreateRequest';
 export type { AgentListResponse } from './models/AgentListResponse';
 export type { AgentPatchRequest } from './models/AgentPatchRequest';

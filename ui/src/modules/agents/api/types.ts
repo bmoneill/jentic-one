@@ -80,6 +80,10 @@ export interface AgentEntity {
 	denialReason: string | null;
 	createdAt: string;
 	approvedAt: string | null;
+	/** When the agent stops working (RFC 3339); null when it never expires. */
+	expiresAt: string | null;
+	/** `expiresAt` has passed: the agent gets no new tokens and issued ones stop working. */
+	expired: boolean;
 	attribution: Attribution;
 	hasApiKey: boolean;
 }
@@ -95,6 +99,8 @@ export function agentToEntity(r: AgentResponse): AgentEntity {
 		denialReason: r.denial_reason ?? null,
 		createdAt: r.created_at,
 		approvedAt: r.approved_at ?? null,
+		expiresAt: r.expires_at ?? null,
+		expired: r.expired ?? false,
 		attribution: {
 			registeredBy: r.registered_by ?? null,
 			approvedBy: r.approved_by ?? null,

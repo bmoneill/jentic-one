@@ -131,9 +131,17 @@ export async function listAgents(params: {
 	}
 }
 
-export async function approveAgent(agentId: string): Promise<AgentEntity> {
+export async function approveAgent(
+	agentId: string,
+	options: { expiresAt?: string } = {},
+): Promise<AgentEntity> {
 	try {
-		return agentToEntity(await AgentsService.approveAgent({ agentId }));
+		return agentToEntity(
+			await AgentsService.approveAgent({
+				agentId,
+				requestBody: options.expiresAt ? { expires_at: options.expiresAt } : undefined,
+			}),
+		);
 	} catch (error) {
 		throw toAgentsError(error, 'Failed to approve the agent.');
 	}
@@ -429,6 +437,8 @@ export interface AgentPatch {
 	name?: string;
 	description?: string | null;
 	ownerId?: string | null;
+	/** RFC 3339 instant in the future; `null` clears the expiry. */
+	expiresAt?: string | null;
 }
 
 /**
@@ -444,6 +454,7 @@ export async function updateAgent(agentId: string, patch: AgentPatch): Promise<A
 				...(patch.name !== undefined ? { name: patch.name } : {}),
 				...(patch.description !== undefined ? { description: patch.description } : {}),
 				...(patch.ownerId !== undefined ? { owner_id: patch.ownerId } : {}),
+				...(patch.expiresAt !== undefined ? { expires_at: patch.expiresAt } : {}),
 			},
 		});
 		return agentToEntity(res);

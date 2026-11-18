@@ -23,6 +23,7 @@
 import type { ReactNode } from 'react';
 import { DangerZone, IdentitySettingsCard, type DangerZoneAction } from '@/shared/ui';
 import { AGENTS_WRITE, useCanAccess } from '@/shared/auth';
+import { AgentExpiryCard } from '@/modules/agents/components/detail/AgentExpiryCard';
 import {
 	useUpdateAgent,
 	ACTIONS_FOR_STATUS,
@@ -105,6 +106,8 @@ export function AgentSettingsPanel({
 			/>
 
 			{afterIdentity}
+
+			{!isArchived && <AgentExpiryCard agent={agent} canManage={canManage} />}
 
 			<DangerZone
 				actions={dangerActions}

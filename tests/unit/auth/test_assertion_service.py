@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import time
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -86,6 +87,7 @@ def _make_active_agent(jwks: dict[str, Any]) -> MagicMock:
     agent.id = "agnt_test123"
     agent.status = "active"
     agent.jwks = jwks
+    agent.expires_at = None
     return agent
 
 
@@ -178,6 +180,25 @@ async def test_verify_terminal_statuses_stay_generic(
     assertion = _make_assertion(private_key)
     with pytest.raises(InvalidGrantError, match="Assertion is invalid"):
         await svc.verify_and_exchange(assertion)
+
+
+@patch("jentic_one.auth.services.assertion_service.TokenService")
+@patch("jentic_one.auth.services.assertion_service.AgentRepository")
+async def test_verify_expired_agent_mints_no_token_and_stays_generic(
+    mock_agent_repo: MagicMock, mock_token_svc_cls: MagicMock
+) -> None:
+    """An active agent past its ``expires_at`` gets the same generic rejection as
+    a disabled one and no token is issued."""
+    ctx = _make_ctx()
+    private_key, jwks = _generate_keypair()
+    agent = _make_active_agent(jwks)
+    agent.expires_at = datetime.now(UTC) - timedelta(minutes=1)
+    mock_agent_repo.get_with_owner_active = AsyncMock(return_value=(agent, True))
+
+    svc = AssertionService(ctx)
+    with pytest.raises(InvalidGrantError, match="Assertion is invalid"):
+        await svc.verify_and_exchange(_make_assertion(private_key, jti="expired-jti"))
+    mock_token_svc_cls.return_value.issue_pair.assert_not_called()
 
 
 @patch("jentic_one.auth.services.assertion_service.TokenService")

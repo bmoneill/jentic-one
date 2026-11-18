@@ -15,6 +15,7 @@ from jentic_one.auth.services.schemas.agents import (
 )
 from jentic_one.auth.web.deps import get_agent_auth_service, get_agent_service
 from jentic_one.auth.web.schemas.agents import (
+    AgentApproveRequest,
     AgentCreateRequest,
     AgentListResponse,
     AgentPatchRequest,
@@ -66,6 +67,8 @@ def _agent_response(view: AgentView) -> AgentResponse:
         denied_by=view.denied_by,
         created_at=view.created_at,
         approved_at=view.approved_at,
+        expires_at=view.expires_at,
+        expired=view.expired,
         has_api_key=view.has_api_key,
     )
 
@@ -91,7 +94,10 @@ async def create_agent(
     """
     view = await agent_svc.create(
         AgentCreatePayload(
-            name=body.name, description=body.description, permissions=body.permissions
+            name=body.name,
+            description=body.description,
+            permissions=body.permissions,
+            expires_at=body.expires_at,
         ),
         owner_id=identity.sub,
         identity=identity,
@@ -188,7 +194,7 @@ async def update_agent(
     identity: Identity = get_current_identity(required_permissions=["agents:write"]),
     agent_svc: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
-    """Partially update an agent's `name`, `description` or `owner_id`.
+    """Partially update an agent's `name`, `description`, `owner_id` or `expires_at`.
 
     Only the fields present in the body change; an empty body returns the
     agent unchanged. Allowed for the agent's owner or an `org:admin` (anyone
@@ -198,7 +204,9 @@ async def update_agent(
     active credential bindings to credentials outside the new owner's
     ownership, and revokes agent permission grants above the new owner's
     permission ceiling (grant those permissions to the new owner first to
-    keep them on the agent). The agent's API key is unaffected. An archived
+    keep them on the agent). The agent's API key is unaffected. Setting `expires_at`
+    (future only, otherwise 422) makes the agent stop working at that time; send
+    null to clear it, or a later time to renew a lapsed agent. An archived
     agent cannot be updated (409). Returns the updated agent.
     """
     update_data = body.model_dump(exclude_unset=True)
@@ -226,6 +234,7 @@ async def update_agent(
 )
 async def approve_agent(
     agent_id: AgentIdPath,
+    body: AgentApproveRequest | None = None,
     identity: Identity = get_current_identity(required_permissions=["agents:write"]),
     agent_svc: AgentService = Depends(get_agent_service),
 ) -> AgentResponse:
@@ -237,9 +246,12 @@ async def approve_agent(
     status, so the response does not reveal agents outside the caller's
     ownership. Self-requested permissions above the owner's permission ceiling
     are dropped on approval; an explicit grant above the owner's ceiling
-    fails with 409 (``agent_permission_exceeds_owner``).
+    fails with 409 (``agent_permission_exceeds_owner``). The optional body's
+    ``expires_at`` sets when the agent stops working.
     """
-    view = await agent_svc.approve(agent_id, identity=identity)
+    view = await agent_svc.approve(
+        agent_id, identity=identity, expires_at=body.expires_at if body else None
+    )
     return _agent_response(view)
 
 

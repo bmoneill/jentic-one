@@ -24,6 +24,7 @@ from jentic_one.admin.repos import (
 )
 from jentic_one.auth.services.errors import InvalidGrantError
 from jentic_one.shared.audit import AuditAction, AuditTargetType, record_audit
+from jentic_one.shared.auth.agent_expiry import agent_expired
 from jentic_one.shared.auth.agent_permission_ceiling import cap_agent_permissions
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.owner_status import log_agent_owner_inactive
@@ -221,7 +222,7 @@ async def _agent_may_act(session: AsyncSession, agent_id: str) -> tuple[Agent | 
     if found is None:
         return None, False
     agent, owner_active = found
-    if agent.status != ActorStatus.ACTIVE:
+    if agent.status != ActorStatus.ACTIVE or agent_expired(agent.expires_at):
         return agent, False
     if not owner_active:
         # A soft-deleted owner has ``active`` false, so this covers delete too.

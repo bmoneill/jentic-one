@@ -18,6 +18,7 @@ from jentic_one.auth.services.errors import InvalidGrantError
 from jentic_one.auth.services.token_service import TokenService
 from jentic_one.shared.audit import AuditAction, AuditTargetType, record_audit
 from jentic_one.shared.auth import resolve_agent_key
+from jentic_one.shared.auth.agent_expiry import agent_expired
 from jentic_one.shared.auth.owner_status import log_agent_owner_inactive
 from jentic_one.shared.config import bind_origin, effective_auth_base_url, resolved_auth_base_url
 from jentic_one.shared.context import Context
@@ -147,6 +148,11 @@ class AssertionService:
             if agent.status == ActorStatus.PENDING:
                 raise InvalidGrantError(_PENDING)
             if agent.status != ActorStatus.ACTIVE:
+                raise InvalidGrantError(_INVALID)
+            if agent_expired(agent.expires_at):
+                # A lapsed agent gets no new token; tokens already issued stop
+                # resolving in the broker. Same generic refusal as any other
+                # non-active agent.
                 raise InvalidGrantError(_INVALID)
             if not owner_active:
                 # An owned agent follows its owner's account status: no new
