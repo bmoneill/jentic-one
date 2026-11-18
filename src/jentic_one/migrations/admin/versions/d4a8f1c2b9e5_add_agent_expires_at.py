@@ -5,6 +5,11 @@ Adds a nullable ``expires_at`` timestamp to ``agents``. An agent whose
 resolving as active. Existing rows stay ``NULL`` (never expires); no backfill
 or index is required.
 
+The downgrade first disables every active agent whose expiry has already
+passed, so rolling the code back fails closed instead of reviving a lapsed
+agent, and only then drops the column. An operator restores such an agent with
+``:enable``.
+
 Revision ID: d4a8f1c2b9e5
 Revises: c7d2e9a41b30
 Create Date: 2026-11-18
@@ -27,4 +32,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    agents = sa.table(
+        "agents",
+        sa.column("expires_at", sa.DateTime(timezone=True)),
+        sa.column("status", sa.String),
+    )
+    op.execute(
+        agents.update()
+        .where(agents.c.status == "active")
+        .where(agents.c.expires_at.is_not(None))
+        .where(agents.c.expires_at <= sa.func.now())
+        .values(status="disabled")
+    )
     op.drop_column("agents", "expires_at")

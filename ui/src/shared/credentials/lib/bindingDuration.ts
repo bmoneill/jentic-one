@@ -1,47 +1,77 @@
 /**
- * How long a new credential binding lasts — the grant's `expires_at`, chosen
- * as an amount and a unit ("10 minutes") rather than a timestamp.
+ * How long access lasts — a grant's or an agent's `expires_at`, chosen as a
+ * duration rather than a timestamp (credential grant expiry, D8).
  *
- * The amount is kept as the field's text so a half-typed value ("", "1") stays
- * editable; it is parsed only when the expiry is worked out. The expiry is
- * computed at the moment of the bind, never ahead of it, so "10 minutes" runs
- * from when the operator confirms, not from when the step opened.
+ * The choice is one of a short list of preset durations (1 hour to 90 days),
+ * or "Custom…": a whole number and a unit, where "No expiry" also lives. "No
+ * expiry" is deliberately not a preset, so choosing it takes a deliberate
+ * step, and nothing is chosen until the operator picks: there is no default.
  *
- * `never` is the one unit with no amount: the binding is made without an
- * `expires_at` and lasts until it is suspended or removed.
+ * A custom amount is kept as the field's text so a half-typed value ("", "1")
+ * stays editable; it is parsed only when the expiry is worked out. The expiry
+ * is computed at the moment of saving, never ahead of it, so "1 day" runs from
+ * when the operator confirms, not from when the control rendered.
  *
  * Every unit is a fixed length of time. There are deliberately no months (or
  * years): "1 month" depends on the start date and the calendar, which makes the
  * resulting expiry ambiguous; operators wanting about a month enter 30 days.
  */
 
-export type BindingDurationUnit = 'seconds' | 'minutes' | 'hours' | 'days' | 'never';
+export type BindingDurationUnit = 'seconds' | 'minutes' | 'hours' | 'days';
 
-export interface BindingDuration {
-	/** The number field's text. */
-	amount: string;
-	unit: BindingDurationUnit;
-}
+/** A custom picker's unit: a fixed length, or `never` (no expiry). */
+export type CustomDurationUnit = BindingDurationUnit | 'never';
 
-/** A low default: a new binding lapses quickly unless the operator says otherwise. */
-export const DEFAULT_BINDING_DURATION: BindingDuration = { amount: '10', unit: 'minutes' };
+export type BindingDurationPreset = '1h' | '8h' | '1d' | '7d' | '30d' | '90d';
 
-export const BINDING_DURATION_UNITS: readonly { value: BindingDurationUnit; label: string }[] = [
+export type BindingDuration =
+	| { kind: 'preset'; preset: BindingDurationPreset }
+	| {
+			kind: 'custom';
+			/** The number field's text. */
+			amount: string;
+			unit: CustomDurationUnit;
+	  };
+
+const HOUR_MS = 3_600_000;
+const DAY_MS = 86_400_000;
+
+export const BINDING_DURATION_PRESETS: readonly {
+	value: BindingDurationPreset;
+	label: string;
+	ms: number;
+}[] = [
+	{ value: '1h', label: '1 hour', ms: HOUR_MS },
+	{ value: '8h', label: '8 hours', ms: 8 * HOUR_MS },
+	{ value: '1d', label: '1 day', ms: DAY_MS },
+	{ value: '7d', label: '7 days', ms: 7 * DAY_MS },
+	{ value: '30d', label: '30 days', ms: 30 * DAY_MS },
+	{ value: '90d', label: '90 days', ms: 90 * DAY_MS },
+];
+
+export const CUSTOM_DURATION_UNITS: readonly { value: CustomDurationUnit; label: string }[] = [
 	{ value: 'seconds', label: 'Seconds' },
 	{ value: 'minutes', label: 'Minutes' },
 	{ value: 'hours', label: 'Hours' },
 	{ value: 'days', label: 'Days' },
-	{ value: 'never', label: 'Never expires' },
+	{ value: 'never', label: 'No expiry' },
 ];
 
-/** Upper bound on the amount, whatever the unit (999 days is about 2.7 years). */
+/** Where "Custom…" starts: a day, so switching to it never lands on "No expiry". */
+export const INITIAL_CUSTOM_DURATION: BindingDuration = {
+	kind: 'custom',
+	amount: '1',
+	unit: 'days',
+};
+
+/** Upper bound on a custom amount, whatever the unit (999 days is about 2.7 years). */
 export const MAX_BINDING_DURATION_AMOUNT = 999;
 
-const UNIT_MS: Record<Exclude<BindingDurationUnit, 'never'>, number> = {
+const UNIT_MS: Record<BindingDurationUnit, number> = {
 	seconds: 1_000,
 	minutes: 60_000,
-	hours: 3_600_000,
-	days: 86_400_000,
+	hours: HOUR_MS,
+	days: DAY_MS,
 };
 
 /** The amount as a whole number in range, or `null` when it is not one. */
@@ -52,10 +82,13 @@ export function parseDurationAmount(amount: string): number | null {
 	return n >= 1 && n <= MAX_BINDING_DURATION_AMOUNT ? n : null;
 }
 
-/** What is wrong with the amount, for the field's error — `null` when it is fine
- * (always, for `never`, which takes no amount). */
-export function bindingDurationError(duration: BindingDuration): string | null {
-	if (duration.unit === 'never') return null;
+/**
+ * What is wrong with a custom amount, for the field's error — `null` when it is
+ * fine, when nothing is chosen yet, for a preset, and for "No expiry" (which
+ * takes no amount).
+ */
+export function bindingDurationError(duration: BindingDuration | null): string | null {
+	if (duration === null || duration.kind === 'preset' || duration.unit === 'never') return null;
 	if (duration.amount.trim() === '') return 'Enter how long access lasts.';
 	if (parseDurationAmount(duration.amount) === null) {
 		return `Enter a whole number from 1 to ${MAX_BINDING_DURATION_AMOUNT}.`;
@@ -64,14 +97,20 @@ export function bindingDurationError(duration: BindingDuration): string | null {
 }
 
 /**
- * When a binding made at `now` with this duration expires: a `Date`, `'never'`
- * for a binding with no expiry, or `null` for an invalid amount. Kept apart so
- * a bad amount can never be mistaken for "no expiry".
+ * When access chosen at `now` with this duration ends: a `Date`, `'never'` for
+ * no expiry, or `null` when nothing is chosen yet or a custom amount is
+ * invalid. Kept apart so an incomplete choice can never be mistaken for "no
+ * expiry".
  */
 export function expiresAtFromDuration(
-	duration: BindingDuration,
+	duration: BindingDuration | null,
 	now: Date = new Date(),
 ): Date | 'never' | null {
+	if (duration === null) return null;
+	if (duration.kind === 'preset') {
+		const preset = BINDING_DURATION_PRESETS.find((p) => p.value === duration.preset);
+		return preset ? new Date(now.getTime() + preset.ms) : null;
+	}
 	if (duration.unit === 'never') return 'never';
 	const amount = parseDurationAmount(duration.amount);
 	if (amount === null) return null;

@@ -37,6 +37,7 @@ import {
 	useAgentsCredentialBindings,
 	usePendingAgents,
 	useApproveAgent,
+	approveInputId,
 	useDenyAgent,
 	useDisableAgent,
 	useArchiveAgent,
@@ -548,11 +549,7 @@ export function FlatAgentsSection({
 				onReview={selectAgent}
 				onApprove={(id) => approve.mutate(id)}
 				onDeny={({ id, name }) => setConfirm({ kind: 'deny', id, name })}
-				approvePendingId={
-					approve.isPending && typeof approve.variables === 'string'
-						? approve.variables
-						: null
-				}
+				approvePendingId={approve.isPending ? approveInputId(approve.variables) : null}
 			/>
 
 			{/* The strip and the selected agent's card sit flush: the strip's notch
@@ -591,9 +588,14 @@ export function FlatAgentsSection({
 							openTileKey={openTileKey}
 							onOpenTile={setOpenTileKey}
 							onCloseTile={() => setOpenTileKey(null)}
-							onApprove={() => approve.mutate(panelAgent.id)}
+							onApprove={(expiresAt) =>
+								approve.mutate(
+									expiresAt ? { id: panelAgent.id, expiresAt } : panelAgent.id,
+								)
+							}
 							approvePending={
-								approve.isPending && approve.variables === panelAgent.id
+								approve.isPending &&
+								approveInputId(approve.variables) === panelAgent.id
 							}
 							onDeny={() =>
 								setConfirm({
@@ -645,7 +647,9 @@ export function FlatAgentsSection({
 						agent={selected}
 						onOpenSurface={setDockSurface}
 						onApprove={() => approve.mutate(selected.id)}
-						approvePending={approve.isPending && approve.variables === selected.id}
+						approvePending={
+							approve.isPending && approveInputId(approve.variables) === selected.id
+						}
 						onArchive={() =>
 							setConfirm({ kind: 'archive', id: selected.id, name: selected.name })
 						}

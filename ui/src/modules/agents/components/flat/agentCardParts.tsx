@@ -76,6 +76,7 @@ export function StateBannerFrame({
 	status,
 	title,
 	detail,
+	below,
 	actions,
 	role,
 	stackActions = false,
@@ -85,6 +86,8 @@ export function StateBannerFrame({
 	status: BanneredStatus;
 	title: ReactNode;
 	detail?: ReactNode;
+	/** Block content under the detail line (a form control, say). */
+	below?: ReactNode;
 	actions?: ReactNode;
 	role?: 'status';
 	/** Below `sm`, put the actions on their own line under the words, so a
@@ -114,6 +117,7 @@ export function StateBannerFrame({
 			<div className="min-w-0 flex-1 space-y-0.5">
 				<p className="text-foreground text-sm leading-tight font-medium">{title}</p>
 				{detail && <p className="text-muted-foreground text-xs leading-snug">{detail}</p>}
+				{below && <div className="pt-2">{below}</div>}
 			</div>
 			{actions && (
 				<span

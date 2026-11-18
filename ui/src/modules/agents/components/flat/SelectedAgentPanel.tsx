@@ -78,6 +78,13 @@ import {
 } from '@/modules/agents/lib/apiPreflight';
 import type { QueueBackSeed } from '@/modules/agents/lib/setupQueue';
 import { usePreflightInputs } from '@/modules/agents/lib/usePreflightInputs';
+import { describeAgentExpiry } from '@/modules/agents/lib/agentExpiry';
+import { BindingDurationField } from '@/shared/credentials/components';
+import {
+	bindingDurationError,
+	expiresAtFromDuration,
+	type BindingDuration,
+} from '@/shared/credentials/lib/bindingDuration';
 
 /**
  * Copy for the non-active banner. Suspension stops traffic, not editing.
@@ -112,11 +119,19 @@ function StateBanner({
 	status: BanneredStatus;
 	denialReason: string | null;
 	deniedBy: string | null;
-	onApprove: () => void;
+	/** Approve, optionally with when the agent stops working (ISO 8601). */
+	onApprove: (expiresAt?: string) => void;
 	approvePending: boolean;
 	onDeny: () => void;
 }) {
 	const grantId = useId();
+	// Optional: approving without a choice leaves the agent without an expiry.
+	const [duration, setDuration] = useState<BindingDuration | null>(null);
+	const durationInvalid = bindingDurationError(duration) !== null;
+	const approve = (): void => {
+		const end = expiresAtFromDuration(duration);
+		onApprove(end instanceof Date ? end.toISOString() : undefined);
+	};
 	// Approving or denying needs `agents:write` (or `org:admin`); anyone else
 	// reads the state without the verbs.
 	const canDecide = useCanAccess(AGENTS_WRITE);
@@ -148,6 +163,18 @@ function StateBanner({
 					)}
 				</>
 			}
+			below={
+				status === 'pending' && canDecide ? (
+					<BindingDurationField
+						value={duration}
+						onChange={setDuration}
+						disabled={approvePending}
+						label="Stops working after (optional)"
+						describe={describeAgentExpiry}
+						testIdPrefix="approve-expiry"
+					/>
+				) : undefined
+			}
 			actions={
 				// The banner pins the longest-waiting agent only; any OTHER pending
 				// agent is decided here, so both verbs sit on its own panel — in the
@@ -158,7 +185,8 @@ function StateBanner({
 							size="sm"
 							variant={ACTION_VARIANT.approve}
 							loading={approvePending}
-							onClick={onApprove}
+							disabled={durationInvalid}
+							onClick={approve}
 							aria-describedby={grantId}
 							data-testid="state-banner-approve"
 						>
@@ -204,7 +232,8 @@ export interface SelectedAgentPanelProps {
 	openTileKey: string | null;
 	onOpenTile: (key: string) => void;
 	onCloseTile: () => void;
-	onApprove: () => void;
+	/** Approve this (pending) agent, optionally with when it stops working (ISO 8601). */
+	onApprove: (expiresAt?: string) => void;
 	approvePending: boolean;
 	/** Open the page's reason-required deny dialog for this (pending) agent. */
 	onDeny: () => void;

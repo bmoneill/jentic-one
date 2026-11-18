@@ -20,6 +20,7 @@ import { AGENTS_READ, useCanAccess } from '@/shared/auth';
 import type { SelectedApi } from '@/shared/credentials/api';
 import {
 	useAgentCredentialBindings,
+	approveInputId,
 	useAgents,
 	type AgentEntity,
 	type useApproveAgent,
@@ -170,7 +171,7 @@ export function useFirstAgentLanding({
 	// view the landing hands to must not show the agent as pending.
 	const approving =
 		agent != null &&
-		approve.variables === agent.id &&
+		approveInputId(approve.variables) === agent.id &&
 		(approve.isPending || (approve.isSuccess && agent.status === 'pending'));
 
 	const visible = agents.length === 0 || up;
