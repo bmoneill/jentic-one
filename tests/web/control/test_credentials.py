@@ -741,6 +741,27 @@ async def test_list_credential_agents_last_used(
             await session.commit()
 
 
+async def test_list_credential_agents_expiry(
+    cred_writer_client: TestClient, web_context: Context, bound_agents: tuple[str, list[str]]
+) -> None:
+    """Each row carries the binding's ``expires_at`` and whether it has passed;
+    an expired binding is listed, not hidden, and a binding with none reads null."""
+    credential_id, (expired_id, open_id) = bound_agents
+    past = datetime.now(UTC) - timedelta(hours=1)
+    async with web_context.admin_db.transaction() as session:
+        await AgentCredentialBindingRepository.set_expires_at(
+            session, agent_id=expired_id, credential_id=credential_id, expires_at=past
+        )
+
+    resp = cred_writer_client.get(f"/credentials/{credential_id}/agents")
+    assert resp.status_code == 200, resp.text
+    rows = {r["agent_id"]: r for r in resp.json()["data"]}
+    assert datetime.fromisoformat(rows[expired_id]["expires_at"]) == past
+    assert rows[expired_id]["expired"] is True
+    assert rows[open_id]["expires_at"] is None
+    assert rows[open_id]["expired"] is False
+
+
 def test_list_credential_agents_empty(cred_writer_client: TestClient) -> None:
     """A credential with no direct bindings returns an empty page, not 404."""
     credential_id = _create_api_key(cred_writer_client)

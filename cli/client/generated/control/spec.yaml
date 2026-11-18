@@ -3974,6 +3974,8 @@ components:
         - agent_id: agnt_6968b3984d1c238dbe7e2e29
           agent_name: billing-assistant
           bound_at: '2026-01-15T09:30:00Z'
+          expired: false
+          expires_at: '2026-12-31T23:59:00Z'
           last_used_at: '2026-02-03T14:05:00Z'
           rule_set_id: prs_6968b3987c22b63e87e79f05
           status: active
@@ -4011,6 +4013,8 @@ components:
       - agent_id: agnt_6968b3984d1c238dbe7e2e29
         agent_name: billing-assistant
         bound_at: '2026-01-15T09:30:00Z'
+        expired: false
+        expires_at: '2026-12-31T23:59:00Z'
         last_used_at: '2026-02-03T14:05:00Z'
         rule_set_id: prs_6968b3987c22b63e87e79f05
         status: active
@@ -4033,6 +4037,20 @@ components:
           - '2026-01-15T09:30:00Z'
           format: date-time
           type: string
+        expired:
+          default: false
+          description: 'Whether `expires_at` has passed: the agent cannot execute through this credential until the binding is renewed.'
+          examples:
+          - false
+          type: boolean
+        expires_at:
+          description: When the binding stops authorizing calls (RFC 3339); null if it never expires. Independent of `suspended`.
+          examples:
+          - '2026-12-31T23:59:00Z'
+          format: date-time
+          type:
+          - string
+          - 'null'
         last_used_at:
           description: When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.
           examples:
@@ -19851,6 +19869,7 @@ paths:
         the caller may see.
         Suspended bindings are included with their flag set and, when known, the
         reason (`api_deleted` when the credential's API was deleted).
+        Expired bindings are included too, with `expires_at` and `expired` set.
         Each row carries `last_used_at`: when that agent last made a call through
         this credential (null if never).
       operationId: listCredentialAgents

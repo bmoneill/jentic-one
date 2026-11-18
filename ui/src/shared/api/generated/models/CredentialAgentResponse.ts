@@ -19,6 +19,14 @@ export type CredentialAgentResponse = {
      */
     bound_at: string;
     /**
+     * Whether `expires_at` has passed: the agent cannot execute through this credential until the binding is renewed.
+     */
+    expired?: boolean;
+    /**
+     * When the binding stops authorizing calls (RFC 3339); null if it never expires. Independent of `suspended`.
+     */
+    expires_at?: (string | null);
+    /**
      * When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.
      */
     last_used_at?: (string | null);

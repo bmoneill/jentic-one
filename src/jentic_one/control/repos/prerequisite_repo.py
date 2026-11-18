@@ -48,6 +48,8 @@ class CredentialBoundAgentRow(NamedTuple):
     # suspended by hand.
     suspended_reason: str | None = None
     agent_owner_id: str | None = None
+    # When the binding stops authorizing calls (fixed expiry); None never expires.
+    expires_at: datetime | None = None
     # Latest recorded execution by the agent through the credential; None when
     # never used or not looked up (see :meth:`last_used_by_agents`).
     last_used_at: datetime | None = None
@@ -206,7 +208,7 @@ class PrerequisiteRepository:
 
         stmt = text(
             "SELECT b.id, a.id, a.name, a.status, b.bound_at, b.suspended, b.rule_set_id, "
-            "b.suspended_reason, a.owner_id "
+            "b.suspended_reason, a.owner_id, b.expires_at "
             "FROM agent_credential_bindings b "
             "JOIN agents a ON a.id = b.agent_id "
             f"WHERE {' AND '.join(conditions)} "
@@ -216,7 +218,7 @@ class PrerequisiteRepository:
         if bind_params:
             stmt = stmt.bindparams(*bind_params)
         # Typed result columns: SQLite returns raw strings and integers otherwise.
-        typed = stmt.columns(bound_at=UTCDateTime(), suspended=Boolean())
+        typed = stmt.columns(bound_at=UTCDateTime(), suspended=Boolean(), expires_at=UTCDateTime())
         result = await session.execute(typed, params)
         return [CredentialBoundAgentRow(*row) for row in result.fetchall()]
 

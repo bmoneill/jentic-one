@@ -91,6 +91,7 @@ from jentic_one.control.web.schemas.permission_rules import (
     PermissionTestResponse,
     ScopeOptionSchema,
 )
+from jentic_one.shared.auth.agent_expiry import agent_expired
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
 from jentic_one.shared.models.credentials import CredentialType
@@ -548,6 +549,7 @@ async def list_credential_agents(
     the caller may see.
     Suspended bindings are included with their flag set and, when known, the
     reason (`api_deleted` when the credential's API was deleted).
+    Expired bindings are included too, with `expires_at` and `expired` set.
     Each row carries `last_used_at`: when that agent last made a call through
     this credential (null if never).
     """
@@ -564,6 +566,8 @@ async def list_credential_agents(
                 suspended=row.suspended,
                 suspended_reason=row.suspended_reason,
                 rule_set_id=row.rule_set_id,
+                expires_at=row.expires_at,
+                expired=agent_expired(row.expires_at),
                 last_used_at=row.last_used_at,
             )
             for row in data

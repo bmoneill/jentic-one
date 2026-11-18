@@ -3837,11 +3837,11 @@ type CreateAdminRequest struct {
 
 // CredentialAgentListResponse Paginated list of agents directly bound to a credential.
 //
-// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","last_used_at":"2026-02-03T14:05:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}],"has_more":true,"next_cursor":"eyJ0IjogIjIwMjYtMDEtMTVUMDk6MzA6MDArMDA6MDAiLCAiaWQiOiAiM2YyYjhjMWUtN2Q0YS00ZTliLWE2YzUtMWQyZTNmNGE1YjZjIn0="}
+// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}],"has_more":true,"next_cursor":"eyJ0IjogIjIwMjYtMDEtMTVUMDk6MzA6MDArMDA6MDAiLCAiaWQiOiAiM2YyYjhjMWUtN2Q0YS00ZTliLWE2YzUtMWQyZTNmNGE1YjZjIn0="}
 type CredentialAgentListResponse struct {
 	// Data The page of bound agents.
 	//
-	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","last_used_at":"2026-02-03T14:05:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}]
+	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}]
 	Data []CredentialAgentResponse `json:"data"`
 
 	// HasMore Whether more results exist after this page.
@@ -3857,7 +3857,7 @@ type CredentialAgentListResponse struct {
 
 // CredentialAgentResponse Agent directly bound to a credential.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","last_used_at":"2026-02-03T14:05:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}
 type CredentialAgentResponse struct {
 	// AgentId ID of the bound agent.
 	//
@@ -3873,6 +3873,16 @@ type CredentialAgentResponse struct {
 	//
 	// Examples: 2026-01-15T09:30:00Z
 	BoundAt time.Time `json:"bound_at"`
+
+	// Expired Whether `expires_at` has passed: the agent cannot execute through this credential until the binding is renewed.
+	//
+	// Examples: false
+	Expired *bool `json:"expired,omitempty"`
+
+	// ExpiresAt When the binding stops authorizing calls (RFC 3339); null if it never expires. Independent of `suspended`.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// LastUsedAt When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.
 	//
@@ -13850,6 +13860,7 @@ type ClientInterface interface {
 	// the caller may see.
 	// Suspended bindings are included with their flag set and, when known, the
 	// reason (`api_deleted` when the credential's API was deleted).
+	// Expired bindings are included too, with `expires_at` and `expired` set.
 	// Each row carries `last_used_at`: when that agent last made a call through
 	// this credential (null if never).
 	//
@@ -18086,6 +18097,7 @@ func (c *Client) UpdateCredential(ctx context.Context, credentialId PathCredenti
 // the caller may see.
 // Suspended bindings are included with their flag set and, when known, the
 // reason (`api_deleted` when the credential's API was deleted).
+// Expired bindings are included too, with `expires_at` and `expired` set.
 // Each row carries `last_used_at`: when that agent last made a call through
 // this credential (null if never).
 //
@@ -31516,6 +31528,7 @@ type ClientWithResponsesInterface interface {
 	// the caller may see.
 	// Suspended bindings are included with their flag set and, when known, the
 	// reason (`api_deleted` when the credential's API was deleted).
+	// Expired bindings are included too, with `expires_at` and `expired` set.
 	// Each row carries `last_used_at`: when that agent last made a call through
 	// this credential (null if never).
 	//
@@ -51495,6 +51508,7 @@ func (c *ClientWithResponses) UpdateCredentialWithResponse(ctx context.Context, 
 // the caller may see.
 // Suspended bindings are included with their flag set and, when known, the
 // reason (`api_deleted` when the credential's API was deleted).
+// Expired bindings are included too, with `expires_at` and `expired` set.
 // Each row carries `last_used_at`: when that agent last made a call through
 // this credential (null if never).
 //

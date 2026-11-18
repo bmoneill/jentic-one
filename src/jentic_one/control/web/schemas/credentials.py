@@ -1030,6 +1030,22 @@ class CredentialAgentResponse(BaseModel):
             "policy; null means the binding's inline rules apply."
         ),
     )
+    expires_at: datetime | None = Field(
+        default=None,
+        examples=["2026-12-31T23:59:00Z"],
+        description=(
+            "When the binding stops authorizing calls (RFC 3339); null if it never "
+            "expires. Independent of `suspended`."
+        ),
+    )
+    expired: bool = Field(
+        default=False,
+        examples=[False],
+        description=(
+            "Whether `expires_at` has passed: the agent cannot execute through this "
+            "credential until the binding is renewed."
+        ),
+    )
     last_used_at: datetime | None = Field(
         default=None,
         examples=["2026-02-03T14:05:00Z"],

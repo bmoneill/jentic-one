@@ -6665,6 +6665,8 @@
                 "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
                 "agent_name": "billing-assistant",
                 "bound_at": "2026-01-15T09:30:00Z",
+                "expired": false,
+                "expires_at": "2026-12-31T23:59:00Z",
                 "last_used_at": "2026-02-03T14:05:00Z",
                 "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                 "status": "active",
@@ -6685,6 +6687,8 @@
                   "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
                   "agent_name": "billing-assistant",
                   "bound_at": "2026-01-15T09:30:00Z",
+                  "expired": false,
+                  "expires_at": "2026-12-31T23:59:00Z",
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "status": "active",
@@ -6733,6 +6737,8 @@
             "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
             "agent_name": "billing-assistant",
             "bound_at": "2026-01-15T09:30:00Z",
+            "expired": false,
+            "expires_at": "2026-12-31T23:59:00Z",
             "last_used_at": "2026-02-03T14:05:00Z",
             "rule_set_id": "prs_6968b3987c22b63e87e79f05",
             "status": "active",
@@ -6762,6 +6768,29 @@
             ],
             "format": "date-time",
             "type": "string"
+          },
+          "expired": {
+            "default": false,
+            "description": "Whether `expires_at` has passed: the agent cannot execute through this credential until the binding is renewed.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the binding stops authorizing calls (RFC 3339); null if it never expires. Independent of `suspended`.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
+            ]
           },
           "last_used_at": {
             "anyOf": [
@@ -33956,7 +33985,7 @@
     "/credentials/{credential_id}/agents": {
       "description": "`GET`: List agents bound to credential.",
       "get": {
-        "description": "List agents directly bound to a credential with cursor-based pagination.\n\nThe reverse lookup for the credential-detail \"Agents\" view: every agent\nwhose direct binding points at this credential, filtered to the agents\nthe caller may see.\nSuspended bindings are included with their flag set and, when known, the\nreason (`api_deleted` when the credential's API was deleted).\nEach row carries `last_used_at`: when that agent last made a call through\nthis credential (null if never).",
+        "description": "List agents directly bound to a credential with cursor-based pagination.\n\nThe reverse lookup for the credential-detail \"Agents\" view: every agent\nwhose direct binding points at this credential, filtered to the agents\nthe caller may see.\nSuspended bindings are included with their flag set and, when known, the\nreason (`api_deleted` when the credential's API was deleted).\nExpired bindings are included too, with `expires_at` and `expired` set.\nEach row carries `last_used_at`: when that agent last made a call through\nthis credential (null if never).",
         "operationId": "listCredentialAgents",
         "parameters": [
           {
@@ -34026,6 +34055,8 @@
                       "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
                       "agent_name": "billing-assistant",
                       "bound_at": "2026-01-15T09:30:00Z",
+                      "expired": false,
+                      "expires_at": "2026-12-31T23:59:00Z",
                       "last_used_at": "2026-02-03T14:05:00Z",
                       "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                       "status": "active",
