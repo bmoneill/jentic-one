@@ -1989,6 +1989,59 @@ describe('AgentsPage — flat agents surface', () => {
 		expect(days).toBeLessThanOrEqual(7);
 	});
 
+	it("the panel's expiry is the one the dock's Approve sends, and can be cleared again", async () => {
+		const user = userEvent.setup();
+		const bodies: unknown[] = [];
+		worker.use(
+			http.post('*/agents/:id\\:approve', async ({ request }) => {
+				const text = await request.text();
+				bodies.push(text ? JSON.parse(text) : null);
+				return HttpResponse.json({
+					id: 'agnt_pending_2',
+					name: 'release-notes-bot',
+					registered_by: 'self',
+					status: 'active',
+					created_at: '2026-10-01T10:00:00Z',
+				});
+			}),
+		);
+		renderPage('/?agent=agnt_pending_2');
+		const banner = await screen.findByTestId('agent-state-banner-pending');
+		const preset = within(banner).getByTestId('approve-expiry-duration-preset');
+
+		// "No expiry" is the empty choice, and picking it again clears a choice.
+		await user.selectOptions(preset, '1d');
+		await user.selectOptions(preset, '');
+		expect(preset).toHaveValue('');
+
+		// A bad custom amount holds the dock's Approve too.
+		await user.selectOptions(preset, 'custom');
+		const amount = within(banner).getByTestId('approve-expiry-duration-amount');
+		await user.clear(amount);
+		expect(await screen.findByTestId('dock-approve')).toBeDisabled();
+		await user.type(amount, '2');
+		await user.selectOptions(
+			within(banner).getByTestId('approve-expiry-duration-unit'),
+			'hours',
+		);
+
+		await user.click(screen.getByTestId('dock-approve'));
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		const { expires_at } = bodies[0] as { expires_at: string };
+		const hours = (new Date(expires_at).getTime() - Date.now()) / 3_600_000;
+		expect(hours).toBeGreaterThan(1.9);
+		expect(hours).toBeLessThanOrEqual(2);
+	});
+
+	it("keeps the pending banner's controls out of its live region", async () => {
+		renderPage('/?agent=agnt_pending_2');
+		const banner = await screen.findByTestId('agent-state-banner-pending');
+		const live = within(banner).getByRole('status');
+		expect(live).toHaveTextContent('Waiting for approval');
+		expect(within(live).queryAllByRole('button')).toHaveLength(0);
+		expect(within(live).queryAllByRole('combobox')).toHaveLength(0);
+	});
+
 	it('keeps the deny dialog open and toasts when the panel deny fails', async () => {
 		const user = userEvent.setup();
 		worker.use(createErrorHandler('post', '/agents/:id\\:deny', { status: 500 }));

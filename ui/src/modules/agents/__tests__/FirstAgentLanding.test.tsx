@@ -745,6 +745,31 @@ describe('Agents page — zero agents', () => {
 		);
 	});
 
+	it('approves from the card with an optional expiry', async () => {
+		const bodies: unknown[] = [];
+		worker.use(
+			http.post('*/agents/:id', async ({ request }) => {
+				const text = await request.clone().text();
+				bodies.push(text ? JSON.parse(text) : null);
+				return undefined;
+			}),
+		);
+		const user = userEvent.setup();
+		const { queryClient } = renderPage();
+		await landing();
+		await arrive('my-first-agent', queryClient);
+
+		const preset = screen.getByTestId('arrival-approve-expiry-duration-preset');
+		expect(preset).toHaveValue('');
+		await user.selectOptions(preset, '30d');
+		await user.click(screen.getByRole('button', { name: 'Approve my-first-agent' }));
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		const { expires_at } = bodies[0] as { expires_at: string };
+		const days = (new Date(expires_at).getTime() - Date.now()) / 86_400_000;
+		expect(days).toBeGreaterThan(29.9);
+		expect(days).toBeLessThanOrEqual(30);
+	});
+
 	it('approving from the card moves it to its last step and suggests GitHub', async () => {
 		const user = userEvent.setup();
 		const { container, queryClient } = renderPage();

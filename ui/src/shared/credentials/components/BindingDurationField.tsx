@@ -9,6 +9,11 @@
  *
  * Under the control it says roughly when access would end if saved now (in
  * the caller's words, via `describe`), or what is wrong with a custom amount.
+ *
+ * Where the choice is optional (approving an agent), `clearable` makes the
+ * empty choice selectable under `placeholder`, so the operator can go back to
+ * it. `compact` fits the control into a row of buttons: the label becomes the
+ * group's accessible name and the line under it is read to screen readers only.
  */
 import { useId } from 'react';
 import { Input, Select } from '@/shared/ui';
@@ -27,10 +32,16 @@ import {
 export interface BindingDurationFieldProps {
 	/** The choice; `null` while nothing is chosen. */
 	value: BindingDuration | null;
-	onChange: (value: BindingDuration) => void;
+	onChange: (value: BindingDuration | null) => void;
 	disabled?: boolean;
-	/** The control's visible label. */
+	/** The control's label: visible, or its accessible name when `compact`. */
 	label?: string;
+	/** What the dropdown shows while nothing is chosen. */
+	placeholder?: string;
+	/** The empty choice can be picked again (an optional duration). */
+	clearable?: boolean;
+	/** Fit into a row of buttons: no visible label, the description for screen readers only. */
+	compact?: boolean;
 	/** The line under the control for a valid choice: when access would end if saved now. */
 	describe?: (end: Date | 'never') => string;
 	/** Prefix for the field's test ids (`<prefix>-duration-*`). */
@@ -61,6 +72,9 @@ export function BindingDurationField({
 	onChange,
 	disabled = false,
 	label = 'Expires after',
+	placeholder = 'Choose…',
+	clearable = false,
+	compact = false,
 	describe = defaultDescribe,
 	testIdPrefix = 'binding',
 }: BindingDurationFieldProps) {
@@ -76,21 +90,28 @@ export function BindingDurationField({
 			if (!custom) onChange(INITIAL_CUSTOM_DURATION);
 			return;
 		}
-		if (next !== NONE) onChange({ kind: 'preset', preset: next as BindingDurationPreset });
+		if (next === NONE) {
+			if (clearable) onChange(null);
+			return;
+		}
+		onChange({ kind: 'preset', preset: next as BindingDurationPreset });
 	};
 
 	return (
 		<div
 			role="group"
-			aria-labelledby={labelId}
-			className="space-y-1.5"
+			aria-labelledby={compact ? undefined : labelId}
+			aria-label={compact ? label : undefined}
+			className={compact ? 'space-y-1' : 'space-y-1.5'}
 			data-testid={`${testIdPrefix}-duration`}
 		>
-			<p id={labelId} className="text-foreground text-sm font-medium">
-				{label}
-			</p>
+			{!compact && (
+				<p id={labelId} className="text-foreground text-sm font-medium">
+					{label}
+				</p>
+			)}
 			<div className="flex flex-wrap items-start gap-2">
-				<div className="w-40 shrink-0">
+				<div className={compact ? 'w-32 shrink-0' : 'w-40 shrink-0'}>
 					<Select
 						aria-label="Duration"
 						aria-describedby={hintId}
@@ -100,9 +121,9 @@ export function BindingDurationField({
 						data-testid={`${testIdPrefix}-duration-preset`}
 						onChange={(e): void => onSelect(e.target.value)}
 					>
-						{value === null && (
-							<option value={NONE} disabled>
-								Choose…
+						{(value === null || clearable) && (
+							<option value={NONE} disabled={!clearable}>
+								{placeholder}
 							</option>
 						)}
 						{BINDING_DURATION_PRESETS.map((p) => (
@@ -116,7 +137,7 @@ export function BindingDurationField({
 				{custom && (
 					<>
 						{custom.unit !== 'never' && (
-							<div className="w-24 shrink-0">
+							<div className={compact ? 'w-20 shrink-0' : 'w-24 shrink-0'}>
 								<Input
 									type="number"
 									inputMode="numeric"
@@ -136,7 +157,7 @@ export function BindingDurationField({
 								/>
 							</div>
 						)}
-						<div className="w-36 shrink-0">
+						<div className={compact ? 'w-28 shrink-0' : 'w-36 shrink-0'}>
 							<Select
 								aria-label="Unit"
 								aria-describedby={hintId}
@@ -173,7 +194,7 @@ export function BindingDurationField({
 			) : (
 				<p
 					id={hintId}
-					className="text-muted-foreground text-xs"
+					className={compact ? 'sr-only' : 'text-muted-foreground text-xs'}
 					data-testid={`${testIdPrefix}-duration-hint`}
 				>
 					{end ? describe(end) : null}

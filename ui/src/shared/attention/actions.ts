@@ -9,10 +9,21 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AgentsService, sharedQueryKeys, type AgentResponse } from '@/shared/api';
 
+/** An agent id, or the id with when the approved agent stops working (ISO 8601). */
+export type ApproveAgentVariables = string | { agentId: string; expiresAt?: string };
+
 export function useApproveAgent() {
 	const queryClient = useQueryClient();
-	return useMutation<AgentResponse, Error, string>({
-		mutationFn: (agentId) => AgentsService.approveAgent({ agentId }),
+	return useMutation<AgentResponse, Error, ApproveAgentVariables>({
+		mutationFn: (variables) =>
+			typeof variables === 'string'
+				? AgentsService.approveAgent({ agentId: variables })
+				: AgentsService.approveAgent({
+						agentId: variables.agentId,
+						requestBody: variables.expiresAt
+							? { expires_at: variables.expiresAt }
+							: undefined,
+					}),
 		onSuccess: () => {
 			void queryClient.invalidateQueries({ queryKey: sharedQueryKeys.agentsRoot });
 			void queryClient.invalidateQueries({ queryKey: sharedQueryKeys.attentionRoot });

@@ -181,6 +181,33 @@ describe('NotificationsMenu', () => {
 		await checkA11y(container);
 	});
 
+	it('approves inline with an optional expiry chosen on the row', async () => {
+		const bodies: unknown[] = [];
+		worker.use(
+			http.post('/agents/:agentId', async ({ request, params }) => {
+				const text = await request.text();
+				bodies.push(text ? JSON.parse(text) : null);
+				approved.push(String(params.agentId).replace(/:approve$/, ''));
+				return HttpResponse.json({ ...pendingAgent, status: 'active' });
+			}),
+		);
+		const user = userEvent.setup();
+		renderMenu();
+		await user.click(await screen.findByRole('button', { name: /^Notifications, 2/ }));
+		const dialog = screen.getByRole('dialog', { name: /Notifications/ });
+
+		const preset = within(dialog).getByTestId('attention-approve-expiry-duration-preset');
+		// Nothing chosen means no expiry, and it can be chosen again.
+		expect(preset).toHaveValue('');
+		await user.selectOptions(preset, '8h');
+		await user.click(within(dialog).getByRole('button', { name: 'Approve' }));
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		const { expires_at } = bodies[0] as { expires_at: string };
+		const hours = (new Date(expires_at).getTime() - Date.now()) / 3_600_000;
+		expect(hours).toBeGreaterThan(7.9);
+		expect(hours).toBeLessThanOrEqual(8);
+	});
+
 	it('approves an agent inline, dropping its row; the alert stays as a View link', async () => {
 		const user = userEvent.setup();
 		renderMenu();

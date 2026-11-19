@@ -75,6 +75,12 @@ import {
 	type CommandTone,
 } from '@/modules/agents/lib/registerCommand';
 import { AgentNameText } from '@/modules/agents/components/AgentNameText';
+import { ApprovalExpiryField } from '@/modules/agents/components/ApprovalExpiryField';
+import {
+	bindingDurationError,
+	expiresAtIso,
+	type BindingDuration,
+} from '@/shared/credentials/lib/bindingDuration';
 import {
 	AgentStatusMark,
 	FactSep,
@@ -689,7 +695,8 @@ export function AgentDetails({
 	titleId: string;
 	agent: AgentEntity;
 	phase: Exclude<FirstAgentPhase, 'listening'>;
-	onApprove: () => void;
+	/** Approve, optionally with when the agent stops working (ISO 8601). */
+	onApprove: (expiresAt?: string) => void;
 	approvePending: boolean;
 	onDeny: () => void;
 	onExit: (exit: FirstAgentExit) => void;
@@ -718,6 +725,9 @@ export function AgentDetails({
 		permissions.isPending || permissions.isError || catalogue.isPending || catalogue.isError;
 	// Approve and Deny need `agents:write` (or `org:admin`).
 	const canDecide = useCanAccess(AGENTS_WRITE);
+	// Optional: approving without a choice leaves the agent without an expiry.
+	const [expiry, setExpiry] = useState<BindingDuration | null>(null);
+	const expiryInvalid = bindingDurationError(expiry) !== null;
 
 	// The initials the fleet's strip and card will give it, so the avatar here
 	// is the one it keeps.
@@ -777,6 +787,16 @@ export function AgentDetails({
 										? "It has its own key but can't make any calls until you approve."
 										: "It has its own key but can't make any calls until someone who can manage agents approves it."
 								}
+								below={
+									canDecide ? (
+										<ApprovalExpiryField
+											value={expiry}
+											onChange={setExpiry}
+											disabled={approvePending}
+											testIdPrefix="arrival-approve-expiry"
+										/>
+									) : undefined
+								}
 								actions={
 									canDecide ? (
 										<>
@@ -784,8 +804,8 @@ export function AgentDetails({
 												size="sm"
 												variant={ACTION_VARIANT.approve}
 												loading={approvePending}
-												disabled={permissionsUnread}
-												onClick={onApprove}
+												disabled={permissionsUnread || expiryInvalid}
+												onClick={() => onApprove(expiresAtIso(expiry))}
 												aria-label={`${ACTION_LABEL.approve} ${agent.name}`}
 											>
 												<CircleCheck className="h-4 w-4" />

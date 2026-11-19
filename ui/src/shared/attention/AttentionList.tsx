@@ -16,7 +16,7 @@
  * (the row still links to the agent for anyone else), and "Finish setup" needs
  * `credentials:write`.
  */
-import { type ComponentType } from 'react';
+import { useState, type ComponentType } from 'react';
 import { AlertTriangle, Bot, CheckSquare, KeyRound, PlugZap, ShieldQuestion } from 'lucide-react';
 import { AppLink } from '@/shared/ui/AppLink';
 import { UserText } from '@/shared/ui/UserText';
@@ -24,6 +24,12 @@ import { Button } from '@/shared/ui/Button';
 import { toast } from '@/shared/ui';
 import { ROUTE_PATHS } from '@/shared/app/routes';
 import { useApproveAgent } from '@/shared/attention/actions';
+import { BindingDurationField } from '@/shared/credentials/components';
+import {
+	bindingDurationError,
+	expiresAtIso,
+	type BindingDuration,
+} from '@/shared/credentials/lib/bindingDuration';
 import { AGENTS_WRITE, CREDENTIALS_WRITE, useCanAccess } from '@/shared/auth/useCanAccess';
 import type { AttentionItem, AttentionKind } from '@/shared/attention/useAttentionItems';
 import { cn, timeAgo } from '@/shared/lib/utils';
@@ -201,7 +207,7 @@ function AttentionRow({
 				{timeAgo(item.since)}
 			</span>
 			{/* On a phone the verbs wrap under the title, aligned past the icon. */}
-			<div className="ml-11 flex shrink-0 items-center gap-2 sm:ml-0">
+			<div className="ml-11 flex shrink-0 flex-wrap items-center justify-end gap-2 sm:ml-0">
 				<RowActions item={item} onNavigate={onNavigate} />
 			</div>
 		</li>
@@ -275,24 +281,42 @@ function AgentActions({
 }) {
 	const approve = useApproveAgent();
 	const canApprove = useCanAccess(AGENTS_WRITE);
+	// Optional: approving without a choice leaves the agent without an expiry.
+	const [expiry, setExpiry] = useState<BindingDuration | null>(null);
 	return (
 		<>
+			{canApprove && (
+				<BindingDurationField
+					compact
+					clearable
+					placeholder="No expiry"
+					label={`${name} stops working after (optional)`}
+					value={expiry}
+					onChange={setExpiry}
+					disabled={approve.isPending}
+					testIdPrefix="attention-approve-expiry"
+				/>
+			)}
 			{canApprove && (
 				<Button
 					variant="primary"
 					size="xs"
 					loading={approve.isPending}
+					disabled={bindingDurationError(expiry) !== null}
 					onClick={() =>
-						approve.mutate(agentId, {
-							onSuccess: () =>
-								toast({ title: `${name} approved`, variant: 'success' }),
-							onError: (error) =>
-								toast({
-									title: `Couldn't approve ${name}`,
-									description: error.message,
-									variant: 'error',
-								}),
-						})
+						approve.mutate(
+							{ agentId, expiresAt: expiresAtIso(expiry) },
+							{
+								onSuccess: () =>
+									toast({ title: `${name} approved`, variant: 'success' }),
+								onError: (error) =>
+									toast({
+										title: `Couldn't approve ${name}`,
+										description: error.message,
+										variant: 'error',
+									}),
+							},
+						)
 					}
 				>
 					Approve
