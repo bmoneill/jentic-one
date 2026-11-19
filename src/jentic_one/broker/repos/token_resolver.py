@@ -223,6 +223,8 @@ class InProcessTokenResolver:
             and client_active
             and grant_active
         )
+        if row.actor_expires_at is not None:
+            expires_at = min(expires_at, _as_aware_datetime(row.actor_expires_at))
         return Identity(
             sub=row.actor_id,
             actor_name=row.actor_name or "",

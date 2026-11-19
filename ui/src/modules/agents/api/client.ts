@@ -133,13 +133,14 @@ export async function listAgents(params: {
 
 export async function approveAgent(
 	agentId: string,
-	options: { expiresAt?: string } = {},
+	options: { expiresAt?: string | null } = {},
 ): Promise<AgentEntity> {
 	try {
 		return agentToEntity(
 			await AgentsService.approveAgent({
 				agentId,
-				requestBody: options.expiresAt ? { expires_at: options.expiresAt } : undefined,
+				requestBody:
+					options.expiresAt !== undefined ? { expires_at: options.expiresAt } : undefined,
 			}),
 		);
 	} catch (error) {

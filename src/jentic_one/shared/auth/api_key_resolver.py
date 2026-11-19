@@ -15,7 +15,7 @@ import structlog
 from sqlalchemy import Boolean, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jentic_one.shared.auth.agent_expiry import agent_expired
+from jentic_one.shared.auth.agent_expiry import agent_expired, as_utc
 from jentic_one.shared.auth.agent_permission_ceiling import cap_agent_permissions
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.owner_status import log_agent_owner_inactive
@@ -257,6 +257,7 @@ class ApiKeyResolver:
             actor_type=ActorType.AGENT,
             permissions=permissions,
             parent_actor_id=row.owner_id,
+            expires_at=as_utc(row.expires_at) if row.expires_at is not None else None,
             active=True,
             auth_token_sha256=hashlib.sha256(raw_key.encode()).hexdigest(),
             auth_method="api_key",

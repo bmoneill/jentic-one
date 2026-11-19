@@ -51,7 +51,7 @@ interface FirstAgentLandingProps {
 	/** The self-registered agent being finished here: pending or active. */
 	agent: AgentEntity | null;
 	/** Approve `agent`, optionally with when it stops working (ISO 8601). */
-	onApprove: (expiresAt?: string) => void;
+	onApprove: (expiresAt?: string | null) => void;
 	approvePending: boolean;
 	/** Opens the page's deny dialog for `agent`. */
 	onDeny: () => void;

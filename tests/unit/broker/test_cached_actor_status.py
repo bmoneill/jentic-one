@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import time
+from datetime import UTC, datetime
 
 import jwt
 import pytest
 
-from jentic_one.broker.core.token_validation import CachedActorStatus
+from jentic_one.broker.core.token_validation import ActorLiveness, CachedActorStatus
 from jentic_one.broker.services.auth import JwtTokenValidator, JwtVerifier
 from jentic_one.shared.auth.errors import TokenValidationError
 
@@ -20,12 +21,16 @@ class _StatusResolver:
 
     def __init__(self, *, active: bool) -> None:
         self.active = active
+        self.expires_at: datetime | None = None
         self.calls: list[tuple[str, str]] = []
 
     async def is_active(self, *, actor_id: str, actor_type: str) -> bool:
+        return (await self.liveness(actor_id=actor_id, actor_type=actor_type)).may_act()
+
+    async def liveness(self, *, actor_id: str, actor_type: str) -> ActorLiveness:
         self.calls.append((actor_type, actor_id))
         await asyncio.sleep(0)
-        return self.active
+        return ActorLiveness(self.active, self.expires_at)
 
 
 def _token(sub: str = "agnt_x", **extra: object) -> str:
@@ -122,3 +127,23 @@ async def test_jwt_for_an_active_agent_passes() -> None:
 
     assert identity.sub == "agnt_x"
     assert identity.permissions == ["broker:execute"]
+
+
+async def test_status_cache_checks_the_agent_deadline_on_hits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Clock(datetime):
+        current = datetime(2026, 1, 1, tzinfo=UTC)
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current
+
+    monkeypatch.setattr("jentic_one.broker.core.token_validation.datetime", Clock)
+    resolver = _StatusResolver(active=True)
+    resolver.expires_at = datetime(2026, 1, 2, tzinfo=UTC)
+    cache = CachedActorStatus(resolver=resolver)
+    assert await cache.is_active(actor_type="agent", actor_id="a")
+    Clock.current = resolver.expires_at
+    assert not await cache.is_active(actor_type="agent", actor_id="a")
+    assert len(resolver.calls) == 1

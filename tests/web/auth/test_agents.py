@@ -104,6 +104,19 @@ def test_approve_agent_with_expiry(admin_client: TestClient, test_agent_id: str)
     assert data["expired"] is False
 
 
+@pytest.mark.parametrize("body", [{}, {"expires_at": None}])
+def test_approval_distinguishes_omitted_and_cleared_expiry(
+    admin_client: TestClient, test_agent_id: str, body: dict[str, None]
+) -> None:
+    url = f"/agents/{test_agent_id}"
+    deadline = datetime.now(UTC) + timedelta(days=1)
+    assert admin_client.patch(url, json={"expires_at": deadline.isoformat()}).status_code == 200
+    approved = admin_client.post(url + ":approve", json=body)
+    assert approved.status_code == 200
+    value = approved.json()["expires_at"]
+    assert (datetime.fromisoformat(value) if value else None) == (None if body else deadline)
+
+
 def test_approve_agent_past_expiry_is_422(admin_client: TestClient, test_agent_id: str) -> None:
     past = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
     resp = admin_client.post(f"/agents/{test_agent_id}:approve", json={"expires_at": past})

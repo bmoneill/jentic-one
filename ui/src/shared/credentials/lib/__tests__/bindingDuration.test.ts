@@ -127,7 +127,7 @@ describe('expiresAtIso', () => {
 			'2026-01-31T13:00:00.000Z',
 		);
 		expect(expiresAtIso(null, NOW)).toBeUndefined();
-		expect(expiresAtIso(custom('', 'never'), NOW)).toBeUndefined();
+		expect(expiresAtIso(custom('', 'never'), NOW)).toBeNull();
 		expect(expiresAtIso(custom('', 'days'), NOW)).toBeUndefined();
 	});
 });
