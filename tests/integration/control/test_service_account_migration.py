@@ -146,7 +146,14 @@ async def _seed_sa(
     with_tokens: bool = False,
     credential_ids: tuple[str, ...] = (),
 ) -> str:
-    """Seed one service account with the requested satellites; return its id."""
+    """Seed one service account with the requested satellites; return its id.
+
+    Grants and bindings carry ``created_at`` from this process's clock, not the
+    column's ``now()`` default: the migration stamps ``migrated_at`` from the
+    same clock and compares the two to find post-stamp rows, so a database
+    clock running ahead of the host (a Docker VM drifts by tens of ms) would
+    otherwise make a row seeded before the stamp read as created after it.
+    """
     sa_id = f"sva_t8m_{suffix}"
     now = dt.datetime.now(dt.UTC)
     async with admin_db.session() as session:
@@ -176,28 +183,30 @@ async def _seed_sa(
             await session.execute(
                 text(
                     "INSERT INTO actor_scope_grants"
-                    " (id, actor_id, actor_type, scope, granted_by, created_by)"
-                    " VALUES (:id, :actor_id, 'service_account', :scope, :by, :by)"
+                    " (id, actor_id, actor_type, scope, granted_by, created_by, created_at)"
+                    " VALUES (:id, :actor_id, 'service_account', :scope, :by, :by, :now)"
                 ),
                 {
                     "id": f"asg_t8m_{suffix}_{scope[:8]}",
                     "actor_id": sa_id,
                     "scope": scope,
                     "by": _OWNER,
+                    "now": now,
                 },
             )
         for credential_id in credential_ids:
             await session.execute(
                 text(
                     "INSERT INTO agent_credential_bindings"
-                    " (id, agent_id, credential_id, created_by)"
-                    " VALUES (:id, :agent_id, :credential_id, :by)"
+                    " (id, agent_id, credential_id, created_by, created_at)"
+                    " VALUES (:id, :agent_id, :credential_id, :by, :now)"
                 ),
                 {
                     "id": f"acb_t8m_{suffix}_{credential_id[-6:]}",
                     "agent_id": sa_id,
                     "credential_id": credential_id,
                     "by": _OWNER,
+                    "now": now,
                 },
             )
         if with_tokens:
