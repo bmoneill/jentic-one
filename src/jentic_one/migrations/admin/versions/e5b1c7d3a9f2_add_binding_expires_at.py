@@ -26,8 +26,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # An earlier stacked build applied this column before stamping the
-    # independent last-use revision. Such a database already has the column.
+    # An earlier stacked build ran this revision before the last-use index
+    # (f6a2c8d4e1b7) and stopped at that index, so it already has the column.
     if any(
         col["name"] == "expires_at"
         for col in sa.inspect(op.get_bind()).get_columns("agent_credential_bindings")

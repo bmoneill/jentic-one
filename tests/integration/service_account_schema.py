@@ -239,7 +239,6 @@ def restore_pre_sa_drop_admin(integration_config: AppConfig) -> None:
         [_AGENT_EXPIRES_AT_HEAD],
         [_BINDING_EXPIRES_AT_HEAD],
         [_LAST_USED_INDEX_HEAD],
-        ["ab43e017dc68"],  # pragma: allowlist secret
     ), f"extend restore_pre_sa_drop_admin for new heads {heads}"
     if not asyncio.run(_has_service_account_tables(db_config)):
         command.downgrade(cfg, _SA_DROP)

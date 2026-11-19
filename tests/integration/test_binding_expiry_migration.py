@@ -109,17 +109,43 @@ async def test_downgrade_suspends_lapsed_bindings_and_reupgrade_restores_column(
     assert remaining == 0
 
 
-@pytest.mark.parametrize("starting_head", ["f6a2c8d4e1b7", _PARENT])  # pragma: allowlist secret
-async def test_upgrade_from_independent_branch(
-    integration_config: AppConfig, admin_db: DatabaseSession, restore_head: None, starting_head: str
-) -> None:
-    cfg = alembic_config_for("admin", integration_config.databases.admin)
-    await asyncio.to_thread(command.downgrade, cfg, "c7d2e9a41b30")  # pragma: allowlist secret
-    await asyncio.to_thread(command.upgrade, cfg, starting_head)
-    await asyncio.to_thread(command.upgrade, cfg, "head")
-    assert await _has_expires_at(admin_db)
-    async with admin_db.session() as session:
-        await session.execute(text("SELECT expires_at FROM agents LIMIT 0"))
+_LAST_USED_INDEX = "f6a2c8d4e1b7"  # pragma: allowlist secret
+
+
+async def _has_last_used_index(db: DatabaseSession) -> bool:
+    async with db.session() as session:
         conn = await session.connection()
         indexes = await conn.run_sync(lambda c: inspect(c).get_indexes("execution_records"))
-        assert "ix_execution_records_actor_credential_last_used" in {idx["name"] for idx in indexes}
+    return "ix_execution_records_actor_credential_last_used" in {idx["name"] for idx in indexes}
+
+
+async def test_a_database_on_the_last_use_revision_gains_both_expiry_columns(
+    integration_config: AppConfig, admin_db: DatabaseSession, restore_head: None
+) -> None:
+    """The last-use index ships on its own first, so the expiry revisions follow it."""
+    cfg = alembic_config_for("admin", integration_config.databases.admin)
+    await asyncio.to_thread(command.downgrade, cfg, _LAST_USED_INDEX)
+    assert not await _has_expires_at(admin_db)
+
+    await asyncio.to_thread(command.upgrade, cfg, "head")
+
+    assert await _has_expires_at(admin_db)
+    assert await _has_last_used_index(admin_db)
+
+
+async def test_a_database_from_the_earlier_stacked_build_upgrades_cleanly(
+    integration_config: AppConfig, admin_db: DatabaseSession, restore_head: None
+) -> None:
+    """That build ran both expiry revisions before the index and stopped at the index.
+
+    The expiry revisions now follow the index, so they run again over columns
+    that already exist, and must leave them in place.
+    """
+    cfg = alembic_config_for("admin", integration_config.databases.admin)
+    await asyncio.to_thread(command.upgrade, cfg, "head")
+    await asyncio.to_thread(command.stamp, cfg, _LAST_USED_INDEX)
+
+    await asyncio.to_thread(command.upgrade, cfg, "head")
+
+    assert await _has_expires_at(admin_db)
+    assert await _has_last_used_index(admin_db)

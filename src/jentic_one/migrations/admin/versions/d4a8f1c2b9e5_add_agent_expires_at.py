@@ -11,7 +11,7 @@ agent, and only then drops the column. An operator restores such an agent with
 ``:enable``.
 
 Revision ID: d4a8f1c2b9e5
-Revises: c7d2e9a41b30
+Revises: f6a2c8d4e1b7
 Create Date: 2026-11-18
 
 """
@@ -22,14 +22,14 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d4a8f1c2b9e5"  # pragma: allowlist secret
-down_revision: str | None = "c7d2e9a41b30"  # pragma: allowlist secret
+down_revision: str | None = "f6a2c8d4e1b7"  # pragma: allowlist secret
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # An earlier stacked build applied this column before stamping the
-    # independent last-use revision. Such a database already has the column.
+    # An earlier stacked build ran this revision before the last-use index
+    # (f6a2c8d4e1b7) and stopped at that index, so it already has the column.
     if any(col["name"] == "expires_at" for col in sa.inspect(op.get_bind()).get_columns("agents")):
         return
     op.add_column("agents", sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True))
