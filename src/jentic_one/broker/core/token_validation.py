@@ -126,6 +126,19 @@ class CachedTokenValidator:
         self._cache.clear()
 
 
+@dataclass(frozen=True, slots=True)
+class ActorLiveness:
+    active: bool
+    expires_at: datetime | None = None
+
+    def may_act(self) -> bool:
+        return self.active and (self.expires_at is None or datetime.now(UTC) < self.expires_at)
+
+
+class ActorLivenessReader(Protocol):
+    async def liveness(self, *, actor_id: str, actor_type: str) -> ActorLiveness: ...
+
+
 class ActorStatusProtocol(Protocol):
     """Answers whether an actor may currently act (``ActorStatusResolver`` satisfies it)."""
 
@@ -134,7 +147,7 @@ class ActorStatusProtocol(Protocol):
 
 @dataclass(slots=True)
 class _StatusEntry:
-    active: bool
+    verdict: ActorLiveness
     cached_at: float
 
 
@@ -150,13 +163,15 @@ class CachedActorStatus:
     concurrent misses for one actor share a single lookup.
     """
 
-    resolver: ActorStatusProtocol
+    resolver: ActorLivenessReader
     cache_ttl_seconds: float = DEFAULT_CACHE_TTL_SECONDS
     max_entries: int = DEFAULT_MAX_CACHE_ENTRIES
     _cache: OrderedDict[tuple[str, str], _StatusEntry] = field(
         default_factory=OrderedDict, init=False, repr=False
     )
-    _single_flight: SingleFlight[bool] = field(default_factory=SingleFlight, init=False, repr=False)
+    _single_flight: SingleFlight[ActorLiveness] = field(
+        default_factory=SingleFlight, init=False, repr=False
+    )
 
     def __post_init__(self) -> None:
         if self.max_entries < 1:
@@ -167,18 +182,19 @@ class CachedActorStatus:
         entry = self._cache.get(key)
         if entry is not None and (time.monotonic() - entry.cached_at) < self.cache_ttl_seconds:
             self._cache.move_to_end(key)
-            return entry.active
+            return entry.verdict.may_act()
 
-        async def _load() -> bool:
+        async def _load() -> ActorLiveness:
             started = time.monotonic()
-            active = await self.resolver.is_active(actor_id=actor_id, actor_type=actor_type)
-            self._cache[key] = _StatusEntry(active=active, cached_at=started)
+            verdict = await self.resolver.liveness(actor_id=actor_id, actor_type=actor_type)
+            self._cache[key] = _StatusEntry(verdict=verdict, cached_at=started)
             self._cache.move_to_end(key)
             while len(self._cache) > self.max_entries:
                 self._cache.popitem(last=False)
-            return active
+            return verdict
 
-        return await self._single_flight.do(f"{actor_type}:{actor_id}", _load)
+        verdict = await self._single_flight.do(f"{actor_type}:{actor_id}", _load)
+        return verdict.may_act()
 
     def invalidate_actor(self, actor_id: str) -> None:
         """Evict cached status verdicts for ``actor_id`` across actor types (#1837)."""

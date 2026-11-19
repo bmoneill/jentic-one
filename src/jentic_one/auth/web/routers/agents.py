@@ -250,7 +250,12 @@ async def approve_agent(
     ``expires_at`` sets when the agent stops working.
     """
     view = await agent_svc.approve(
-        agent_id, identity=identity, expires_at=body.expires_at if body else None
+        agent_id,
+        identity=identity,
+        expires_at=body.expires_at if body else None,
+        clear_expiry=bool(
+            body and "expires_at" in body.model_fields_set and body.expires_at is None
+        ),
     )
     return _agent_response(view)
 
