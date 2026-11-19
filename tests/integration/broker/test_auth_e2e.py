@@ -766,3 +766,36 @@ async def test_token_and_actor_status_resolvers_read_without_begin_or_rollback(
         assert auth.active is True
         assert len(trace.statements) == 1, trace.statements
         trace.assert_no_begin_or_rollback()
+
+
+async def test_cached_verdicts_end_at_the_agent_deadline(
+    admin_db: DatabaseSession, clean_access_tokens: None
+) -> None:
+    """A verdict cached just before an agent's deadline is not served after it.
+
+    Both arms carry the deadline into the cached identity, so a long cache TTL
+    cannot extend the agent past its ``expires_at``.
+    """
+    api_key = "jak_deadline_" + "d" * 24  # pragma: allowlist secret
+    await _seed_owned_agent_with_key(admin_db, api_key=api_key)
+    await _seed_opaque_token(admin_db, plaintext="at_deadline", actor_id=_OWNED_AGENT)
+    deadline = datetime.now(UTC) + timedelta(milliseconds=300)
+    async with admin_db.session() as session:
+        await session.execute(
+            update(Agent).where(Agent.id == _OWNED_AGENT).values(expires_at=deadline)
+        )
+        await session.commit()
+    validator = CompositeTokenValidator(
+        opaque=CachedTokenValidator(
+            resolver=InProcessTokenResolver(admin_db), cache_ttl_seconds=60
+        ),
+        api_key=CachedTokenValidator(resolver=ApiKeyResolver(admin_db), cache_ttl_seconds=60),
+    )
+
+    for credential in ("at_deadline", api_key):
+        assert (await validator.validate(credential)).sub == _OWNED_AGENT
+
+    await asyncio.sleep(max(0.0, (deadline - datetime.now(UTC)).total_seconds()) + 0.05)
+    for credential in ("at_deadline", api_key):
+        with pytest.raises(TokenValidationError, match="token_expired"):
+            await validator.validate(credential)
