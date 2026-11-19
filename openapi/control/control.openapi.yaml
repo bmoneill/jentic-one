@@ -1534,6 +1534,11 @@ components:
           examples:
           - github.com
           type: string
+        api_version:
+          description: Recorded API version, when known.
+          type:
+          - string
+          - 'null'
         last_used_at:
           description: When the agent last called this API through the credential (RFC 3339).
           examples:

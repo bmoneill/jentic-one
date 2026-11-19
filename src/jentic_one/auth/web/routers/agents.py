@@ -446,7 +446,10 @@ def _credential_binding_response(view: CredentialBindingView) -> CredentialBindi
         last_used_at=view.last_used_at,
         last_used_by_api=[
             ApiLastUseResponse(
-                api_vendor=u.api_vendor, api_name=u.api_name, last_used_at=u.last_used_at
+                api_vendor=u.api_vendor,
+                api_name=u.api_name,
+                api_version=u.api_version,
+                last_used_at=u.last_used_at,
             )
             for u in view.last_used_by_api
         ],

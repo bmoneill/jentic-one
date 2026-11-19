@@ -204,6 +204,7 @@ function bindingToEntity(r: CredentialBindingResponse): CredentialBindingEntity 
 		lastUsedByApi: r.last_used_by_api?.map((u) => ({
 			vendor: u.api_vendor,
 			name: u.api_name ?? null,
+			version: u.api_version,
 			lastUsedAt: u.last_used_at,
 		})),
 		serves: (r.serves ?? []).map((s) => ({

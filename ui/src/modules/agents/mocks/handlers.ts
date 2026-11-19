@@ -177,7 +177,12 @@ interface CredentialBindingRow {
 	/** Last call through the credential; null = never used. */
 	last_used_at: string | null;
 	/** Per-API last use; derived from `last_used_at` and `serves` when absent. */
-	last_used_by_api?: Array<{ api_vendor: string; api_name: string | null; last_used_at: string }>;
+	last_used_by_api?: Array<{
+		api_vendor: string;
+		api_name: string | null;
+		api_version?: string | null;
+		last_used_at: string;
+	}>;
 	serves: Array<{ api_vendor: string; api_name?: string | null; api_version?: string | null }>;
 	permissions: BindingRule[];
 	/** The credential's granted OAuth scopes; null (the default) for a non-OAuth one. */
@@ -293,6 +298,7 @@ function bindingJson(row: CredentialBindingRow) {
 			? row.serves.map((s) => ({
 					api_vendor: s.api_vendor,
 					api_name: s.api_name ?? null,
+					api_version: s.api_version,
 					last_used_at: row.last_used_at,
 				}))
 			: []);
@@ -667,7 +673,12 @@ export function resetAgentsStore(): void {
 			last_used_at: now(-12),
 			// Execution records name the resolved API, never the wildcard.
 			last_used_by_api: [
-				{ api_vendor: 'slack.com', api_name: 'web-api', last_used_at: now(-12) },
+				{
+					api_vendor: 'slack.com',
+					api_name: 'web-api',
+					api_version: '1.0.0',
+					last_used_at: now(-12),
+				},
 			],
 			serves: [{ api_vendor: 'slack.com', api_name: null, api_version: null }],
 			permissions: [
@@ -682,7 +693,12 @@ export function resetAgentsStore(): void {
 			// Idle for weeks: the kind of access the "last used" view surfaces.
 			last_used_at: now(-60 * 24 * 23),
 			last_used_by_api: [
-				{ api_vendor: 'github', api_name: 'github-api', last_used_at: now(-60 * 24 * 23) },
+				{
+					api_vendor: 'github',
+					api_name: 'github-api',
+					api_version: '1.0.0',
+					last_used_at: now(-60 * 24 * 23),
+				},
 			],
 			serves: [{ api_vendor: 'github', api_name: null, api_version: null }],
 		}),

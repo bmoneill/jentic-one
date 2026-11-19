@@ -2384,6 +2384,9 @@ type ApiLastUseResponse struct {
 	// Examples: github.com
 	ApiVendor string `json:"api_vendor"`
 
+	// ApiVersion Recorded API version, when known.
+	ApiVersion *string `json:"api_version,omitempty"`
+
 	// LastUsedAt When the agent last called this API through the credential (RFC 3339).
 	//
 	// Examples: 2026-02-03T14:05:00Z
