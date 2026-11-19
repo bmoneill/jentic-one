@@ -119,7 +119,12 @@ class CachingCredentialDeriver:
             logger.debug("credential_binding_cache_miss", agent_id=agent_id, vendor=vendor)
             return result
 
-        return await self._single_flight.do(key, _load)
+        while True:
+            result = await self._single_flight.do(key, _load)
+            # The database read or this waiter's wakeup can straddle a deadline.
+            # Re-derive so surviving bindings and the denial are decided together.
+            if result.valid_until is None or self._clock() < result.valid_until:
+                return result
 
     def _is_fresh(self, entry: _CacheEntry, now: float) -> bool:
         """Within the TTL and strictly before the derivation's ``valid_until``."""
