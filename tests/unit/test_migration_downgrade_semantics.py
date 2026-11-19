@@ -23,7 +23,10 @@ from jentic_one.migrations import run as run_mod
 
 
 def _head_and_ancestors(db_name: str, depth: int = 3) -> list[str]:
-    """Return ``[head, parent, grandparent, ...]`` for ``db_name``."""
+    """Return ``[head, parent, grandparent, ...]`` for ``db_name``.
+
+    A merge revision is followed through its first parent.
+    """
     script = ScriptDirectory.from_config(run_mod._build_config(db_name))
     (head,) = script.get_heads()
     chain = [head]
@@ -31,8 +34,12 @@ def _head_and_ancestors(db_name: str, depth: int = 3) -> list[str]:
     for _ in range(depth - 1):
         assert cur is not None
         rev = script.get_revision(cur)
-        assert rev is not None and isinstance(rev.down_revision, str)
-        cur = rev.down_revision
+        assert rev is not None
+        parent = rev.down_revision
+        if isinstance(parent, tuple):
+            parent = parent[0]
+        assert isinstance(parent, str)
+        cur = parent
         chain.append(cur)
     return chain
 
