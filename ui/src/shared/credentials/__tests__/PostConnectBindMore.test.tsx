@@ -62,12 +62,15 @@ describe('PostConnectBindMore — how long the access lasts', () => {
 		expect(await screen.findByText('Bound to selected agents.')).toBeVisible();
 	});
 
-	it('asks before binding with no expiry, and binds only once confirmed', async () => {
+	it('waits for a duration; No expiry asks first and binds only once confirmed', async () => {
 		const user = userEvent.setup();
 		renderCta();
 		await user.click(await screen.findByText('agent_extra'));
-		await user.click(screen.getByRole('button', { name: 'Bind to 1 agent' }));
+		expect(screen.getByRole('button', { name: 'Bind to 1 agent' })).toBeDisabled();
 
+		await user.selectOptions(screen.getByTestId('bind-more-duration-preset'), 'custom');
+		await user.selectOptions(screen.getByTestId('bind-more-duration-unit'), 'never');
+		await user.click(screen.getByRole('button', { name: 'Bind to 1 agent' }));
 		expect(await screen.findByTestId('no-expiry-warning')).toHaveTextContent(
 			'This agent will keep this access until someone removes it.',
 		);

@@ -251,6 +251,9 @@ describe('BindAgentDialog — what the agent may call', () => {
 		await user.click(screen.getByRole('button', { name: 'Add rule' }));
 		await user.click(screen.getByRole('button', { name: 'DELETE' }));
 		await user.click(screen.getByRole('button', { name: 'Add' }));
+		// The rules are complete; Bind waits only for how long the access lasts.
+		expect(screen.getByTestId('bind-agent-confirm')).toBeDisabled();
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), '7d');
 		expect(screen.getByTestId('bind-agent-confirm')).toBeEnabled();
 		await bind(user);
 		await waitFor(() => expect(ruleCalls).toHaveLength(1));
@@ -500,8 +503,10 @@ describe('BindAgentDialog — how long the access lasts', () => {
 		const preset = screen.getByTestId('bind-agent-duration-preset') as HTMLSelectElement;
 		expect(preset.value).toBe('');
 		expect(screen.getByTestId('bind-agent-duration-hint')).toHaveTextContent(
-			/Without an expiry it lasts until someone removes it/,
+			/pick Custom… and then No expiry/,
 		);
+		// Rules and agents are set, but Bind waits for a duration.
+		expect(screen.getByTestId('bind-agent-confirm')).toBeDisabled();
 
 		await user.selectOptions(preset, '30d');
 		const before = Date.now();
@@ -525,18 +530,20 @@ describe('BindAgentDialog — how long the access lasts', () => {
 		expect(screen.getByTestId('bind-agent-confirm')).toBeEnabled();
 	});
 
-	it('binding with no expiry warns first, and binds nothing until confirmed', async () => {
+	it('binding with No expiry warns first, and binds nothing until confirmed', async () => {
 		const user = userEvent.setup();
 		renderDialog();
 		await ready(user);
+		// No default: nothing chosen is not "no expiry", it is no choice yet.
+		expect(screen.getByTestId('bind-agent-confirm')).toBeDisabled();
 
-		// Nothing chosen: Bind asks before going ahead without an end date.
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), 'custom');
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-unit'), 'never');
 		await user.click(screen.getByTestId('bind-agent-confirm'));
 		const warning = await screen.findByTestId('no-expiry-warning');
 		expect(warning).toHaveTextContent(
 			'agent_1 will keep this access until someone removes it.',
 		);
-		expect(screen.getByRole('button', { name: 'Bind without expiry' })).toBeVisible();
 		// "Set an expiry" is the default action, and takes the operator back to the choice.
 		const setExpiry = screen.getByTestId('no-expiry-set-expiry');
 		await waitFor(() => expect(setExpiry).toHaveFocus());
@@ -544,9 +551,6 @@ describe('BindAgentDialog — how long the access lasts', () => {
 		await waitFor(() => expect(screen.getByTestId('bind-agent-duration-preset')).toHaveFocus());
 		expect(bodies).toHaveLength(0);
 
-		// "No expiry", chosen deliberately in Custom…, asks too; confirming binds.
-		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), 'custom');
-		await user.selectOptions(screen.getByTestId('bind-agent-duration-unit'), 'never');
 		await user.click(screen.getByTestId('bind-agent-confirm'));
 		await user.click(await screen.findByRole('button', { name: 'Bind without expiry' }));
 		await waitFor(() => expect(bodies).toHaveLength(1));

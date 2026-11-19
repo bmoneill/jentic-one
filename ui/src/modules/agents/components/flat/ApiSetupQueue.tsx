@@ -8,8 +8,8 @@
  * operations · Read-only (GET only) · Custom rules, Custom preselected), with an
  * inline "Try a request" that dry-runs the rules as they stand — unsaved —
  * locally, with the broker's semantics — and how long the access lasts (the
- * shared duration control, nothing preselected; binding with no expiry asks
- * for confirmation first). Confirming binds the credential, then
+ * shared duration control, nothing preselected; adding waits for a choice,
+ * and "No expiry" asks for confirmation first). Confirming binds the credential, then
  * saves its rules, and only advances once both landed AND the binding surfaces
  * refetched — the agent's rows are never left reading a stale "Blocked". A rules
  * save that fails leaves the binding (blocked) and offers Retry in place, with
@@ -76,12 +76,12 @@ import {
 	type ScopeReach,
 } from '@/shared/credentials/lib/accessPresets';
 import { apiScopeReach } from '@/shared/credentials/lib/apiIdentity';
+import { expiresAtIso, type BindingDuration } from '@/shared/credentials/lib/bindingDuration';
 import {
-	bindingDurationError,
-	expiresAtIso,
-	type BindingDuration,
-} from '@/shared/credentials/lib/bindingDuration';
-import { NO_DURATION_HINT, createsWithoutExpiry } from '@/shared/credentials/lib/bindingExpiry';
+	NO_DURATION_HINT,
+	choosesNoExpiry,
+	durationChosen,
+} from '@/shared/credentials/lib/bindingExpiry';
 import {
 	credentialAwaitsConsent,
 	type CredentialChoice,
@@ -965,13 +965,14 @@ function AccessStep({
 	const working = entry.status === 'working';
 	const [laterPending, setLaterPending] = useState(false);
 	// How long the access lasts — asked only while the binding is still to be
-	// made (a bound item owes just its rules). No expiry is confirmed first.
+	// made (a bound item owes just its rules). Adding waits for a choice, and
+	// "No expiry" is confirmed first.
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
 	const askDuration = !entry.bound;
-	const durationInvalid = askDuration && bindingDurationError(draft.duration) !== null;
+	const durationMissing = askDuration && !durationChosen(draft.duration);
 	const guardExpiry = (run: () => void): void =>
-		noExpiry.request(askDuration && createsWithoutExpiry(draft.duration), run);
+		noExpiry.request(askDuration && choosesNoExpiry(draft.duration), run);
 	// Focus follows the confirm in and back out, so the keyboard never drops
 	// to the page when the button that opened it unmounts.
 	const laterRef = useRef<HTMLButtonElement>(null);
@@ -1063,12 +1064,20 @@ function AccessStep({
 							shows as Blocked until then.
 						</span>
 					</p>
+					{durationMissing && (
+						<p
+							className="text-muted-foreground text-xs"
+							data-testid="queue-later-duration-hint"
+						>
+							Choose when this access ends first.
+						</p>
+					)}
 					<div className="flex items-center gap-2">
 						<Button
 							size="sm"
 							variant="secondary"
 							loading={working}
-							disabled={durationInvalid}
+							disabled={durationMissing}
 							onClick={(): void => guardExpiry(onLater)}
 						>
 							Add without rules
@@ -1088,7 +1097,7 @@ function AccessStep({
 				<div className="flex flex-wrap items-center gap-2">
 					<Button
 						size="sm"
-						disabled={working || rules == null || durationInvalid}
+						disabled={working || rules == null || durationMissing}
 						loading={working}
 						onClick={(): void => {
 							const preset = draft.preset;
@@ -1128,6 +1137,11 @@ function AccessStep({
 			{rules == null && draft.preset === 'custom' && !laterPending && (
 				<p className="text-muted-foreground text-xs" data-testid="queue-access-hint">
 					Add at least one rule, or pick a preset.
+				</p>
+			)}
+			{durationMissing && rules != null && !laterPending && (
+				<p className="text-muted-foreground text-xs" data-testid="queue-duration-hint">
+					Choose when this access ends.
 				</p>
 			)}
 			<NoExpiryConfirmDialog

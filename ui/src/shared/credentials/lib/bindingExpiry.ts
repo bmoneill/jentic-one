@@ -67,7 +67,7 @@ function shortSpan(ms: number, round: boolean): string {
 
 /** Under the duration control where a binding is created, while nothing is chosen. */
 export const NO_DURATION_HINT =
-	'Recommended: choose when this access ends. Without an expiry it lasts until someone removes it.';
+	'Choose when this access ends. To give access with no end date, pick Custom… and then No expiry.';
 
 /** Whether the binding no longer authorizes calls because its end date passed. */
 export function bindingIsExpired(
@@ -123,15 +123,18 @@ export function bindingExpiryShortLabel(
 }
 
 /**
- * Whether saving this choice where a binding is created leaves it with no end:
- * "No expiry", or nothing chosen (a binding is created without an expiry
- * unless one is set). Either needs the "No expiry" confirmation first.
+ * Whether a complete duration is chosen — a preset, a valid custom amount, or
+ * "No expiry". Creating or renewing a binding waits for one: there is no
+ * default, so an end date (or deliberately none) is always the operator's call.
  */
-export function createsWithoutExpiry(duration: BindingDuration | null): boolean {
-	return duration === null || expiresAtFromDuration(duration) === 'never';
+export function durationChosen(duration: BindingDuration | null): boolean {
+	return expiresAtFromDuration(duration) !== null;
 }
 
-/** Whether saving this choice on an existing binding clears its expiry. */
-export function clearsExpiry(duration: BindingDuration | null): boolean {
-	return duration !== null && expiresAtFromDuration(duration) === 'never';
+/**
+ * Whether the choice is "No expiry": saving it creates a binding with no end
+ * date, or clears an existing one's. Either asks for confirmation first.
+ */
+export function choosesNoExpiry(duration: BindingDuration | null): boolean {
+	return expiresAtFromDuration(duration) === 'never';
 }

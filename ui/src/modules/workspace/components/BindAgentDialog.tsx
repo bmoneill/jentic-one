@@ -8,9 +8,9 @@
  * operations, Read-only (GET only), or Custom rules (the shared rules editor).
  * Nothing is preselected and Bind stays disabled until a choice is made (or,
  * for custom, at least one rule exists). It also asks how long the access
- * lasts (the shared duration control, nothing preselected): binding with no
- * expiry — nothing chosen, or "No expiry" — asks for confirmation first, and
- * the end date runs from that confirmation. The same rules and end date go to
+ * lasts (the shared duration control, nothing preselected): Bind waits for a
+ * duration too, and "No expiry" (in Custom…) asks for confirmation first. The
+ * end date runs from the moment Bind is confirmed. The same rules and end date go to
  * every ticked agent: each is bound (`POST /agents/{id}/credentials`), then its binding's
  * rules are replaced (`PUT /credentials/{cid}/agents/{aid}/permissions`). If a
  * rules save fails the binding stays — that agent reads Blocked — and the
@@ -67,12 +67,12 @@ import {
 	formatDurationEnd,
 	useNoExpiryConfirm,
 } from '@/shared/credentials/components';
+import { expiresAtIso, type BindingDuration } from '@/shared/credentials/lib/bindingDuration';
 import {
-	bindingDurationError,
-	expiresAtIso,
-	type BindingDuration,
-} from '@/shared/credentials/lib/bindingDuration';
-import { NO_DURATION_HINT, createsWithoutExpiry } from '@/shared/credentials/lib/bindingExpiry';
+	NO_DURATION_HINT,
+	choosesNoExpiry,
+	durationChosen,
+} from '@/shared/credentials/lib/bindingExpiry';
 import {
 	rulesForPreset,
 	type RulesPreset,
@@ -510,12 +510,12 @@ export function BindAgentDialog({
 			<Button
 				size="sm"
 				onClick={(): void =>
-					noExpiry.request(createsWithoutExpiry(duration), () => void handleBind())
+					noExpiry.request(choosesNoExpiry(duration), () => void handleBind())
 				}
 				disabled={
 					picked.length === 0 ||
 					rules == null ||
-					bindingDurationError(duration) !== null ||
+					!durationChosen(duration) ||
 					busy ||
 					(!credential && !pendingCreate) ||
 					!boundKnown

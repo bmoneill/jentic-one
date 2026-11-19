@@ -4,12 +4,12 @@ import {
 	useAgentsForPicker,
 	useBindCredentialToAgents,
 } from '@/shared/credentials/api/vendors-hooks';
+import { expiresAtIso, type BindingDuration } from '@/shared/credentials/lib/bindingDuration';
 import {
-	bindingDurationError,
-	expiresAtIso,
-	type BindingDuration,
-} from '@/shared/credentials/lib/bindingDuration';
-import { NO_DURATION_HINT, createsWithoutExpiry } from '@/shared/credentials/lib/bindingExpiry';
+	NO_DURATION_HINT,
+	choosesNoExpiry,
+	durationChosen,
+} from '@/shared/credentials/lib/bindingExpiry';
 import { BindingDurationField } from '@/shared/credentials/components/BindingDurationField';
 import {
 	NoExpiryConfirmDialog,
@@ -24,7 +24,8 @@ import {
  * for the primary (agent, credential) pair at ``:confirm``, so
  * additional agents get a suspended row and grant them access from
  * each agent's page. How long the new bindings last is chosen here too (the
- * shared duration control); binding with no expiry asks for confirmation.
+ * shared duration control, which Bind waits for); "No expiry" asks for
+ * confirmation.
  *
  * Lives under ``shared/credentials`` (not ``modules/agents``) because
  * both the credential inventory and the Agents page mount it via
@@ -124,12 +125,8 @@ export function PostConnectBindMore({
 				type="button"
 				variant="secondary"
 				size="sm"
-				onClick={(): void => noExpiry.request(createsWithoutExpiry(duration), handleBind)}
-				disabled={
-					selected.size === 0 ||
-					bindMany.isPending ||
-					bindingDurationError(duration) !== null
-				}
+				onClick={(): void => noExpiry.request(choosesNoExpiry(duration), handleBind)}
+				disabled={selected.size === 0 || bindMany.isPending || !durationChosen(duration)}
 				loading={bindMany.isPending}
 			>
 				Bind{' '}

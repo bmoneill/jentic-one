@@ -1394,12 +1394,28 @@ describe('ApiSetupQueue — how long the access lasts', () => {
 		await waitFor(() => expect(rowFor('stripe')).toHaveAttribute('data-status', 'added'));
 	});
 
-	it('adding with no expiry asks first, for Add and for Add without rules alike', async () => {
+	it('waits for a duration, and No expiry asks first — for Add and Add without rules alike', async () => {
 		const { calls } = watchBinds();
 		const user = userEvent.setup();
 		const step = await toAccessStep(user);
 
-		await user.click(within(step).getByRole('button', { name: 'Add stripe' }));
+		// Nothing chosen: neither way of adding is open yet.
+		expect(within(step).getByRole('button', { name: 'Add stripe' })).toBeDisabled();
+		expect(within(step).getByTestId('queue-duration-hint')).toHaveTextContent(
+			'Choose when this access ends.',
+		);
+		await user.click(within(step).getByRole('button', { name: 'Set up later' }));
+		const later = within(step).getByTestId('queue-later-confirm');
+		expect(within(later).getByRole('button', { name: 'Add without rules' })).toBeDisabled();
+		expect(within(later).getByTestId('queue-later-duration-hint')).toBeVisible();
+
+		await user.selectOptions(
+			within(step).getByTestId('queue-access-duration-preset'),
+			'custom',
+		);
+		await user.selectOptions(within(step).getByTestId('queue-access-duration-unit'), 'never');
+		expect(within(later).queryByTestId('queue-later-duration-hint')).not.toBeInTheDocument();
+		await user.click(within(later).getByRole('button', { name: 'Add without rules' }));
 		expect(await screen.findByTestId('no-expiry-warning')).toHaveTextContent(
 			'Support bot will keep this access until someone removes it.',
 		);
@@ -1407,16 +1423,11 @@ describe('ApiSetupQueue — how long the access lasts', () => {
 		await waitFor(() =>
 			expect(within(step).getByTestId('queue-access-duration-preset')).toHaveFocus(),
 		);
-
-		await user.click(within(step).getByRole('button', { name: 'Set up later' }));
-		await user.click(
-			within(within(step).getByTestId('queue-later-confirm')).getByRole('button', {
-				name: 'Add without rules',
-			}),
-		);
-		expect(await screen.findByTestId('no-expiry-warning')).toBeVisible();
 		expect(calls).toHaveLength(0);
-		await user.click(screen.getByRole('button', { name: 'Add stripe without expiry' }));
+
+		await user.click(within(step).getByRole('button', { name: 'Keep setting up' }));
+		await user.click(within(step).getByRole('button', { name: 'Add stripe' }));
+		await user.click(await screen.findByRole('button', { name: 'Add stripe without expiry' }));
 		await waitFor(() => expect(calls).toHaveLength(1));
 		expect(calls[0].body).toEqual({ credential_id: 'cred_stripe' });
 		await waitFor(() => expect(rowFor('stripe')).toHaveAttribute('data-status', 'added'));

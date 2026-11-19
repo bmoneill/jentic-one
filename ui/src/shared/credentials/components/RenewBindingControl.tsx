@@ -15,12 +15,8 @@ import { RefreshCw } from 'lucide-react';
 import { Button, ErrorAlert, UserText, toast } from '@/shared/ui';
 import { isolateText } from '@/shared/lib/utils';
 import { useRenewCredentialBinding } from '@/shared/credentials/api/vendors-hooks';
-import {
-	bindingDurationError,
-	expiresAtIso,
-	type BindingDuration,
-} from '@/shared/credentials/lib/bindingDuration';
-import { clearsExpiry } from '@/shared/credentials/lib/bindingExpiry';
+import { expiresAtIso, type BindingDuration } from '@/shared/credentials/lib/bindingDuration';
+import { choosesNoExpiry, durationChosen } from '@/shared/credentials/lib/bindingExpiry';
 import {
 	BindingDurationField,
 	formatDurationEnd,
@@ -66,14 +62,10 @@ export function RenewBindingControl({
 	const fieldRef = useRef<HTMLSelectElement>(null);
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
 
-	const clearing = clearsExpiry(duration);
+	const clearing = choosesNoExpiry(duration);
 	// Clearing an end date the binding doesn't have changes nothing.
 	const nothingToClear = clearing && !expiresAt;
-	const blocked =
-		renew.isPending ||
-		duration === null ||
-		bindingDurationError(duration) !== null ||
-		nothingToClear;
+	const blocked = renew.isPending || !durationChosen(duration) || nothingToClear;
 
 	const save = (): void => {
 		// Worked out now, as the operator confirms: the duration runs from here.

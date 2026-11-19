@@ -4,8 +4,8 @@ import {
 	bindingExpiryLabel,
 	bindingExpiryShortLabel,
 	bindingIsExpired,
-	clearsExpiry,
-	createsWithoutExpiry,
+	choosesNoExpiry,
+	durationChosen,
 } from '@/shared/credentials/lib/bindingExpiry';
 import { INITIAL_CUSTOM_DURATION } from '@/shared/credentials/lib/bindingDuration';
 
@@ -90,26 +90,23 @@ describe('bindingExpiresSoon', () => {
 	});
 });
 
-describe('createsWithoutExpiry / clearsExpiry', () => {
+describe('durationChosen / choosesNoExpiry', () => {
 	const noExpiry = { kind: 'custom' as const, amount: '1', unit: 'never' as const };
 	const preset = { kind: 'preset' as const, preset: '7d' as const };
+	const bad = { kind: 'custom' as const, amount: '', unit: 'days' as const };
 
-	it('a new binding has no expiry when nothing is chosen, or No expiry is', () => {
-		expect(createsWithoutExpiry(null)).toBe(true);
-		expect(createsWithoutExpiry(noExpiry)).toBe(true);
-		expect(createsWithoutExpiry(preset)).toBe(false);
-		expect(createsWithoutExpiry(INITIAL_CUSTOM_DURATION)).toBe(false);
+	it('a duration is chosen once it is a preset, a valid amount or No expiry', () => {
+		expect(durationChosen(null)).toBe(false);
+		expect(durationChosen(bad)).toBe(false);
+		expect(durationChosen(preset)).toBe(true);
+		expect(durationChosen(INITIAL_CUSTOM_DURATION)).toBe(true);
+		expect(durationChosen(noExpiry)).toBe(true);
 	});
 
-	it('a renewal clears the expiry only when No expiry is chosen', () => {
-		expect(clearsExpiry(null)).toBe(false);
-		expect(clearsExpiry(noExpiry)).toBe(true);
-		expect(clearsExpiry(preset)).toBe(false);
-	});
-
-	it('an invalid custom amount is neither', () => {
-		const bad = { kind: 'custom' as const, amount: '', unit: 'days' as const };
-		expect(createsWithoutExpiry(bad)).toBe(false);
-		expect(clearsExpiry(bad)).toBe(false);
+	it('only No expiry means no end date — nothing chosen is not a choice', () => {
+		expect(choosesNoExpiry(noExpiry)).toBe(true);
+		expect(choosesNoExpiry(null)).toBe(false);
+		expect(choosesNoExpiry(preset)).toBe(false);
+		expect(choosesNoExpiry(bad)).toBe(false);
 	});
 });
