@@ -1438,6 +1438,8 @@ describe('Agents page — zero agents', () => {
 		const step = await within(queue).findByTestId('queue-access-step');
 		expect(within(step).getByRole('radio', { name: /Custom rules/ })).toBeChecked();
 		await user.click(within(step).getByRole('radio', { name: /Read-only/ }));
+		// How long the access lasts (with none, adding asks first).
+		await user.selectOptions(within(step).getByTestId('queue-access-duration-preset'), '7d');
 		await user.click(within(step).getByRole('button', { name: /^Add GitHub/ }));
 		const row = await within(queue).findByTestId('queue-progress-row');
 		await waitFor(() => expect(row).toHaveAttribute('data-status', 'added'));

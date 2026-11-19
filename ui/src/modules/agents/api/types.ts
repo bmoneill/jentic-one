@@ -144,6 +144,12 @@ export interface CredentialBindingEntity {
 	 * rules are dormant (the broker and `permissions:test` evaluate the set). */
 	ruleSetId: string | null;
 	boundAt: string;
+	/** When the binding stops authorizing calls; null when it never expires
+	 * (absent reads the same). Independent of `suspended`: renewing restores an
+	 * expired binding, and never resumes a suspended one. */
+	expiresAt?: string | null;
+	/** `expiresAt` had passed when the server answered. */
+	expired?: boolean;
 	/** When the agent last made a call through this credential, whatever its
 	 * outcome; null when it never has. Absent when the server doesn't report it,
 	 * so the UI claims nothing either way. */

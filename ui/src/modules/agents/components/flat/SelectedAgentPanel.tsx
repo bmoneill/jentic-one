@@ -632,6 +632,7 @@ export function SelectedAgentPanel({
 	const openCardFor = (tile: ApiTileModel) => {
 		const tileStatus = deriveTileStatus({
 			suspended: tile.suspended,
+			expired: tile.expired,
 			agentServing: serving,
 			awaitingConsent: tile.awaitingConsent,
 			rules: ruleSummaries.get(tile.credentialId),

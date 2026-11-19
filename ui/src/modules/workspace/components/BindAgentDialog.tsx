@@ -7,8 +7,11 @@
  * dialog asks for the rules up front ("What can this agent call?"): Allow all
  * operations, Read-only (GET only), or Custom rules (the shared rules editor).
  * Nothing is preselected and Bind stays disabled until a choice is made (or,
- * for custom, at least one rule exists). The same rules go to every ticked
- * agent: each is bound (`POST /agents/{id}/credentials`), then its binding's
+ * for custom, at least one rule exists). It also asks how long the access
+ * lasts (the shared duration control, nothing preselected): binding with no
+ * expiry — nothing chosen, or "No expiry" — asks for confirmation first, and
+ * the end date runs from that confirmation. The same rules and end date go to
+ * every ticked agent: each is bound (`POST /agents/{id}/credentials`), then its binding's
  * rules are replaced (`PUT /credentials/{cid}/agents/{aid}/permissions`). If a
  * rules save fails the binding stays — that agent reads Blocked — and the
  * dialog stays open on a Retry for just those rules.
@@ -26,8 +29,8 @@
  * agent past the first page can't pass for unbound and be bound twice. Until
  * that read is whole, nothing can be ticked or bound.
  *
- * State lifecycle (dialog-state rule): the draft (credential, ticks, rules)
- * persists across dismissals and resets on a successful bind; transient errors
+ * State lifecycle (dialog-state rule): the draft (credential, ticks, rules,
+ * duration) persists across dismissals and resets on a successful bind; transient errors
  * clear on reopen.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -57,7 +60,19 @@ import {
 	useBindCredentialToAgents,
 } from '@/shared/credentials/api/vendors-hooks';
 import type { PermissionRule } from '@/shared/credentials/api/vendors-types';
-import { AccessRulesStep } from '@/shared/credentials/components';
+import {
+	AccessRulesStep,
+	BindingDurationField,
+	NoExpiryConfirmDialog,
+	formatDurationEnd,
+	useNoExpiryConfirm,
+} from '@/shared/credentials/components';
+import {
+	bindingDurationError,
+	expiresAtIso,
+	type BindingDuration,
+} from '@/shared/credentials/lib/bindingDuration';
+import { NO_DURATION_HINT, createsWithoutExpiry } from '@/shared/credentials/lib/bindingExpiry';
 import {
 	rulesForPreset,
 	type RulesPreset,
@@ -133,6 +148,11 @@ export function BindAgentDialog({
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [preset, setPreset] = useState<RulesPreset | null>(null);
 	const [customRules, setCustomRules] = useState<PermissionRule[]>([]);
+	// How long the access lasts; null = nothing chosen (binds with no expiry,
+	// after the warning).
+	const [duration, setDuration] = useState<BindingDuration | null>(null);
+	const durationRef = useRef<HTMLSelectElement>(null);
+	const noExpiry = useNoExpiryConfirm();
 	// A bind that landed but whose rules didn't, for some agents: kept so the
 	// Retry saves exactly those rules on exactly those bindings.
 	const [rulesFailure, setRulesFailure] = useState<{
@@ -211,16 +231,18 @@ export function BindAgentDialog({
 		return hint ? `${cred.name} · ${hint}` : cred.name;
 	};
 
-	const finish = (credentialLabel: string, names: string[]): void => {
+	const finish = (credentialLabel: string, names: string[], expiresAt?: string | null): void => {
+		const until = expiresAt ? `, until ${formatDurationEnd(new Date(expiresAt))}` : '';
 		toast({
 			title: 'Credential bound',
-			description: `Bound “${credentialLabel}” to ${agentList(names)}, with access rules.`,
+			description: `Bound “${credentialLabel}” to ${agentList(names)}, with access rules${until}.`,
 			variant: 'success',
 		});
 		// Reset the draft only on a successful commit.
 		setSelected(new Set());
 		setPreset(null);
 		setCustomRules([]);
+		setDuration(null);
 		setRulesFailure(null);
 		onClose();
 	};
@@ -245,14 +267,22 @@ export function BindAgentDialog({
 		if (!target) return;
 		const bound = target;
 		const agentsToBind = picked.map((a) => ({ id: a.id, name: a.name }));
+		// Worked out now, as the operator confirms: the duration runs from here.
+		const expiresAt = expiresAtIso(duration);
 		bind.mutate(
-			{ credentialId: bound.credential_id, agentIds: agentsToBind.map((a) => a.id), rules },
+			{
+				credentialId: bound.credential_id,
+				agentIds: agentsToBind.map((a) => a.id),
+				rules,
+				expiresAt,
+			},
 			{
 				onSuccess: ({ rulesFailed }) => {
 					if (rulesFailed.length === 0) {
 						finish(
 							pickerLabel(bound),
 							agentsToBind.map((a) => a.name),
+							expiresAt,
 						);
 						return;
 					}
@@ -438,6 +468,17 @@ export function BindAgentDialog({
 						testIdPrefix="bind-agent"
 					/>
 				)}
+				{!everyAgentBound && (
+					<BindingDurationField
+						value={duration}
+						onChange={setDuration}
+						disabled={busy}
+						label="Access expires after"
+						emptyHint={NO_DURATION_HINT}
+						selectRef={durationRef}
+						testIdPrefix="bind-agent"
+					/>
+				)}
 				{createError && (
 					<ErrorAlert
 						title="Couldn't create the no-auth credential"
@@ -468,10 +509,13 @@ export function BindAgentDialog({
 			</Button>
 			<Button
 				size="sm"
-				onClick={(): void => void handleBind()}
+				onClick={(): void =>
+					noExpiry.request(createsWithoutExpiry(duration), () => void handleBind())
+				}
 				disabled={
 					picked.length === 0 ||
 					rules == null ||
+					bindingDurationError(duration) !== null ||
 					busy ||
 					(!credential && !pendingCreate) ||
 					!boundKnown
@@ -485,14 +529,22 @@ export function BindAgentDialog({
 	);
 
 	return (
-		<Dialog
-			open={open}
-			onClose={onClose}
-			title="Bind to an agent"
-			subtitle={`Give an existing agent access to ${apiLabel} through one of its credentials.`}
-			footer={noActiveAgents || noCredential ? undefined : footer}
-		>
-			{body}
-		</Dialog>
+		<>
+			<Dialog
+				open={open}
+				onClose={onClose}
+				title="Bind to an agent"
+				subtitle={`Give an existing agent access to ${apiLabel} through one of its credentials.`}
+				footer={noActiveAgents || noCredential ? undefined : footer}
+			>
+				{body}
+			</Dialog>
+			<NoExpiryConfirmDialog
+				{...noExpiry.dialogProps}
+				subject={picked.length === 1 ? picked[0].name : 'These agents'}
+				confirmLabel="Bind without expiry"
+				fieldRef={durationRef}
+			/>
+		</>
 	);
 }

@@ -134,7 +134,21 @@ async function addWithAccess(
 ): Promise<void> {
 	const step = await screen.findByTestId('queue-access-step');
 	await user.click(within(step).getByRole('radio', { name: preset }));
+	await pickDuration(user, step);
 	await user.click(within(step).getByRole('button', { name: `Add ${label}` }));
+}
+
+/** Choose how long the access lasts (7 days unless named), unless it already
+ * is — or isn't asked, on an item whose binding already landed. */
+async function pickDuration(
+	user: ReturnType<typeof userEvent.setup>,
+	step: HTMLElement,
+	value = '7d',
+): Promise<void> {
+	const field = within(step).queryByTestId('queue-access-duration-preset');
+	if (field instanceof HTMLSelectElement && field.value === '') {
+		await user.selectOptions(field, value);
+	}
 }
 
 /** Records every rules PUT while still letting the store handler answer. */
@@ -208,7 +222,10 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 
 		await waitFor(() => expect(calls).toHaveLength(1));
 		expect(calls[0].agentId).toBe(AGENT_ID);
-		expect(calls[0].body).toEqual({ credential_id: 'cred_stripe' });
+		expect(calls[0].body).toEqual({
+			credential_id: 'cred_stripe',
+			expires_at: expect.any(String),
+		});
 		// The binding gets the chosen rules, and the footer says what an API set
 		// up later is left with.
 		await waitFor(() => expect(rules.calls).toHaveLength(1));
@@ -280,7 +297,10 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 		await addWithAccess(user, 'stripe');
 
 		await waitFor(() => expect(calls).toHaveLength(1));
-		expect(calls[0].body).toEqual({ credential_id: 'cred_stripe' });
+		expect(calls[0].body).toEqual({
+			credential_id: 'cred_stripe',
+			expires_at: expect.any(String),
+		});
 		await waitFor(() => expect(rowFor('stripe')).toHaveTextContent('via Stripe key'));
 	});
 
@@ -481,6 +501,7 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 		// Its access choice survived the failure too.
 		const step = await screen.findByTestId('queue-access-step');
 		expect(within(step).getByRole('radio', { name: /Read-only/ })).toBeChecked();
+		await pickDuration(user, step);
 		await user.click(within(step).getByRole('button', { name: 'Add stripe' }));
 		await waitFor(() => expect(rowFor('stripe')).toHaveAttribute('data-status', 'added'));
 		expect(screen.getByText('2 APIs added')).toBeInTheDocument();
@@ -548,7 +569,10 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 		await addWithAccess(user, 'stripe');
 
 		await waitFor(() => expect(calls).toHaveLength(1));
-		expect(calls[0].body).toEqual({ credential_id: 'cred_sandbox' });
+		expect(calls[0].body).toEqual({
+			credential_id: 'cred_sandbox',
+			expires_at: expect.any(String),
+		});
 		await waitFor(() => expect(rowFor('stripe')).toHaveAttribute('data-status', 'added'));
 	});
 
@@ -941,6 +965,7 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 			await user.click(within(step).getByRole('button', { name: 'Add rule' }));
 			await user.click(within(step).getByRole('button', { name: 'DELETE' }));
 			await user.click(within(step).getByRole('button', { name: 'Add' }));
+			await pickDuration(user, step);
 			await user.click(within(step).getByRole('button', { name: 'Add stripe' }));
 			await waitFor(() => expect(rowFor('stripe')).toHaveAttribute('data-status', 'added'));
 			expect(rules.calls.map((c) => c.body)).toEqual([
@@ -1006,6 +1031,7 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 			);
 			const step = await toAccess(user);
 
+			await pickDuration(user, step);
 			await user.click(within(step).getByRole('button', { name: 'Set up later' }));
 			const confirm = within(step).getByTestId('queue-later-confirm');
 			expect(confirm).toHaveTextContent(
@@ -1022,6 +1048,7 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 			);
 			expect(calls).toHaveLength(0);
 
+			await pickDuration(user, step);
 			await user.click(within(step).getByRole('button', { name: 'Set up later' }));
 			await user.click(
 				within(within(step).getByTestId('queue-later-confirm')).getByRole('button', {
@@ -1057,6 +1084,7 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 			step = await toAccess(user);
 			expect(within(step).getByRole('radio', { name: /Read-only/ })).toBeChecked();
 
+			await pickDuration(user, step);
 			await user.click(within(step).getByRole('button', { name: 'Add stripe' }));
 			await waitFor(() => expect(rowFor('stripe')).toHaveAttribute('data-status', 'added'));
 			expect(screen.getByTestId('queue-position')).toHaveTextContent('2 of 2');
@@ -1118,6 +1146,7 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 			await user.click(within(step).getByRole('button', { name: 'Add rule' }));
 			await user.click(within(step).getByRole('button', { name: 'GET' }));
 			await user.click(within(step).getByRole('button', { name: 'Add' }));
+			await pickDuration(user, step);
 			await user.click(within(step).getByRole('button', { name: 'Add stripe' }));
 
 			const failed = await within(step).findByTestId('queue-rules-failed');
@@ -1192,6 +1221,7 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 			await user.click(within(step).getByRole('button', { name: 'Add rule' }));
 			await user.click(within(step).getByRole('button', { name: 'GET' }));
 			await user.click(within(step).getByRole('button', { name: 'Add' }));
+			await pickDuration(user, step);
 			await user.click(within(step).getByRole('button', { name: 'Add stripe' }));
 			await within(step).findByTestId('queue-rules-failed');
 
@@ -1208,6 +1238,7 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 					return undefined;
 				}),
 			);
+			await pickDuration(user, step);
 			await user.click(within(step).getByRole('button', { name: 'Set up later' }));
 			const addWithout = within(within(step).getByTestId('queue-later-confirm')).getByRole(
 				'button',
@@ -1232,6 +1263,7 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 			);
 			const step = await toAccess(user);
 			await tryRequest(user, step, 'GET', '/v1/charges');
+			await pickDuration(user, step);
 			await user.click(within(step).getByRole('button', { name: 'Set up later' }));
 			await checkA11y(document.body, { modal: true });
 		});
@@ -1322,5 +1354,71 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 			);
 			expect(onBack).toHaveBeenCalledTimes(1);
 		});
+	});
+});
+
+describe('ApiSetupQueue — how long the access lasts', () => {
+	const DAY = 86_400_000;
+	beforeEach(async () => {
+		await page.viewport(1280, 900);
+		setToken('test-token');
+		resetAgentsStore();
+		resetCredentialsStore([makeCredential()]);
+		resetApisStore([
+			makeMockApi({ vendor: 'stripe.com', name: 'main', displayName: 'stripe' }),
+		]);
+	});
+
+	async function toAccessStep(user: ReturnType<typeof userEvent.setup>): Promise<HTMLElement> {
+		renderWithProviders(<QueueHarness items={[coveredItem('stripe.com', 'cred_stripe')]} />);
+		await user.click(await screen.findByRole('button', { name: 'Use this credential' }));
+		const step = await screen.findByTestId('queue-access-step');
+		await user.click(within(step).getByRole('radio', { name: /Read-only/ }));
+		return step;
+	}
+
+	it('asks with nothing preselected, and the end date goes out with the bind', async () => {
+		const { calls } = watchBinds();
+		const user = userEvent.setup();
+		const step = await toAccessStep(user);
+		const field = within(step).getByTestId('queue-access-duration-preset') as HTMLSelectElement;
+		expect(field.value).toBe('');
+
+		await user.selectOptions(field, '90d');
+		const before = Date.now();
+		await user.click(within(step).getByRole('button', { name: 'Add stripe' }));
+		await waitFor(() => expect(calls).toHaveLength(1));
+		const at = Date.parse((calls[0].body as { expires_at: string }).expires_at);
+		expect(at).toBeGreaterThanOrEqual(before + 90 * DAY);
+		expect(at).toBeLessThanOrEqual(Date.now() + 90 * DAY);
+		await waitFor(() => expect(rowFor('stripe')).toHaveAttribute('data-status', 'added'));
+	});
+
+	it('adding with no expiry asks first, for Add and for Add without rules alike', async () => {
+		const { calls } = watchBinds();
+		const user = userEvent.setup();
+		const step = await toAccessStep(user);
+
+		await user.click(within(step).getByRole('button', { name: 'Add stripe' }));
+		expect(await screen.findByTestId('no-expiry-warning')).toHaveTextContent(
+			'Support bot will keep this access until someone removes it.',
+		);
+		await user.click(screen.getByTestId('no-expiry-set-expiry'));
+		await waitFor(() =>
+			expect(within(step).getByTestId('queue-access-duration-preset')).toHaveFocus(),
+		);
+
+		await user.click(within(step).getByRole('button', { name: 'Set up later' }));
+		await user.click(
+			within(within(step).getByTestId('queue-later-confirm')).getByRole('button', {
+				name: 'Add without rules',
+			}),
+		);
+		expect(await screen.findByTestId('no-expiry-warning')).toBeVisible();
+		expect(calls).toHaveLength(0);
+		await user.click(screen.getByRole('button', { name: 'Add stripe without expiry' }));
+		await waitFor(() => expect(calls).toHaveLength(1));
+		expect(calls[0].body).toEqual({ credential_id: 'cred_stripe' });
+		await waitFor(() => expect(rowFor('stripe')).toHaveAttribute('data-status', 'added'));
 	});
 });

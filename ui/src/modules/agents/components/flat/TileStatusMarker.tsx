@@ -9,6 +9,7 @@ import {
 	CheckCircle2,
 	ChevronRight,
 	CircleHelp,
+	Hourglass,
 	Loader2,
 	LogIn,
 	MinusCircle,
@@ -29,6 +30,7 @@ import {
 
 const TEXT_TONE = {
 	suspended: { tone: 'muted', icon: PauseCircle },
+	expired: { tone: 'caution', icon: Hourglass },
 	'not-serving': { tone: 'muted', icon: undefined },
 	'sign-in-needed': { tone: 'warning', icon: undefined },
 	'blocked-no-rules': { tone: 'caution', icon: ShieldOff },
@@ -40,6 +42,7 @@ const TEXT_TONE = {
 
 const CHIP = {
 	suspended: { tone: 'caution', icon: PauseCircle },
+	expired: { tone: 'caution', icon: Hourglass },
 	'not-serving': { tone: 'neutral', icon: MinusCircle },
 	'sign-in-needed': { tone: 'warning', icon: LogIn },
 	'blocked-no-rules': { tone: 'caution', icon: ShieldOff },

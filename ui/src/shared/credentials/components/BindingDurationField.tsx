@@ -14,8 +14,11 @@
  * empty choice selectable under `placeholder`, so the operator can go back to
  * it. `compact` fits the control into a row of buttons: the label becomes the
  * group's accessible name and the line under it is read to screen readers only.
+ * `emptyHint` is the line under the control while nothing is chosen, and
+ * `selectRef` lets a caller move focus to the dropdown (the "No expiry"
+ * warning's "Set an expiry").
  */
-import { useId } from 'react';
+import { useId, type Ref } from 'react';
 import { Input, Select } from '@/shared/ui';
 import {
 	BINDING_DURATION_PRESETS,
@@ -44,6 +47,10 @@ export interface BindingDurationFieldProps {
 	compact?: boolean;
 	/** The line under the control for a valid choice: when access would end if saved now. */
 	describe?: (end: Date | 'never') => string;
+	/** The line under the control while nothing is chosen. */
+	emptyHint?: string;
+	/** The preset dropdown, for a caller that moves focus to it. */
+	selectRef?: Ref<HTMLSelectElement>;
 	/** Prefix for the field's test ids (`<prefix>-duration-*`). */
 	testIdPrefix?: string;
 }
@@ -76,6 +83,8 @@ export function BindingDurationField({
 	clearable = false,
 	compact = false,
 	describe = defaultDescribe,
+	emptyHint,
+	selectRef,
 	testIdPrefix = 'binding',
 }: BindingDurationFieldProps) {
 	const labelId = useId();
@@ -113,6 +122,7 @@ export function BindingDurationField({
 			<div className="flex flex-wrap items-start gap-2">
 				<div className={compact ? 'w-32 shrink-0' : 'w-40 shrink-0'}>
 					<Select
+						ref={selectRef}
 						aria-label="Duration"
 						aria-describedby={hintId}
 						value={selected}
@@ -197,7 +207,7 @@ export function BindingDurationField({
 					className={compact ? 'sr-only' : 'text-muted-foreground text-xs'}
 					data-testid={`${testIdPrefix}-duration-hint`}
 				>
-					{end ? describe(end) : null}
+					{end ? describe(end) : value === null ? (emptyHint ?? null) : null}
 				</p>
 			)}
 		</div>

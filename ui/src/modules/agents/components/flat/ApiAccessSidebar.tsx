@@ -7,7 +7,16 @@
  * Suspend/resume is the reversible cut-off, so it sits in the header.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ExternalLink, Info, LogIn, PauseCircle, Pencil, PlayCircle, X } from 'lucide-react';
+import {
+	ExternalLink,
+	Hourglass,
+	Info,
+	LogIn,
+	PauseCircle,
+	Pencil,
+	PlayCircle,
+	X,
+} from 'lucide-react';
 import {
 	Button,
 	CodeSnippet,
@@ -26,7 +35,7 @@ import {
 	type DangerZoneAction,
 } from '@/shared/ui';
 import { vendorIconPropsFor } from '@/shared/lib';
-import { formatTimestamp, isolateText, timeAgo } from '@/shared/lib/utils';
+import { cn, formatTimestamp, isolateText, timeAgo } from '@/shared/lib/utils';
 import {
 	AGENTS_WRITE,
 	CREDENTIALS_WRITE,
@@ -47,7 +56,9 @@ import {
 	SharedWithYouBadge,
 	EditCredentialSheet,
 	CreateCredentialFlow,
+	RenewBindingControl,
 } from '@/shared/credentials/components';
+import { bindingExpiresSoon, bindingExpiryLabel } from '@/shared/credentials/lib/bindingExpiry';
 import { credentialEditableBy } from '@/shared/credentials/lib/credentialAuthority';
 import {
 	summarizeBindingRules,
@@ -231,6 +242,7 @@ export function ApiAccessSidebar({
 	const status = shown
 		? deriveTileStatus({
 				suspended: shown.suspended,
+				expired: shown.expired,
 				agentServing,
 				awaitingConsent: shown.awaitingConsent,
 				rules: effective.isError ? 'error' : (savedRuleSummary ?? 'loading'),
@@ -404,7 +416,9 @@ export function ApiAccessSidebar({
 											{shown.authLabel ? ` · ${shown.authLabel}` : ''}
 										</UserText>{' '}
 										— access for <UserText>{agent.name}</UserText>
-										{shown.suspended ? ' · not serving calls' : ''}
+										{shown.suspended || shown.expired
+											? ' · not serving calls'
+											: ''}
 										{shown.suspended && shown.suspendedReason === 'api_deleted'
 											? ' because its API was deleted — review the rules before resuming'
 											: ''}
@@ -573,6 +587,46 @@ export function ApiAccessSidebar({
 											copyAriaLabel="Copy the Jentic-Credential-Id header"
 										/>
 									</>
+								)}
+							</section>
+
+							{/* When this access ends, and — for whoever may re-grant the
+							    credential — renewing it. Renewing re-grants, so it takes the
+							    same rights as resuming: agents:write and the credential's
+							    owner (or an org admin). */}
+							<section
+								aria-label="Access expiry"
+								className="space-y-3"
+								data-testid="sidebar-expiry"
+							>
+								<h3 className="text-foreground text-sm font-semibold">
+									Access ends
+								</h3>
+								<p
+									className={cn(
+										'flex items-start gap-2 text-sm',
+										shown.expired || bindingExpiresSoon(shown)
+											? 'text-caution'
+											: 'text-muted-foreground',
+									)}
+									data-testid="sidebar-expiry-status"
+								>
+									<Hourglass
+										className="mt-0.5 h-4 w-4 shrink-0"
+										aria-hidden="true"
+									/>
+									<span>{expiryStatusText(shown)}</span>
+								</p>
+								{canManageBinding && !credentialReadOnly && credentialId && (
+									<RenewBindingControl
+										key={`${agent.id}:${credentialId}`}
+										agentId={agent.id}
+										agentName={agent.name}
+										credentialId={credentialId}
+										expiresAt={shown.expiresAt}
+										expired={shown.expired ?? false}
+										testIdPrefix="sidebar-renew"
+									/>
 								)}
 							</section>
 
@@ -791,4 +845,19 @@ export function ApiAccessSidebar({
 			{deviceDialog}
 		</>
 	);
+}
+
+/** The sheet's line about when this access ends. */
+function expiryStatusText(tile: ApiTileModel): string {
+	const label = bindingExpiryLabel(tile);
+	if (!tile.expiresAt || !label) {
+		return 'No expiry — this access lasts until someone removes it. Setting an end date is recommended.';
+	}
+	const when = formatTimestamp(tile.expiresAt);
+	if (tile.expired) {
+		return `${label} (${when}). Calls through this credential are refused until it is renewed${
+			tile.suspended ? ' and resumed' : ''
+		}.`;
+	}
+	return `${label} (${when}). After that, calls through this credential are refused until it is renewed.`;
 }

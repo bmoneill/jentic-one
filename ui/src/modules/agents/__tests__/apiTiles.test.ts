@@ -281,6 +281,43 @@ describe('tileStats / agentSetupGapCount', () => {
 		expect(tile.suspendedReason).toBe('api_deleted');
 	});
 
+	it('carries the end date onto the tile, and an expired one reads expired', () => {
+		const apis = [makeApi({ vendor: 'slack.com', display_name: 'Slack' })];
+		const future = new Date(Date.now() + 86_400_000).toISOString();
+		const past = new Date(Date.now() - 60_000).toISOString();
+		const [open] = composeApiTiles([makeBinding()], [makeCredential()], apis);
+		expect(open.expiresAt).toBeNull();
+		expect(open.expired).toBe(false);
+		const [ending] = composeApiTiles(
+			[makeBinding({ expiresAt: future, expired: false })],
+			[makeCredential()],
+			apis,
+		);
+		expect(ending.expiresAt).toBe(future);
+		expect(ending.expired).toBe(false);
+		// Lapsed since the server answered: expired all the same.
+		const [lapsed] = composeApiTiles(
+			[makeBinding({ expiresAt: past, expired: false })],
+			[makeCredential()],
+			apis,
+		);
+		expect(lapsed.expired).toBe(true);
+	});
+
+	it('keeps an expired binding configured, without its operations', () => {
+		const apis = [
+			makeApi({ vendor: 'slack.com', display_name: 'Slack', operation_count: 100 }),
+		];
+		const expired = makeBinding({
+			expiresAt: new Date(Date.now() - 60_000).toISOString(),
+			expired: true,
+		});
+		const stats = tileStats(composeApiTiles([expired], [makeCredential()], apis));
+		expect(stats.configured).toBe(1);
+		expect(stats.operations).toBe(0);
+		expect(stats.blockedBindings).toBe(0);
+	});
+
 	it('withholds the operations figure when no usable tile proves a count', () => {
 		// A binding whose API the registry does not describe: the tile renders,
 		// but nothing states how many operations it exposes. A `0` would claim

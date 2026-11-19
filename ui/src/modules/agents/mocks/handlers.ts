@@ -174,6 +174,8 @@ interface CredentialBindingRow {
 	suspended: boolean;
 	rule_set_id: string | null;
 	bound_at: string;
+	/** When the binding stops authorizing calls; null = never. */
+	expires_at?: string | null;
 	/** Last call through the credential; null = never used. */
 	last_used_at: string | null;
 	/** Per-API last use; derived from `last_used_at` and `serves` when absent. */
@@ -220,6 +222,19 @@ export function seedCredentialBindings(
 	>,
 ): void {
 	for (const over of rows) credentialBindings.push(seedBinding(over));
+}
+
+/** Set or clear a seeded binding's end date (tests: an expiring or expired binding). */
+export function setCredentialBindingExpiry(
+	agentId: string,
+	credentialId: string,
+	expiresAt: string | null,
+): void {
+	const row = credentialBindings.find(
+		(b) => b.agent_id === agentId && b.credential_id === credentialId,
+	);
+	if (!row) throw new Error(`No seeded binding for ${agentId} × ${credentialId}`);
+	row.expires_at = expiresAt;
 }
 
 /** One shared permission rule set (`RuleSetResponse` minus `binding_count`,
@@ -302,7 +317,30 @@ function bindingJson(row: CredentialBindingRow) {
 					last_used_at: row.last_used_at,
 				}))
 			: []);
-	return { ...wire, last_used_by_api };
+	return { ...wire, ...bindingExpiryJson(row), last_used_by_api };
+}
+
+/** A binding's end date and whether it has passed, as every binding read reports them. */
+function bindingExpiryJson(row: CredentialBindingRow): {
+	expires_at: string | null;
+	expired: boolean;
+} {
+	const expiresAt = row.expires_at ?? null;
+	return {
+		expires_at: expiresAt,
+		expired: expiresAt != null && Date.parse(expiresAt) <= Date.now(),
+	};
+}
+
+/** The 422 a binding write gets for an end date that is not in the future. */
+function pastExpiryError(expiresAt: unknown): Response | null {
+	if (expiresAt == null) return null;
+	const ms = typeof expiresAt === 'string' ? Date.parse(expiresAt) : NaN;
+	if (!Number.isNaN(ms) && ms > Date.now()) return null;
+	return HttpResponse.json(
+		{ detail: [{ loc: ['body', 'expires_at'], msg: 'expires_at must be in the future' }] },
+		{ status: 422 },
+	);
 }
 
 /**
@@ -1966,7 +2004,12 @@ export const agentsHandlers = [
 	http.post('/agents/:id/credentials', async ({ params, request }) => {
 		const agent = agents.find((a) => a.id === params.id);
 		if (!agent) return new HttpResponse(null, { status: 404 });
-		const body = (await request.json().catch(() => ({}))) as { credential_id?: string };
+		const body = (await request.json().catch(() => ({}))) as {
+			credential_id?: string;
+			expires_at?: string | null;
+		};
+		const pastExpiry = pastExpiryError(body.expires_at);
+		if (pastExpiry) return pastExpiry;
 		if (!body.credential_id) {
 			return HttpResponse.json(
 				{ detail: [{ loc: ['body', 'credential_id'], msg: 'Field required' }] },
@@ -1992,6 +2035,7 @@ export const agentsHandlers = [
 			agent_id: params.id as string,
 			credential_id: body.credential_id,
 			bound_at: now(),
+			expires_at: body.expires_at ?? null,
 			name: credential?.name ?? null,
 			serves: credential
 				? [
@@ -2023,6 +2067,24 @@ export const agentsHandlers = [
 		}
 		return new HttpResponse(null, { status: 204 });
 	}),
+	// Renew: set, move or clear the end date. Never touches `suspended`.
+	http.patch('/agents/:id/credentials/:cid', async ({ params, request }) => {
+		const row = credentialBindings.find(
+			(b) => b.agent_id === params.id && b.credential_id === params.cid,
+		);
+		if (!row) return new HttpResponse(null, { status: 404 });
+		const body = (await request.json().catch(() => ({}))) as { expires_at?: string | null };
+		if (!('expires_at' in body)) {
+			return HttpResponse.json(
+				{ detail: [{ loc: ['body', 'expires_at'], msg: 'Field required' }] },
+				{ status: 422 },
+			);
+		}
+		const pastExpiry = pastExpiryError(body.expires_at);
+		if (pastExpiry) return pastExpiry;
+		row.expires_at = body.expires_at ?? null;
+		return HttpResponse.json(bindingJson(row));
+	}),
 	http.post('/agents/:id/credentials/:cid\\:resume', ({ params }) => {
 		const row = credentialBindings.find(
 			(b) => b.agent_id === params.id && b.credential_id === params.cid,
@@ -2047,6 +2109,7 @@ export const agentsHandlers = [
 					rule_set_id: b.rule_set_id,
 					status: agent?.status ?? 'active',
 					suspended: b.suspended,
+					...bindingExpiryJson(b),
 					last_used_at: b.last_used_at,
 				};
 			});

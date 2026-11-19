@@ -33,6 +33,7 @@ import {
 	listVendors,
 	pollConnectSessionStatus,
 	rejectConnectSession,
+	renewCredentialBinding,
 	startEditConnection,
 	startIntegrationConnect,
 	type VendorOperationsPage,
@@ -380,7 +381,9 @@ export interface BindResult {
  * or reported. A failed bind stops the run (agents before it stay bound); a
  * failed rules save doesn't — it lands in `rulesFailed` for a retry
  * ({@link useApplyBindingRules}). Caches are invalidated whatever the outcome,
- * so a run that fails partway still shows the binds that landed.
+ * so a run that fails partway still shows the binds that landed. Every binding
+ * gets the same `expiresAt` (RFC 3339), worked out once when the run starts;
+ * omitted, none of them expires.
  */
 export function useBindCredentialToAgents() {
 	const client = useQueryClient();
@@ -391,12 +394,13 @@ export function useBindCredentialToAgents() {
 			credentialId: string;
 			agentIds: readonly string[];
 			rules?: readonly PermissionRuleSchema[];
+			expiresAt?: string | null;
 		}
 	>({
-		mutationFn: async ({ credentialId, agentIds, rules }) => {
+		mutationFn: async ({ credentialId, agentIds, rules, expiresAt }) => {
 			const rulesFailed: string[] = [];
 			for (const aid of agentIds) {
-				await bindCredentialToAgentBlocked(aid, credentialId);
+				await bindCredentialToAgentBlocked(aid, credentialId, expiresAt);
 				if (!rules) continue;
 				try {
 					await replaceBindingPermissions(aid, credentialId, [...rules]);
@@ -408,6 +412,25 @@ export function useBindCredentialToAgents() {
 		},
 		onSettled: (_res, _err, { credentialId, agentIds }) =>
 			invalidateBindingSurfaces(client, credentialId, agentIds),
+	});
+}
+
+/**
+ * Renew one binding (`PATCH /agents/{id}/credentials/{cid}`): a new end date,
+ * or `null` to clear it. Every surface showing the binding refetches before the
+ * mutation settles, so its status never reads "Expired" after a renewal.
+ */
+export function useRenewCredentialBinding() {
+	const client = useQueryClient();
+	return useMutation<
+		void,
+		Error,
+		{ agentId: string; credentialId: string; expiresAt: string | null }
+	>({
+		mutationFn: ({ agentId, credentialId, expiresAt }) =>
+			renewCredentialBinding(agentId, credentialId, expiresAt),
+		onSettled: (_res, _err, { agentId, credentialId }) =>
+			invalidateBindingSurfaces(client, credentialId, [agentId]),
 	});
 }
 

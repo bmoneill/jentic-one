@@ -141,28 +141,65 @@ export function startEditConnection(body: EditConnectionBody): Promise<EditConne
  * domain feature but touches an agent-owned endpoint — can compose it
  * without crossing the module-vs-module boundary. Uses the generated
  * ``AgentsService`` (allowed at this repository tier) so a schema
- * change lands automatically.
+ * change lands automatically. ``expiresAt`` (RFC 3339, in the future) ends
+ * the binding then; omitted, the binding never expires.
  */
 export async function bindCredentialToAgentBlocked(
 	agentId: string,
 	credentialId: string,
+	expiresAt?: string | null,
 ): Promise<void> {
 	try {
 		await AgentsService.bindAgentCredential({
 			agentId,
-			requestBody: { credential_id: credentialId },
+			requestBody: {
+				credential_id: credentialId,
+				...(expiresAt ? { expires_at: expiresAt } : {}),
+			},
 		});
 	} catch (err) {
-		const status =
-			typeof (err as { status?: number })?.status === 'number'
-				? (err as { status: number }).status
-				: null;
-		throw new IntegrationsApiError(
-			(err as Error)?.message ?? 'Failed to bind the credential.',
-			status,
-			err,
-		);
+		throw generatedCallError(err, 'Failed to bind the credential.');
 	}
+}
+
+/**
+ * Renew a binding (`PATCH /agents/{id}/credentials/{cid}`): set or move when
+ * it stops authorizing calls, or clear the end date with `null`. Renewing
+ * restores an expired binding; it never resumes a suspended one. The caller
+ * must own the credential (or hold ``org:admin``), as for ``:resume``.
+ */
+export async function renewCredentialBinding(
+	agentId: string,
+	credentialId: string,
+	expiresAt: string | null,
+): Promise<void> {
+	try {
+		await AgentsService.renewAgentCredentialBinding({
+			agentId,
+			credentialId,
+			requestBody: { expires_at: expiresAt },
+		});
+	} catch (err) {
+		// The server's own words: a lapsed choice ("must be in the future") or a
+		// credential the viewer may not renew reads better than a status line.
+		const detail = problemDetailText((err as { body?: unknown })?.body);
+		throw generatedCallError(err, detail ?? 'Failed to renew the binding.', detail != null);
+	}
+}
+
+/** A generated-client failure as an {@link IntegrationsApiError}: the error's
+ * own message, or `fallback` (always `fallback` when `preferFallback`). */
+function generatedCallError(
+	err: unknown,
+	fallback: string,
+	preferFallback = false,
+): IntegrationsApiError {
+	const status =
+		typeof (err as { status?: number })?.status === 'number'
+			? (err as { status: number }).status
+			: null;
+	const message = preferFallback ? fallback : ((err as Error)?.message ?? fallback);
+	return new IntegrationsApiError(message, status, err);
 }
 
 /**

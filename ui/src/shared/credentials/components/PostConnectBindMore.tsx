@@ -1,9 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Button, Checkbox, ErrorAlert, Label, Skeleton } from '@/shared/ui';
 import {
 	useAgentsForPicker,
 	useBindCredentialToAgents,
 } from '@/shared/credentials/api/vendors-hooks';
+import {
+	bindingDurationError,
+	expiresAtIso,
+	type BindingDuration,
+} from '@/shared/credentials/lib/bindingDuration';
+import { NO_DURATION_HINT, createsWithoutExpiry } from '@/shared/credentials/lib/bindingExpiry';
+import { BindingDurationField } from '@/shared/credentials/components/BindingDurationField';
+import {
+	NoExpiryConfirmDialog,
+	useNoExpiryConfirm,
+} from '@/shared/credentials/components/NoExpiryConfirmDialog';
 
 /**
  * Post-connect CTA rendered on the credentials-dialog terminal step:
@@ -12,7 +23,8 @@ import {
  * mode (no rules) — the user has already authored per-binding rules
  * for the primary (agent, credential) pair at ``:confirm``, so
  * additional agents get a suspended row and grant them access from
- * each agent's page.
+ * each agent's page. How long the new bindings last is chosen here too (the
+ * shared duration control); binding with no expiry asks for confirmation.
  *
  * Lives under ``shared/credentials`` (not ``modules/agents``) because
  * both the credential inventory and the Agents page mount it via
@@ -31,6 +43,9 @@ export function PostConnectBindMore({
 	const bindMany = useBindCredentialToAgents();
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [done, setDone] = useState(false);
+	const [duration, setDuration] = useState<BindingDuration | null>(null);
+	const durationRef = useRef<HTMLSelectElement>(null);
+	const noExpiry = useNoExpiryConfirm();
 
 	const candidates = useMemo(() => {
 		const all = agents.data?.data ?? [];
@@ -59,11 +74,13 @@ export function PostConnectBindMore({
 	const handleBind = (): void => {
 		if (selected.size === 0) return;
 		bindMany.mutate(
-			{ credentialId, agentIds: Array.from(selected) },
+			// The end date runs from now, as the operator confirms.
+			{ credentialId, agentIds: Array.from(selected), expiresAt: expiresAtIso(duration) },
 			{
 				onSuccess: () => {
 					setDone(true);
 					setSelected(new Set());
+					setDuration(null);
 				},
 			},
 		);
@@ -90,6 +107,15 @@ export function PostConnectBindMore({
 					);
 				})}
 			</div>
+			<BindingDurationField
+				value={duration}
+				onChange={setDuration}
+				disabled={bindMany.isPending}
+				label="Access expires after"
+				emptyHint={NO_DURATION_HINT}
+				selectRef={durationRef}
+				testIdPrefix="bind-more"
+			/>
 			{bindMany.error && <ErrorAlert message={bindMany.error} />}
 			{done && !bindMany.error && (
 				<p className="text-success text-xs">Bound to selected agents.</p>
@@ -98,8 +124,12 @@ export function PostConnectBindMore({
 				type="button"
 				variant="secondary"
 				size="sm"
-				onClick={handleBind}
-				disabled={selected.size === 0 || bindMany.isPending}
+				onClick={(): void => noExpiry.request(createsWithoutExpiry(duration), handleBind)}
+				disabled={
+					selected.size === 0 ||
+					bindMany.isPending ||
+					bindingDurationError(duration) !== null
+				}
 				loading={bindMany.isPending}
 			>
 				Bind{' '}
@@ -107,6 +137,12 @@ export function PostConnectBindMore({
 					? `to ${selected.size} agent${selected.size === 1 ? '' : 's'}`
 					: ''}
 			</Button>
+			<NoExpiryConfirmDialog
+				{...noExpiry.dialogProps}
+				subject={selected.size === 1 ? 'This agent' : 'These agents'}
+				confirmLabel="Bind without expiry"
+				fieldRef={durationRef}
+			/>
 		</div>
 	);
 }

@@ -43,6 +43,13 @@ export {
 	formatDurationEnd,
 } from '@/shared/credentials/components/BindingDurationField';
 export type { BindingDurationFieldProps } from '@/shared/credentials/components/BindingDurationField';
+export {
+	NoExpiryConfirmDialog,
+	useNoExpiryConfirm,
+} from '@/shared/credentials/components/NoExpiryConfirmDialog';
+export type { NoExpiryConfirmDialogProps } from '@/shared/credentials/components/NoExpiryConfirmDialog';
+export { RenewBindingControl } from '@/shared/credentials/components/RenewBindingControl';
+export type { RenewBindingControlProps } from '@/shared/credentials/components/RenewBindingControl';
 export { RuleListEditor } from '@/shared/credentials/components/RuleListEditor';
 export {
 	MatchedRuleText,

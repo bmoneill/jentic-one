@@ -25,6 +25,8 @@ function seedBoundAgents(
 		suspended?: boolean;
 		suspended_reason?: string | null;
 		last_used_at?: string | null;
+		expires_at?: string | null;
+		expired?: boolean;
 	}>,
 ) {
 	worker.use(
@@ -42,6 +44,10 @@ function seedBoundAgents(
 					suspended: r.suspended ?? false,
 					suspended_reason: r.suspended_reason ?? null,
 					...('last_used_at' in r && { last_used_at: r.last_used_at }),
+					...('expires_at' in r && {
+						expires_at: r.expires_at,
+						expired: r.expired ?? false,
+					}),
 				})),
 				has_more: false,
 				next_cursor: null,
@@ -265,5 +271,191 @@ describe('BoundAgentsSection — whose agents the list holds', () => {
 		expect(await screen.findByTestId('bound-agents-empty')).toHaveTextContent(
 			'None of your agents are bound to this credential.',
 		);
+	});
+});
+
+describe('BoundAgentsSection — when access ends', () => {
+	const DAY = 86_400_000;
+	const inDays = (n: number): string => new Date(Date.now() + n * DAY + 60_000).toISOString();
+
+	beforeEach(() => {
+		setToken('test-token');
+		resetCredentialsStore([
+			makeMockCredential({ credential_id: 'cred_gh_1', name: 'GitHub PAT' }),
+		]);
+	});
+
+	/** Records each renewal's body. */
+	function watchRenewals(): unknown[] {
+		const bodies: unknown[] = [];
+		worker.use(
+			http.patch('/agents/:aid/credentials/:cid', async ({ params, request }) => {
+				const body = (await request.json()) as { expires_at: string | null };
+				bodies.push(body);
+				return HttpResponse.json({
+					id: 'acb_1',
+					agent_id: params.aid,
+					credential_id: params.cid,
+					bound_at: '2026-05-02T09:00:00Z',
+					suspended: false,
+					expires_at: body.expires_at,
+					expired: false,
+				});
+			}),
+		);
+		return bodies;
+	}
+
+	function rowFor(name: string): HTMLElement {
+		const row = screen
+			.getAllByTestId('bound-agent-row')
+			.find((li) => within(li).queryByText(name) != null);
+		if (!row) throw new Error(`no row for ${name}`);
+		return row;
+	}
+
+	it('shows each end date, and marks an expired binding', async () => {
+		seedBoundAgents('cred_gh_1', [
+			{
+				agent_id: 'agnt_old',
+				agent_name: 'old-agent',
+				expires_at: new Date(Date.now() - 2 * DAY - 60_000).toISOString(),
+				expired: true,
+			},
+			{ agent_id: 'agnt_soon', agent_name: 'soon-agent', expires_at: inDays(3) },
+			{ agent_id: 'agnt_open', agent_name: 'open-agent', expires_at: null },
+		]);
+		const { container } = renderSheet('cred_gh_1');
+		await screen.findByText('Bound agents (3)');
+
+		const old = rowFor('old-agent');
+		expect(within(old).getByTestId('bound-agent-expired')).toHaveTextContent(/^Expired$/);
+		expect(within(old).getByTestId('bound-agent-expiry')).toHaveTextContent(
+			'Expired 2 days ago',
+		);
+		expect(
+			within(old).getByRole('button', { name: /^Renew for \W?old-agent\W?$/ }),
+		).toBeVisible();
+
+		const soon = rowFor('soon-agent');
+		expect(within(soon).queryByTestId('bound-agent-expired')).not.toBeInTheDocument();
+		expect(within(soon).getByTestId('bound-agent-expiry')).toHaveTextContent(
+			'Expires in 3 days',
+		);
+
+		const open = rowFor('open-agent');
+		expect(within(open).queryByTestId('bound-agent-expiry')).not.toBeInTheDocument();
+		await checkA11y(container);
+	});
+
+	it('renews from the row: the new end date runs from the save', async () => {
+		const renewals = watchRenewals();
+		seedBoundAgents('cred_gh_1', [
+			{
+				agent_id: 'agnt_old',
+				agent_name: 'old-agent',
+				expires_at: new Date(Date.now() - DAY).toISOString(),
+				expired: true,
+			},
+		]);
+		const user = userEvent.setup();
+		renderSheet('cred_gh_1');
+
+		const toggle = await screen.findByRole('button', { name: /^Renew for \W?old-agent\W?$/ });
+		await user.click(toggle);
+		expect(toggle).toHaveAttribute('aria-expanded', 'true');
+		const save = screen.getByTestId('bound-agent-renew-control-save');
+		// Nothing is preselected, so nothing can be saved yet.
+		expect(save).toBeDisabled();
+
+		await user.selectOptions(
+			screen.getByTestId('bound-agent-renew-control-duration-preset'),
+			'30d',
+		);
+		const before = Date.now();
+		await user.click(save);
+		await vi.waitFor(() => expect(renewals).toHaveLength(1));
+		const at = Date.parse((renewals[0] as { expires_at: string }).expires_at);
+		expect(at).toBeGreaterThanOrEqual(before + 30 * DAY);
+		expect(at).toBeLessThanOrEqual(Date.now() + 30 * DAY);
+		// The row's control closes once the renewal lands.
+		await vi.waitFor(() =>
+			expect(screen.queryByTestId('bound-agent-renew-control')).not.toBeInTheDocument(),
+		);
+	});
+
+	it('clearing the expiry asks first; "Set an expiry" goes back to the control', async () => {
+		const renewals = watchRenewals();
+		seedBoundAgents('cred_gh_1', [
+			{ agent_id: 'agnt_soon', agent_name: 'soon-agent', expires_at: inDays(3) },
+		]);
+		const user = userEvent.setup();
+		renderSheet('cred_gh_1');
+
+		await user.click(
+			await screen.findByRole('button', { name: /^Change the expiry for \W?soon-agent\W?$/ }),
+		);
+		await user.selectOptions(
+			screen.getByTestId('bound-agent-renew-control-duration-preset'),
+			'custom',
+		);
+		await user.selectOptions(
+			screen.getByTestId('bound-agent-renew-control-duration-unit'),
+			'never',
+		);
+		await user.click(
+			screen.getByRole('button', { name: /^Remove expiry for \W?soon-agent\W?$/ }),
+		);
+
+		const warning = await screen.findByTestId('no-expiry-warning');
+		expect(warning).toHaveTextContent(
+			'soon-agent will keep this access until someone removes it.',
+		);
+		const setExpiry = screen.getByTestId('no-expiry-set-expiry');
+		await vi.waitFor(() => expect(setExpiry).toHaveFocus());
+		await user.click(setExpiry);
+		await vi.waitFor(() =>
+			expect(screen.getByTestId('bound-agent-renew-control-duration-preset')).toHaveFocus(),
+		);
+		expect(renewals).toHaveLength(0);
+
+		await user.click(
+			screen.getByRole('button', { name: /^Remove expiry for \W?soon-agent\W?$/ }),
+		);
+		await user.click(await screen.findByTestId('no-expiry-confirm'));
+		await vi.waitFor(() => expect(renewals).toEqual([{ expires_at: null }]));
+	});
+
+	it('Enter in a custom amount renews, and never submits the credential form around it', async () => {
+		const renewals = watchRenewals();
+		let credentialSaves = 0;
+		worker.use(
+			http.patch('/credentials/:id', () => {
+				credentialSaves += 1;
+				return undefined;
+			}),
+		);
+		seedBoundAgents('cred_gh_1', [
+			{ agent_id: 'agnt_soon', agent_name: 'soon-agent', expires_at: inDays(3) },
+		]);
+		const user = userEvent.setup();
+		renderSheet('cred_gh_1');
+
+		await user.click(
+			await screen.findByRole('button', { name: /^Change the expiry for \W?soon-agent\W?$/ }),
+		);
+		await user.selectOptions(
+			screen.getByTestId('bound-agent-renew-control-duration-preset'),
+			'custom',
+		);
+		const amount = screen.getByTestId('bound-agent-renew-control-duration-amount');
+		await user.clear(amount);
+		await user.type(amount, '12{Enter}');
+
+		await vi.waitFor(() => expect(renewals).toHaveLength(1));
+		const at = Date.parse((renewals[0] as { expires_at: string }).expires_at);
+		expect(at - Date.now()).toBeGreaterThan(11 * DAY);
+		expect(at - Date.now()).toBeLessThanOrEqual(12 * DAY);
+		expect(credentialSaves).toBe(0);
 	});
 });

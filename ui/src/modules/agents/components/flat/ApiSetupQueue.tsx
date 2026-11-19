@@ -7,7 +7,9 @@
  * whole item. Access: the same presets as the workspace bind (Allow all
  * operations · Read-only (GET only) · Custom rules, Custom preselected), with an
  * inline "Try a request" that dry-runs the rules as they stand — unsaved —
- * locally, with the broker's semantics. Confirming binds the credential, then
+ * locally, with the broker's semantics — and how long the access lasts (the
+ * shared duration control, nothing preselected; binding with no expiry asks
+ * for confirmation first). Confirming binds the credential, then
  * saves its rules, and only advances once both landed AND the binding surfaces
  * refetched — the agent's rows are never left reading a stale "Blocked". A rules
  * save that fails leaves the binding (blocked) and offers Retry in place, with
@@ -59,6 +61,9 @@ import {
 import type { PermissionRule } from '@/shared/credentials/api/vendors-types';
 import {
 	AccessRulesStep,
+	BindingDurationField,
+	NoExpiryConfirmDialog,
+	useNoExpiryConfirm,
 	useDeviceAwareConnect,
 	type ConnectedCredentialInfo,
 	CreateCredentialFlow,
@@ -71,6 +76,12 @@ import {
 	type ScopeReach,
 } from '@/shared/credentials/lib/accessPresets';
 import { apiScopeReach } from '@/shared/credentials/lib/apiIdentity';
+import {
+	bindingDurationError,
+	expiresAtIso,
+	type BindingDuration,
+} from '@/shared/credentials/lib/bindingDuration';
+import { NO_DURATION_HINT, createsWithoutExpiry } from '@/shared/credentials/lib/bindingExpiry';
 import {
 	credentialAwaitsConsent,
 	type CredentialChoice,
@@ -129,14 +140,17 @@ function errorText(e: unknown): string {
 	return e instanceof Error && e.message ? e.message : 'Something went wrong.';
 }
 
-/** One item's access draft — the preset and the custom rules being written. */
+/** One item's access draft — the preset and the custom rules being written,
+ * and how long the access lasts (null = nothing chosen: no expiry). */
 interface AccessDraft {
 	preset: RulesPreset | null;
 	customRules: PermissionRule[];
+	duration: BindingDuration | null;
 }
 
-/** Custom rules, preselected: the operator says what the agent may call. */
-const DEFAULT_DRAFT: AccessDraft = { preset: 'custom', customRules: [] };
+/** Custom rules, preselected: the operator says what the agent may call. No
+ * duration: the operator chooses one, or confirms going without. */
+const DEFAULT_DRAFT: AccessDraft = { preset: 'custom', customRules: [], duration: null };
 
 const RULES_SAVE_FAILED = "The access rules weren't saved.";
 
@@ -335,6 +349,8 @@ export function ApiSetupQueue({
 						credentialId: chosen.credential_id,
 						agentIds: [agentId],
 						rules: rules ?? undefined,
+						// Worked out as the bind goes out: the duration runs from here.
+						expiresAt: expiresAtIso(draftFor(entry.key).duration),
 					}));
 				} catch (e) {
 					setEntries((current) =>
@@ -948,6 +964,14 @@ function AccessStep({
 }) {
 	const working = entry.status === 'working';
 	const [laterPending, setLaterPending] = useState(false);
+	// How long the access lasts — asked only while the binding is still to be
+	// made (a bound item owes just its rules). No expiry is confirmed first.
+	const durationRef = useRef<HTMLSelectElement>(null);
+	const noExpiry = useNoExpiryConfirm();
+	const askDuration = !entry.bound;
+	const durationInvalid = askDuration && bindingDurationError(draft.duration) !== null;
+	const guardExpiry = (run: () => void): void =>
+		noExpiry.request(askDuration && createsWithoutExpiry(draft.duration), run);
 	// Focus follows the confirm in and back out, so the keyboard never drops
 	// to the page when the button that opened it unmounts.
 	const laterRef = useRef<HTMLButtonElement>(null);
@@ -997,6 +1021,18 @@ function AccessStep({
 				testIdPrefix="queue-access"
 			/>
 
+			{askDuration && (
+				<BindingDurationField
+					value={draft.duration}
+					onChange={(duration): void => onDraftChange({ duration })}
+					disabled={working}
+					label="Access expires after"
+					emptyHint={NO_DURATION_HINT}
+					selectRef={durationRef}
+					testIdPrefix="queue-access"
+				/>
+			)}
+
 			{entry.rulesError && (
 				<div data-testid="queue-rules-failed">
 					<ErrorAlert
@@ -1028,7 +1064,13 @@ function AccessStep({
 						</span>
 					</p>
 					<div className="flex items-center gap-2">
-						<Button size="sm" variant="secondary" loading={working} onClick={onLater}>
+						<Button
+							size="sm"
+							variant="secondary"
+							loading={working}
+							disabled={durationInvalid}
+							onClick={(): void => guardExpiry(onLater)}
+						>
 							Add without rules
 						</Button>
 						<Button
@@ -1046,10 +1088,11 @@ function AccessStep({
 				<div className="flex flex-wrap items-center gap-2">
 					<Button
 						size="sm"
-						disabled={working || rules == null}
+						disabled={working || rules == null || durationInvalid}
 						loading={working}
 						onClick={(): void => {
-							if (rules && draft.preset) onCommit(rules, draft.preset);
+							const preset = draft.preset;
+							if (rules && preset) guardExpiry(() => onCommit(rules, preset));
 						}}
 					>
 						<ShieldCheck className="h-4 w-4" />
@@ -1087,6 +1130,12 @@ function AccessStep({
 					Add at least one rule, or pick a preset.
 				</p>
 			)}
+			<NoExpiryConfirmDialog
+				{...noExpiry.dialogProps}
+				subject={<AgentNameText name={agentName} />}
+				confirmLabel={`Add ${entry.api.label} without expiry`}
+				fieldRef={durationRef}
+			/>
 		</div>
 	);
 }

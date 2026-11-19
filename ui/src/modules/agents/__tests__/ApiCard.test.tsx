@@ -124,6 +124,28 @@ describe('ApiCard', () => {
 		expect(screen.getByTestId('card-status')).toHaveTextContent('Paused');
 	});
 
+	it('shows when the binding ends beside its credential, and names it in full', () => {
+		const expiresAt = new Date(Date.now() + 3 * 86_400_000 + 60_000).toISOString();
+		renderCard(makeTile({ expiresAt, expired: false }));
+		expect(screen.getByTestId('card-expiry')).toHaveTextContent('Ends in 3d');
+		expect(card()).toHaveAccessibleName(
+			'Slack, Slack bot token, Ends in 3d, Ready. Expires in 3 days. Open access details.',
+		);
+	});
+
+	it('reads an expired binding as Expired, with no end date line', () => {
+		const expiresAt = new Date(Date.now() - 86_400_000).toISOString();
+		renderCard(makeTile({ expiresAt, expired: true }));
+		expect(card()).toHaveAttribute('data-status', 'expired');
+		expect(screen.getByTestId('card-status')).toHaveTextContent('Expired');
+		expect(screen.queryByTestId('card-expiry')).not.toBeInTheDocument();
+	});
+
+	it('shows no end date for a binding that never expires', () => {
+		renderCard(makeTile({ expiresAt: null }));
+		expect(screen.queryByTestId('card-expiry')).not.toBeInTheDocument();
+	});
+
 	it('shows Sign-in needed when the credential awaits consent', () => {
 		renderCard(makeTile({ awaitingConsent: true }), { rules: undefined });
 		expect(card()).toHaveAttribute('data-status', 'sign-in-needed');

@@ -85,6 +85,13 @@ function renderDialog() {
 	);
 }
 
+/** Choose how long the access lasts (unless the test already has), then Bind. */
+async function bind(user: ReturnType<typeof userEvent.setup>, duration = '7d'): Promise<void> {
+	const preset = screen.getByTestId('bind-agent-duration-preset') as HTMLSelectElement;
+	if (preset.value === '') await user.selectOptions(preset, duration);
+	await user.click(screen.getByTestId('bind-agent-confirm'));
+}
+
 function optionFor(name: string): HTMLElement {
 	const row = screen
 		.getAllByTestId('bind-agent-option')
@@ -112,7 +119,7 @@ describe('BindAgentDialog — already-bound agents across pages', () => {
 		const user = userEvent.setup();
 		await user.click(within(optionFor('agent_3')).getByRole('checkbox'));
 		await user.click(screen.getByRole('radio', { name: /Allow all/ }));
-		await user.click(screen.getByTestId('bind-agent-confirm'));
+		await bind(user);
 		await waitFor(() => expect(posted).toEqual(['agent_3']));
 	});
 
@@ -198,7 +205,7 @@ describe('BindAgentDialog — what the agent may call', () => {
 		expect(screen.getByTestId('bind-agent-confirm')).toBeDisabled();
 
 		await user.click(screen.getByRole('radio', { name: /Read-only/ }));
-		await user.click(screen.getByTestId('bind-agent-confirm'));
+		await bind(user);
 		await waitFor(() => expect(ruleCalls).toHaveLength(2));
 		expect(posted).toEqual(['agent_1', 'agent_2']);
 		for (const call of ruleCalls)
@@ -228,7 +235,7 @@ describe('BindAgentDialog — what the agent may call', () => {
 		expect(screen.queryByLabelText('Request path')).not.toBeInTheDocument();
 
 		await user.click(within(group).getByRole('radio', { name: /Allow all/ }));
-		await user.click(screen.getByTestId('bind-agent-confirm'));
+		await bind(user);
 		await waitFor(() => expect(ruleCalls).toHaveLength(1));
 		expect(ruleCalls[0].body).toEqual([{ effect: 'allow', path: '.*' }]);
 	});
@@ -245,7 +252,7 @@ describe('BindAgentDialog — what the agent may call', () => {
 		await user.click(screen.getByRole('button', { name: 'DELETE' }));
 		await user.click(screen.getByRole('button', { name: 'Add' }));
 		expect(screen.getByTestId('bind-agent-confirm')).toBeEnabled();
-		await user.click(screen.getByTestId('bind-agent-confirm'));
+		await bind(user);
 		await waitFor(() => expect(ruleCalls).toHaveLength(1));
 		expect(ruleCalls[0].body).toEqual([{ effect: 'allow', methods: ['DELETE'] }]);
 	});
@@ -267,7 +274,7 @@ describe('BindAgentDialog — what the agent may call', () => {
 		await user.click(await screen.findByRole('checkbox', { name: 'agent_1' }));
 		await user.click(screen.getByRole('checkbox', { name: 'agent_2' }));
 		await user.click(screen.getByRole('radio', { name: /Allow all/ }));
-		await user.click(screen.getByTestId('bind-agent-confirm'));
+		await bind(user);
 
 		const failed = await screen.findByTestId('bind-agent-rules-failed');
 		expect(failed).toHaveTextContent("Bound, but the access rules weren't saved");
@@ -325,7 +332,7 @@ describe('BindAgentDialog — what the agent may call', () => {
 		const { rerender } = renderWithProviders(ui(true));
 		await user.click(await screen.findByRole('checkbox', { name: 'agent_1' }));
 		await user.click(screen.getByRole('radio', { name: /Allow all/ }));
-		await user.click(screen.getByTestId('bind-agent-confirm'));
+		await bind(user);
 		expect(await screen.findByTestId('bind-agent-rules-failed')).toBeInTheDocument();
 		rerender(ui(false));
 		rerender(ui(true));
@@ -436,9 +443,113 @@ describe('BindAgentDialog — what Allow all reaches, and naming the credential'
 		expect(picked).toMatch(/^Shared key · /);
 		await user.click(await screen.findByRole('checkbox', { name: 'agent_1' }));
 		await user.click(screen.getByRole('radio', { name: /Read-only/ }));
-		await user.click(screen.getByTestId('bind-agent-confirm'));
+		await bind(user);
 		expect(
-			await screen.findByText(`Bound “${picked}” to agent_1, with access rules.`),
+			await screen.findByText(`Bound “${picked}” to agent_1, with access rules`, {
+				exact: false,
+			}),
 		).toBeInTheDocument();
+	});
+});
+
+describe('BindAgentDialog — how long the access lasts', () => {
+	const DAY = 86_400_000;
+	let bodies: { agent: string; body: Record<string, unknown> }[] = [];
+	beforeEach(() => {
+		setToken('test-token');
+		bodies = [];
+		clearAllToasts();
+		worker.use(
+			http.get('/agents', () =>
+				HttpResponse.json({
+					data: [pickerAgent('agent_1')],
+					has_more: false,
+					next_cursor: null,
+				}),
+			),
+			http.get('/credentials/:cid/agents', () =>
+				HttpResponse.json({ data: [], has_more: false, next_cursor: null }),
+			),
+			http.post('/agents/:id/credentials', async ({ params, request }) => {
+				bodies.push({
+					agent: String(params.id),
+					body: (await request.json()) as Record<string, unknown>,
+				});
+				return HttpResponse.json({}, { status: 201 });
+			}),
+			http.put('/credentials/:cid/agents/:aid/permissions', () =>
+				HttpResponse.json({ data: [] }),
+			),
+		);
+	});
+
+	async function ready(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+		await user.click(await screen.findByRole('checkbox', { name: 'agent_1' }));
+		await user.click(screen.getByRole('radio', { name: /Read-only/ }));
+	}
+
+	it('preselects no duration, and a chosen one becomes the end date at Bind', async () => {
+		const user = userEvent.setup();
+		renderWithProviders(
+			<>
+				<BindAgentDialog open onClose={() => {}} credentials={[CRED]} apiLabel="Stripe" />
+				<Toaster />
+			</>,
+		);
+		await ready(user);
+		const preset = screen.getByTestId('bind-agent-duration-preset') as HTMLSelectElement;
+		expect(preset.value).toBe('');
+		expect(screen.getByTestId('bind-agent-duration-hint')).toHaveTextContent(
+			/Without an expiry it lasts until someone removes it/,
+		);
+
+		await user.selectOptions(preset, '30d');
+		const before = Date.now();
+		await user.click(screen.getByTestId('bind-agent-confirm'));
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		const at = Date.parse(String(bodies[0].body.expires_at));
+		expect(at).toBeGreaterThanOrEqual(before + 30 * DAY);
+		expect(at).toBeLessThanOrEqual(Date.now() + 30 * DAY);
+		expect(screen.queryByTestId('no-expiry-warning')).not.toBeInTheDocument();
+		expect(await screen.findByText(/with access rules, until /)).toBeInTheDocument();
+	});
+
+	it('an invalid custom amount blocks Bind', async () => {
+		const user = userEvent.setup();
+		renderDialog();
+		await ready(user);
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), 'custom');
+		await user.clear(screen.getByTestId('bind-agent-duration-amount'));
+		expect(screen.getByTestId('bind-agent-confirm')).toBeDisabled();
+		await user.type(screen.getByTestId('bind-agent-duration-amount'), '12');
+		expect(screen.getByTestId('bind-agent-confirm')).toBeEnabled();
+	});
+
+	it('binding with no expiry warns first, and binds nothing until confirmed', async () => {
+		const user = userEvent.setup();
+		renderDialog();
+		await ready(user);
+
+		// Nothing chosen: Bind asks before going ahead without an end date.
+		await user.click(screen.getByTestId('bind-agent-confirm'));
+		const warning = await screen.findByTestId('no-expiry-warning');
+		expect(warning).toHaveTextContent(
+			'agent_1 will keep this access until someone removes it.',
+		);
+		expect(screen.getByRole('button', { name: 'Bind without expiry' })).toBeVisible();
+		// "Set an expiry" is the default action, and takes the operator back to the choice.
+		const setExpiry = screen.getByTestId('no-expiry-set-expiry');
+		await waitFor(() => expect(setExpiry).toHaveFocus());
+		await user.click(setExpiry);
+		await waitFor(() => expect(screen.getByTestId('bind-agent-duration-preset')).toHaveFocus());
+		expect(bodies).toHaveLength(0);
+
+		// "No expiry", chosen deliberately in Custom…, asks too; confirming binds.
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), 'custom');
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-unit'), 'never');
+		await user.click(screen.getByTestId('bind-agent-confirm'));
+		await user.click(await screen.findByRole('button', { name: 'Bind without expiry' }));
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		expect(bodies[0].body).toEqual({ credential_id: 'cred_big' });
 	});
 });

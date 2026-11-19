@@ -329,6 +329,8 @@ function RecentCallsSection({
 		'No calls — default-deny refuses every call until a rule allows it.'
 	) : tile.suspended ? (
 		'No calls while paused.'
+	) : status === 'expired' ? (
+		'No calls — its access has expired. Renew it to restore access.'
 	) : (
 		'No calls yet.'
 	);

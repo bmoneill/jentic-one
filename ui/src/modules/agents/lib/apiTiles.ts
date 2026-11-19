@@ -9,6 +9,7 @@ import { apiRefDisplayName } from '@/shared/lib';
 import { CredentialType, type ApiResponse, type Credential } from '@/shared/credentials/api';
 import { apiScopeCovers } from '@/shared/credentials/lib/apiIdentity';
 import { credentialAwaitsConsent, idTail } from '@/shared/credentials/lib/credentialIdentity';
+import { bindingIsExpired } from '@/shared/credentials/lib/bindingExpiry';
 import type { BindingRulesState } from '@/modules/agents/api';
 import type { CredentialBindingEntity, ServedApiEntity } from '@/modules/agents/api/types';
 import { ruleSummaryOf, rulesBlock } from '@/modules/agents/lib/tileStatus';
@@ -47,6 +48,11 @@ export interface ApiTileModel {
 	suspended: boolean;
 	/** Why it is suspended (`api_deleted` = its API was deleted). */
 	suspendedReason: string | null;
+	/** When the binding stops authorizing calls; null/absent = never. Shared by
+	 * every tile of the binding: a vendor-wide binding ends for all its APIs. */
+	expiresAt?: string | null;
+	/** The binding's end date has passed — refused until renewed. */
+	expired?: boolean;
 	/** OAuth sign-in not completed. Drives the dashed treatment. */
 	awaitingConsent: boolean;
 	/** The registry has an upstream spec update this API hasn't adopted. */
@@ -224,6 +230,8 @@ export function composeApiTiles(
 			boundAt: binding.boundAt,
 			suspended: binding.suspended,
 			suspendedReason: binding.suspendedReason,
+			expiresAt: binding.expiresAt ?? null,
+			expired: bindingIsExpired(binding),
 			awaitingConsent: credentialAwaitsConsent(credential),
 			authLabel: credential ? (AUTH_TILE_LABEL[credential.type] ?? null) : null,
 		};
@@ -401,8 +409,8 @@ export function tileStats(
 			continue;
 		}
 		configured.add(apiKey);
-		// A pause is a deliberate exclusion, not a missing fact.
-		if (tile.suspended) continue;
+		// A pause or a lapsed end date is a deliberate exclusion, not a missing fact.
+		if (tile.suspended || tile.expired) continue;
 		const rules = rulesFor?.(tile);
 		if (rulesBlock(ruleSummaryOf(rules))) {
 			blockedBindings.add(tile.bindingId);

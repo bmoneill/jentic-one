@@ -201,6 +201,8 @@ function bindingToEntity(r: CredentialBindingResponse): CredentialBindingEntity 
 		suspendedReason: r.suspended_reason ?? null,
 		ruleSetId: r.rule_set_id ?? null,
 		boundAt: r.bound_at,
+		expiresAt: r.expires_at ?? null,
+		expired: r.expired ?? false,
 		lastUsedAt: r.last_used_at,
 		lastUsedByApi: r.last_used_by_api?.map((u) => ({
 			vendor: u.api_vendor,

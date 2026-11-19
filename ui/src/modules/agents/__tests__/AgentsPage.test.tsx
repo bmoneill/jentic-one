@@ -2260,6 +2260,8 @@ describe('AgentsPage — Add APIs: Back from the setup queue to the tray', () =>
 	): Promise<void> {
 		const step = await screen.findByTestId('queue-access-step');
 		await user.click(within(step).getByRole('radio', { name: preset }));
+		// How long the access lasts (with none, adding asks first).
+		await user.selectOptions(within(step).getByTestId('queue-access-duration-preset'), '7d');
 		await user.click(within(step).getByRole('button', { name: `Add ${label}` }));
 	}
 
@@ -2358,6 +2360,8 @@ describe('AgentsPage — Add APIs: Back from the setup queue to the tray', () =>
 		await user.click(within(tray).getByRole('button', { name: 'Continue' }));
 		await user.click(await screen.findByRole('button', { name: 'Use this credential' }));
 		const step = await screen.findByTestId('queue-access-step');
+		// How long the access lasts (with none, adding asks first).
+		await user.selectOptions(within(step).getByTestId('queue-access-duration-preset'), '7d');
 		await user.click(within(step).getByRole('button', { name: 'Set up later' }));
 		await user.click(within(step).getByRole('button', { name: 'Add without rules' }));
 		await waitFor(() => expect(queueRows()).toEqual(['Stripe:added']));
