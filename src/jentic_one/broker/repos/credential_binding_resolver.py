@@ -34,6 +34,12 @@ from jentic_one.shared.models.api_identity import (
     slugify_api_field,
 )
 
+_CANDIDATE_DEADLINE = text(
+    "SELECT COUNT(*), MIN(expires_at) FROM agent_credential_bindings "
+    "WHERE agent_id = :agent_id AND credential_id IN :ids AND suspended = false"
+).bindparams(bindparam("ids", expanding=True))
+
+
 # admin DB — every direct binding the agent holds, with its suspension flag and
 # fixed expiry. Suspended bindings never authorize an execution (suspension is
 # the reversible per-consumer cut-off), nor do bindings whose ``expires_at`` has
@@ -133,6 +139,15 @@ class CredentialBindingResolver:
         # Wall-clock source for binding-expiry comparisons (injectable for
         # tests): a binding is expired when ``expires_at <= clock()``.
         self._clock = clock
+
+    async def cached_candidates_live(self, agent_id: str, result: CredentialDerivation) -> bool:
+        """Check the live deadlines of cached candidates, including edits by another process."""
+        ids = [c.credential_id for c in result.credentials]
+        async with self._admin_db.read_session() as session:
+            count, deadline = (
+                await session.execute(_CANDIDATE_DEADLINE, {"agent_id": agent_id, "ids": ids})
+            ).one()
+        return count == len(ids) and (deadline is None or self._clock() < as_utc(deadline))
 
     async def derive_credentials(
         self, *, agent_id: str, vendor: str, name: str, version: str

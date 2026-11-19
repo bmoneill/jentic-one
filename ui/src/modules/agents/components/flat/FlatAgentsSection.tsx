@@ -178,7 +178,7 @@ export function FlatAgentsSection({
 	);
 	const approveWithExpiry = (id: string): void => {
 		const expiresAt = expiresAtIso(expiryFor(id));
-		approve.mutate(expiresAt ? { id, expiresAt } : id);
+		approve.mutate(expiresAt !== undefined ? { id, expiresAt } : id);
 	};
 	const deny = useDenyAgent();
 	const landing = useFirstAgentLanding({
@@ -541,7 +541,9 @@ export function FlatAgentsSection({
 					onApprove={(expiresAt) => {
 						if (landingAgent)
 							approve.mutate(
-								expiresAt ? { id: landingAgent.id, expiresAt } : landingAgent.id,
+								expiresAt !== undefined
+									? { id: landingAgent.id, expiresAt }
+									: landingAgent.id,
 							);
 					}}
 					approvePending={landing.approving}

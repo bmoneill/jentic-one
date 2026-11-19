@@ -46,8 +46,9 @@ from datetime import UTC, datetime
 from sqlalchemy import Boolean, Integer, String, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from jentic_one.broker.core.token_validation import ActorLiveness
 from jentic_one.shared.auth.actor_status import read_user_status
-from jentic_one.shared.auth.agent_expiry import agent_expired
+from jentic_one.shared.auth.agent_expiry import agent_expired, as_utc
 from jentic_one.shared.auth.agent_permission_ceiling import cap_agent_permissions
 from jentic_one.shared.auth.owner_status import log_agent_owner_inactive
 from jentic_one.shared.auth.permission_catalog import compute_effective
@@ -151,18 +152,24 @@ class ActorStatusResolver:
 
     async def is_active(self, *, actor_id: str, actor_type: str) -> bool:
         """``True`` only when the actor row exists and is active."""
+        return (await self.liveness(actor_id=actor_id, actor_type=actor_type)).may_act()
+
+    async def liveness(self, *, actor_id: str, actor_type: str) -> ActorLiveness:
         if actor_type == ActorType.AGENT.value:
             async with self._admin_db.read_session() as session:
                 row = (await session.execute(_AGENT_STATUS, {"actor_id": actor_id})).one_or_none()
             if row is None:
-                return False
+                return ActorLiveness(False)
             if row.status == _OWNER_INACTIVE:
                 log_agent_owner_inactive(actor_id, row.owner_id)
-            return bool(row.status == "active") and not agent_expired(row.expires_at)
+            return ActorLiveness(
+                row.status == "active",
+                as_utc(row.expires_at) if row.expires_at is not None else None,
+            )
         if actor_type == ActorType.USER.value:
             status = await read_user_status(self._admin_db, actor_id)
-            return status is not None and status.accepts_credentials
-        return False
+            return ActorLiveness(status is not None and status.accepts_credentials)
+        return ActorLiveness(False)
 
     async def authority(
         self,

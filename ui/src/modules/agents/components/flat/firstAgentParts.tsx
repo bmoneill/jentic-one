@@ -696,7 +696,7 @@ export function AgentDetails({
 	agent: AgentEntity;
 	phase: Exclude<FirstAgentPhase, 'listening'>;
 	/** Approve, optionally with when the agent stops working (ISO 8601). */
-	onApprove: (expiresAt?: string) => void;
+	onApprove: (expiresAt?: string | null) => void;
 	approvePending: boolean;
 	onDeny: () => void;
 	onExit: (exit: FirstAgentExit) => void;

@@ -166,7 +166,9 @@ export function NewAgentPanel({
 					agent={agent}
 					onApprove={(expiresAt) => {
 						if (agent)
-							approve.mutate(expiresAt ? { id: agent.id, expiresAt } : agent.id);
+							approve.mutate(
+								expiresAt !== undefined ? { id: agent.id, expiresAt } : agent.id,
+							);
 					}}
 					approvePending={register.approving}
 					onDeny={() => {

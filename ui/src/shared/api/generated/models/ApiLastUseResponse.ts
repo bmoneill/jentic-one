@@ -15,6 +15,10 @@ export type ApiLastUseResponse = {
      */
     api_vendor: string;
     /**
+     * Recorded API version, when known.
+     */
+    api_version?: (string | null);
+    /**
      * When the agent last called this API through the credential (RFC 3339).
      */
     last_used_at: string;

@@ -18,7 +18,7 @@ concurrent build leaves an INVALID index of the same name behind, so
 CONCURRENTLY IF NOT EXISTS``. On SQLite the concurrency flag is ignored.
 
 Revision ID: f6a2c8d4e1b7
-Revises: e5b1c7d3a9f2
+Revises: c7d2e9a41b30
 Create Date: 2026-11-18
 
 """
@@ -29,7 +29,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "f6a2c8d4e1b7"  # pragma: allowlist secret
-down_revision: str | None = "e5b1c7d3a9f2"  # pragma: allowlist secret
+down_revision: str | None = "c7d2e9a41b30"  # pragma: allowlist secret
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

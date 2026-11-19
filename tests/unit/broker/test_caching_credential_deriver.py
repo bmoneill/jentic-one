@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
@@ -158,6 +159,7 @@ async def test_entry_not_served_at_or_past_valid_until() -> None:
     clock.now = _T0 + timedelta(seconds=9)
     await cached.derive_credentials(**_KW)
     assert inner.calls == 1  # still served inside valid_until
+    inner._valid_until = None  # the next database read has no expiring candidate
     clock.now = _T0 + timedelta(seconds=10)  # exactly at valid_until
     await cached.derive_credentials(**_KW)
     assert inner.calls == 2  # refetched despite TTL not lapsing
@@ -172,3 +174,28 @@ async def test_no_valid_until_uses_ttl_only() -> None:
     clock.now = _T0 + timedelta(days=365)
     await cached.derive_credentials(**_KW)
     assert inner.calls == 1
+
+
+async def test_in_flight_lookup_crossing_deadline_is_rederived_for_every_waiter() -> None:
+    clock = _Clock(_T0)
+    started, release = asyncio.Event(), asyncio.Event()
+
+    class SlowDeriver(_CountingDeriver):
+        async def derive_credentials(self, **kwargs: str) -> CredentialDerivation:
+            result = await super().derive_credentials(**kwargs)
+            if self.calls == 1:
+                started.set()
+                await release.wait()
+                return replace(result, valid_until=_T0 + timedelta(seconds=1))
+            return replace(result, credentials=())
+
+    inner = SlowDeriver()
+    cached = CachingCredentialDeriver(inner, clock=clock)
+    leader = asyncio.create_task(cached.derive_credentials(**_KW))
+    await started.wait()
+    clock.now += timedelta(seconds=1)
+    waiter = asyncio.create_task(cached.derive_credentials(**_KW))
+    await asyncio.sleep(0)
+    release.set()
+    for result in await asyncio.gather(leader, waiter):
+        assert not result.credentials

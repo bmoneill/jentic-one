@@ -252,7 +252,12 @@ async def approve_agent(
     ``expires_at`` sets when the agent stops working.
     """
     view = await agent_svc.approve(
-        agent_id, identity=identity, expires_at=body.expires_at if body else None
+        agent_id,
+        identity=identity,
+        expires_at=body.expires_at if body else None,
+        clear_expiry=bool(
+            body and "expires_at" in body.model_fields_set and body.expires_at is None
+        ),
     )
     return _agent_response(view)
 
@@ -446,7 +451,10 @@ def _credential_binding_response(view: CredentialBindingView) -> CredentialBindi
         last_used_at=view.last_used_at,
         last_used_by_api=[
             ApiLastUseResponse(
-                api_vendor=u.api_vendor, api_name=u.api_name, last_used_at=u.last_used_at
+                api_vendor=u.api_vendor,
+                api_name=u.api_name,
+                api_version=u.api_version,
+                last_used_at=u.last_used_at,
             )
             for u in view.last_used_by_api
         ],
@@ -564,7 +572,8 @@ async def renew_credential_binding(
     credential, so it takes the same checks as `:resume`: the caller must own
     the credential (or hold `org:admin`) as well as see the agent, and an agent
     cannot renew its own binding. Audited; broker caches are invalidated, so
-    the change takes effect at once. Returns the binding.
+    a shortened deadline is checked on every broker. A separate broker may cache a denial
+    until its binding-cache TTL elapses. Returns the binding.
     """
     binding = await agent_svc.renew_credential(
         agent_id,

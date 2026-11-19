@@ -199,6 +199,7 @@ async def _record(
     started_at: datetime,
     api_vendor: str | None = "slack.com",
     api_name: str | None = "default",
+    api_version: str = "v1",
     status: str = "completed",
 ) -> None:
     async with admin_db.session() as session:
@@ -210,6 +211,7 @@ async def _record(
             status=status,
             api_vendor=api_vendor,
             api_name=api_name,
+            api_version=api_version,
             created_by=actor_id,
             actor_id=actor_id,
             actor_type="agent",
@@ -239,6 +241,9 @@ async def test_last_used_by_api_takes_latest_per_credential_and_api(
         api_name="admin",
     )
     await _record(admin_db, actor_id=agent, credential_id="cred_b", started_at=base)
+    await _record(
+        admin_db, actor_id=agent, credential_id="cred_a", started_at=base, api_version="v2"
+    )
     # Not counted: another agent, a credential not asked about, no credential.
     await _record(
         admin_db, actor_id="agnt_other", credential_id="cred_a", started_at=base + timedelta(9)
@@ -253,11 +258,12 @@ async def test_last_used_by_api_takes_latest_per_credential_and_api(
             session, actor_id=agent, credential_ids=["cred_a", "cred_b"]
         )
 
-    got = {(r.credential_id, r.api_vendor, r.api_name): r.last_used_at for r in rows}
+    got = {(r.credential_id, r.api_vendor, r.api_name, r.api_version): r.last_used_at for r in rows}
     assert got == {
-        ("cred_a", "slack.com", "default"): base + timedelta(days=2),
-        ("cred_a", "slack.com", "admin"): base + timedelta(days=1),
-        ("cred_b", "slack.com", "default"): base,
+        ("cred_a", "slack.com", "default", "v1"): base + timedelta(days=2),
+        ("cred_a", "slack.com", "default", "v2"): base,
+        ("cred_a", "slack.com", "admin", "v1"): base + timedelta(days=1),
+        ("cred_b", "slack.com", "default", "v1"): base,
     }
 
 

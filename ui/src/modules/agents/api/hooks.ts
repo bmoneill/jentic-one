@@ -724,7 +724,7 @@ export function useAgentApiKeyHistory(id: string | null) {
  * What approving takes: the agent's id, or the id with when the approved agent
  * stops working (`expiresAt`, ISO 8601).
  */
-export type ApproveAgentInput = string | { id: string; expiresAt?: string };
+export type ApproveAgentInput = string | { id: string; expiresAt?: string | null };
 
 /** The agent id an approve call is for, whichever form it was given in. */
 export function approveInputId(input: ApproveAgentInput | undefined): string | null {

@@ -14,10 +14,11 @@ from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 
 from jentic_one.admin.core.schema.agent_credential_bindings import AgentCredentialBinding
 from jentic_one.admin.core.schema.agents import Agent
+from jentic_one.broker.repos.caching_credential_deriver import CachingCredentialDeriver
 from jentic_one.broker.repos.credential_binding_resolver import CredentialBindingResolver
 from jentic_one.control.core.schema.credentials import Credential
 from jentic_one.shared.broker.protocols import CredentialDeriverProtocol
@@ -476,3 +477,26 @@ async def test_valid_until_is_earliest_candidate_expiry_and_expired_sibling_drop
     assert result.valid_until == soon
     # A usable sibling means this is not a denial, so the expired flag stays off.
     assert result.binding_expired is False
+
+
+async def test_cached_candidates_observe_a_deadline_changed_on_another_node(
+    admin_db: DatabaseSession, control_db: DatabaseSession, clean_tables: None
+) -> None:
+    cred = await _seed_credential(
+        control_db, name="acme", vendor="acme.com", api_name="pets-api", version="v1"
+    )
+    agent = await _seed_agent(admin_db)
+    await _bind(admin_db, agent_id=agent, credential_id=cred)
+    resolver = CredentialBindingResolver(admin_db, control_db, clock=_clock)
+    cache = CachingCredentialDeriver(
+        resolver, clock=_clock, candidates_live=resolver.cached_candidates_live
+    )
+    args = {"agent_id": agent, "vendor": "acme.com", "name": "pets-api", "version": "v1"}
+    assert (await cache.derive_credentials(**args)).credentials
+    async with admin_db.transaction() as session:
+        await session.execute(
+            update(AgentCredentialBinding)
+            .where(AgentCredentialBinding.agent_id == agent)
+            .values(expires_at=_NOW)
+        )
+    assert (await cache.derive_credentials(**args)).binding_expired

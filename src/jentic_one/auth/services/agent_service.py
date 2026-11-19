@@ -298,6 +298,7 @@ class AgentService:
         *,
         identity: Identity,
         expires_at: datetime | None = None,
+        clear_expiry: bool = False,
     ) -> AgentView:
         """Activate a pending agent.
 
@@ -389,7 +390,11 @@ class AgentService:
                 owner_effective=owner_effective,
             )
             agent = await AgentRepository.set_approval(
-                session, agent_id, approved_by=identity.sub, expires_at=expires_at
+                session,
+                agent_id,
+                approved_by=identity.sub,
+                expires_at=expires_at,
+                clear_expiry=clear_expiry,
             )
             if not existing_grants:
                 for permission in DEFAULT_AGENT_PERMISSIONS:
@@ -1167,9 +1172,9 @@ class AgentService:
         ``suspended``. Audited with before/after, and broker caches are
         invalidated so the new policy applies on the next call.
         """
-        agent = await self._load_binding_agent(agent_id, identity=identity)
-        if self._is_own_binding(agent_id, identity):
+        if identity.actor_type != ActorType.USER:
             raise CredentialNotVisibleError(credential_id)
+        agent = await self._load_binding_agent(agent_id, identity=identity)
         ref = None
         if self._ctx.is_db_allowed("control"):
             async with self._ctx.control_db.session() as session:
@@ -1320,6 +1325,8 @@ class AgentService:
         empty ``update_data`` is a no-op that returns the agent unchanged,
         after the same ownership check.
         """
+        if "expires_at" in update_data and identity.actor_type != ActorType.USER:
+            raise ActorNotFoundError(agent_id)
         if not update_data:
             async with self._ctx.admin_db.session() as session:
                 agent = await self._load_owned_agent(session, agent_id, identity=identity)
@@ -1600,7 +1607,12 @@ def _apply_last_use(view: CredentialBindingView, last_uses: list[ApiLastUseRow])
     own = [r for r in last_uses if r.credential_id == view.credential_id]
     view.last_used_at = max((r.last_used_at for r in own), default=None)
     view.last_used_by_api = [
-        ApiLastUseView(api_vendor=r.api_vendor, api_name=r.api_name, last_used_at=r.last_used_at)
+        ApiLastUseView(
+            api_vendor=r.api_vendor,
+            api_name=r.api_name,
+            api_version=r.api_version,
+            last_used_at=r.last_used_at,
+        )
         for r in sorted(own, key=lambda r: r.last_used_at, reverse=True)
         if r.api_vendor is not None
     ]

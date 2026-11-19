@@ -133,13 +133,14 @@ export async function listAgents(params: {
 
 export async function approveAgent(
 	agentId: string,
-	options: { expiresAt?: string } = {},
+	options: { expiresAt?: string | null } = {},
 ): Promise<AgentEntity> {
 	try {
 		return agentToEntity(
 			await AgentsService.approveAgent({
 				agentId,
-				requestBody: options.expiresAt ? { expires_at: options.expiresAt } : undefined,
+				requestBody:
+					options.expiresAt !== undefined ? { expires_at: options.expiresAt } : undefined,
 			}),
 		);
 	} catch (error) {
@@ -204,6 +205,7 @@ function bindingToEntity(r: CredentialBindingResponse): CredentialBindingEntity 
 		lastUsedByApi: r.last_used_by_api?.map((u) => ({
 			vendor: u.api_vendor,
 			name: u.api_name ?? null,
+			version: u.api_version,
 			lastUsedAt: u.last_used_at,
 		})),
 		serves: (r.serves ?? []).map((s) => ({

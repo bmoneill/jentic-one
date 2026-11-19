@@ -2384,6 +2384,9 @@ type ApiLastUseResponse struct {
 	// Examples: github.com
 	ApiVendor string `json:"api_vendor"`
 
+	// ApiVersion Recorded API version, when known.
+	ApiVersion *string `json:"api_version,omitempty"`
+
 	// LastUsedAt When the agent last called this API through the credential (RFC 3339).
 	//
 	// Examples: 2026-02-03T14:05:00Z
@@ -12843,7 +12846,8 @@ type ClientInterface interface {
 	// credential, so it takes the same checks as `:resume`: the caller must own
 	// the credential (or hold `org:admin`) as well as see the agent, and an agent
 	// cannot renew its own binding. Audited; broker caches are invalidated, so
-	// the change takes effect at once. Returns the binding.
+	// a shortened deadline is checked on every broker. A separate broker may cache a denial
+	// until its binding-cache TTL elapses. Returns the binding.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -12861,7 +12865,8 @@ type ClientInterface interface {
 	// credential, so it takes the same checks as `:resume`: the caller must own
 	// the credential (or hold `org:admin`) as well as see the agent, and an agent
 	// cannot renew its own binding. Audited; broker caches are invalidated, so
-	// the change takes effect at once. Returns the binding.
+	// a shortened deadline is checked on every broker. A separate broker may cache a denial
+	// until its binding-cache TTL elapses. Returns the binding.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -16302,7 +16307,8 @@ func (c *Client) UnbindAgentCredential(ctx context.Context, agentId string, cred
 // credential, so it takes the same checks as `:resume`: the caller must own
 // the credential (or hold `org:admin`) as well as see the agent, and an agent
 // cannot renew its own binding. Audited; broker caches are invalidated, so
-// the change takes effect at once. Returns the binding.
+// a shortened deadline is checked on every broker. A separate broker may cache a denial
+// until its binding-cache TTL elapses. Returns the binding.
 //
 // Takes any type of body and a specified content type.
 //
@@ -16330,7 +16336,8 @@ func (c *Client) RenewAgentCredentialBindingWithBody(ctx context.Context, agentI
 // credential, so it takes the same checks as `:resume`: the caller must own
 // the credential (or hold `org:admin`) as well as see the agent, and an agent
 // cannot renew its own binding. Audited; broker caches are invalidated, so
-// the change takes effect at once. Returns the binding.
+// a shortened deadline is checked on every broker. A separate broker may cache a denial
+// until its binding-cache TTL elapses. Returns the binding.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -30445,7 +30452,8 @@ type ClientWithResponsesInterface interface {
 	// credential, so it takes the same checks as `:resume`: the caller must own
 	// the credential (or hold `org:admin`) as well as see the agent, and an agent
 	// cannot renew its own binding. Audited; broker caches are invalidated, so
-	// the change takes effect at once. Returns the binding.
+	// a shortened deadline is checked on every broker. A separate broker may cache a denial
+	// until its binding-cache TTL elapses. Returns the binding.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -30463,7 +30471,8 @@ type ClientWithResponsesInterface interface {
 	// credential, so it takes the same checks as `:resume`: the caller must own
 	// the credential (or hold `org:admin`) as well as see the agent, and an agent
 	// cannot renew its own binding. Audited; broker caches are invalidated, so
-	// the change takes effect at once. Returns the binding.
+	// a shortened deadline is checked on every broker. A separate broker may cache a denial
+	// until its binding-cache TTL elapses. Returns the binding.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -49963,7 +49972,8 @@ func (c *ClientWithResponses) UnbindAgentCredentialWithResponse(ctx context.Cont
 // credential, so it takes the same checks as `:resume`: the caller must own
 // the credential (or hold `org:admin`) as well as see the agent, and an agent
 // cannot renew its own binding. Audited; broker caches are invalidated, so
-// the change takes effect at once. Returns the binding.
+// a shortened deadline is checked on every broker. A separate broker may cache a denial
+// until its binding-cache TTL elapses. Returns the binding.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -49987,7 +49997,8 @@ func (c *ClientWithResponses) RenewAgentCredentialBindingWithBodyWithResponse(ct
 // credential, so it takes the same checks as `:resume`: the caller must own
 // the credential (or hold `org:admin`) as well as see the agent, and an agent
 // cannot renew its own binding. Audited; broker caches are invalidated, so
-// the change takes effect at once. Returns the binding.
+// a shortened deadline is checked on every broker. A separate broker may cache a denial
+// until its binding-cache TTL elapses. Returns the binding.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

@@ -26,6 +26,13 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # An earlier stacked build applied this column before stamping the
+    # independent last-use revision. Such a database already has the column.
+    if any(
+        col["name"] == "expires_at"
+        for col in sa.inspect(op.get_bind()).get_columns("agent_credential_bindings")
+    ):
+        return
     op.add_column(
         "agent_credential_bindings",
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),

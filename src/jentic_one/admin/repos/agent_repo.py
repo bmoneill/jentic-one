@@ -151,6 +151,7 @@ class AgentRepository:
         *,
         approved_by: str,
         expires_at: datetime | None = None,
+        clear_expiry: bool = False,
     ) -> Agent:
         # Lock the row: approval sets owner_id only when still unowned, and a
         # concurrent `:claim` (which locks + commits owner_id) can interleave
@@ -165,7 +166,7 @@ class AgentRepository:
         agent.status = ActorStatus.ACTIVE
         agent.approved_by = approved_by
         agent.approved_at = datetime.now(UTC)
-        if expires_at is not None:
+        if clear_expiry or expires_at is not None:
             agent.expires_at = expires_at
         if agent.owner_id is None:
             agent.owner_id = approved_by

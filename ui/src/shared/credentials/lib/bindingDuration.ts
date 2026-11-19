@@ -119,13 +119,13 @@ export function expiresAtFromDuration(
 
 /**
  * The `expires_at` to send for an optional duration: an ISO 8601 string, or
- * `undefined` when nothing is chosen, the choice is "No expiry", or a custom
+ * `null` for "No expiry", or `undefined` when nothing is chosen or a custom
  * amount is invalid (callers block saving on an invalid amount separately).
  */
 export function expiresAtIso(
 	duration: BindingDuration | null,
 	now: Date = new Date(),
-): string | undefined {
+): string | null | undefined {
 	const end = expiresAtFromDuration(duration, now);
-	return end instanceof Date ? end.toISOString() : undefined;
+	return end === 'never' ? null : end?.toISOString();
 }
