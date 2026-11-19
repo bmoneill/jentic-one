@@ -42,7 +42,8 @@ export interface RegisterFlowProps {
 	baseId: string;
 	/** The agent being finished: pending or active, or null while listening. */
 	agent: AgentEntity | null;
-	onApprove: () => void;
+	/** Approve `agent`, optionally with when it stops working (ISO 8601). */
+	onApprove: (expiresAt?: string) => void;
 	approvePending: boolean;
 	/** Opens the page's deny dialog for `agent`. */
 	onDeny: () => void;

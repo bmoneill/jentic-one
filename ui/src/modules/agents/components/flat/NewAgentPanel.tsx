@@ -164,8 +164,9 @@ export function NewAgentPanel({
 				<RegisterFlow
 					baseId={baseId}
 					agent={agent}
-					onApprove={() => {
-						if (agent) approve.mutate(agent.id);
+					onApprove={(expiresAt) => {
+						if (agent)
+							approve.mutate(expiresAt ? { id: agent.id, expiresAt } : agent.id);
 					}}
 					approvePending={register.approving}
 					onDeny={() => {

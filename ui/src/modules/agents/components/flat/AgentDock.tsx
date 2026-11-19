@@ -34,10 +34,13 @@ export interface AgentDockProps {
 	agent: AgentEntity;
 	/** Open one of the dock's sheet surfaces (keys / permissions / activity / mcp / settings). */
 	onOpenSurface: (surface: AgentDockSurface) => void;
-	/** Route a pending agent's Approve through the shared mutation (banner-consistent). */
+	/** Route a pending agent's Approve through the shared mutation (banner-consistent),
+	 * with the expiry chosen on the agent's panel, if any. */
 	onApprove: () => void;
 	/** True while THIS agent's approve is in flight (per-id scoped by the caller). */
 	approvePending: boolean;
+	/** The expiry chosen on the panel is incomplete (a bad custom amount): hold Approve. */
+	approveBlocked?: boolean;
 	/** Stage the archive confirm (routes through the existing LifecycleDialogs). */
 	onArchive: () => void;
 }
@@ -52,6 +55,7 @@ export function AgentDock({
 	onOpenSurface,
 	onApprove,
 	approvePending,
+	approveBlocked = false,
 	onArchive,
 }: AgentDockProps) {
 	const reducedMotion = useReducedMotion();
@@ -71,7 +75,12 @@ export function AgentDock({
 				className="flex min-w-0 items-center gap-2"
 				data-testid="agent-dock"
 			>
-				<ServingVerb agent={agent} onApprove={onApprove} approvePending={approvePending} />
+				<ServingVerb
+					agent={agent}
+					onApprove={onApprove}
+					approvePending={approvePending}
+					approveBlocked={approveBlocked}
+				/>
 
 				<DockDivider />
 
@@ -160,10 +169,12 @@ function DockApprove({
 	agent,
 	onApprove,
 	approvePending,
+	approveBlocked,
 }: {
 	agent: AgentEntity;
 	onApprove: () => void;
 	approvePending: boolean;
+	approveBlocked: boolean;
 }) {
 	const grantId = useId();
 	const grant = useApprovalGrantCopy(agent.id);
@@ -171,6 +182,7 @@ function DockApprove({
 		<Button
 			size="sm"
 			loading={approvePending}
+			disabled={approveBlocked}
 			onClick={onApprove}
 			// Named per-agent so it can't collide with the approval
 			// band's own Approve buttons in the accessibility tree.
@@ -208,10 +220,12 @@ function ServingVerb({
 	agent,
 	onApprove,
 	approvePending,
+	approveBlocked,
 }: {
 	agent: AgentEntity;
 	onApprove: () => void;
 	approvePending: boolean;
+	approveBlocked: boolean;
 }) {
 	const canManage = useCanAccess(AGENTS_WRITE);
 	switch (agent.status) {
@@ -244,7 +258,12 @@ function ServingVerb({
 			// A pending agent's lifecycle verb IS approval. Shares the mutation with the
 			// panel banner, so the two buttons load together.
 			return (
-				<DockApprove agent={agent} onApprove={onApprove} approvePending={approvePending} />
+				<DockApprove
+					agent={agent}
+					onApprove={onApprove}
+					approvePending={approvePending}
+					approveBlocked={approveBlocked}
+				/>
 			);
 		case 'rejected':
 			// No serving verb: a rejected agent can never serve traffic.
