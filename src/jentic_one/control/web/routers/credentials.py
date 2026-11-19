@@ -91,7 +91,7 @@ from jentic_one.control.web.schemas.permission_rules import (
     PermissionTestResponse,
     ScopeOptionSchema,
 )
-from jentic_one.shared.auth.agent_expiry import agent_expired
+from jentic_one.shared.auth.agent_expiry import binding_expired
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
 from jentic_one.shared.models.credentials import CredentialType
@@ -567,7 +567,7 @@ async def list_credential_agents(
                 suspended_reason=row.suspended_reason,
                 rule_set_id=row.rule_set_id,
                 expires_at=row.expires_at,
-                expired=agent_expired(row.expires_at),
+                expired=binding_expired(row.expires_at),
                 last_used_at=row.last_used_at,
             )
             for row in data

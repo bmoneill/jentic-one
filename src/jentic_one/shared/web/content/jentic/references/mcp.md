@@ -232,7 +232,7 @@ is still waiting — relay that link to your operator rather than calling
 `request_access_change` with `parameters.edit`, and relay the
 `approval_url`. The denial taxonomy
 (`no_credential_binding`, `credential_binding_suspended`,
-`credential_undecryptable`, `credential_identity_mismatch`,
+`credential_binding_expired`, `credential_undecryptable`, `credential_identity_mismatch`,
 `ambiguous_credential_binding` — the per-code meanings are surface-independent
 and live in `references/recovery.md`) applies unchanged — the same codes,
 delivered in the envelope instead of stderr.

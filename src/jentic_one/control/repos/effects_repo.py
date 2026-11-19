@@ -7,11 +7,13 @@ NOTHING for idempotent inserts without requiring rollback.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import NamedTuple
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from jentic_one.shared.auth.agent_expiry import binding_expired
 from jentic_one.shared.db.ids import generate_ksuid
 from jentic_one.shared.db.locks import lock_credential_bindings
 
@@ -126,6 +128,29 @@ class EffectsRepository:
             {"agent_id": agent_id},
         )
         return [str(row[0]) for row in result.all()]
+
+    @staticmethod
+    async def list_expired_credential_ids(
+        session: AsyncSession, agent_id: str, *, now: datetime | None = None
+    ) -> list[str]:
+        """The credentials the agent holds an expired, unsuspended binding to (admin DB).
+
+        An expired binding no longer authorizes calls; only the operator can
+        renew it, so the connect flow refuses a new connect that the expired
+        credential's API identity covers (a second binding would route around
+        the expiry). A suspended binding is left to
+        :meth:`list_suspended_credential_ids`, which is reported first. Expiry
+        is compared in Python against ``now`` (default: the clock), with the
+        broker's rule.
+        """
+        result = await session.execute(
+            text(
+                "SELECT credential_id, expires_at FROM agent_credential_bindings "
+                "WHERE agent_id = :agent_id AND suspended = false AND expires_at IS NOT NULL"
+            ),
+            {"agent_id": agent_id},
+        )
+        return [str(row[0]) for row in result.all() if binding_expired(row[1], now=now)]
 
     @staticmethod
     async def unbind_agent_from_credential(

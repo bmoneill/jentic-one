@@ -24,6 +24,7 @@ from jentic_one.control.services.integrations.errors import (
     AmendFieldsMismatchError,
     AuthTypeNotDeclaredError,
     AuthTypeRequiredError,
+    BindingExpiredError,
     BindingSuspendedError,
     ConnectOpenError,
     EditBindingNotFoundError,
@@ -368,6 +369,14 @@ def _api_target_tool_error(exc: Exception, target: str) -> ToolError | None:
             "ask your operator to resume it.",
             extra={"retryable": False},
         )
+    if isinstance(exc, BindingExpiredError):
+        return ToolError(
+            CODE_BROKER_DENIED,
+            f"this agent's access to {target} has expired: {exc}",
+            actionable="Your access to this API has expired. Do not ask again; "
+            "ask your operator to renew it.",
+            extra={"retryable": False},
+        )
     return None
 
 
@@ -547,6 +556,7 @@ async def handle_request_connection(
         TooManyOpenSessionsError,
         RecentlyRejectedError,
         BindingSuspendedError,
+        BindingExpiredError,
     ) as exc:
         mapped = _api_target_tool_error(exc, target)
         assert mapped is not None
@@ -605,9 +615,9 @@ async def handle_show_access(env: CallEnv, arguments: dict[str, Any]) -> mcp_typ
     """GET /credentials/{cid}/agents/{me}/permissions in-process (Go: ``handleShowAccess``).
 
     The calling agent's own binding to ``credential_id``, in the route's wire
-    shape. A credential it is not bound to, or whose binding is suspended
-    (which hides the credential from the agent), is RESOLVE_FAILED pointing
-    at whoami.
+    shape. A credential it is not bound to, or whose binding is suspended or
+    expired (which hides the credential from the agent), is RESOLVE_FAILED
+    pointing at whoami.
     """
     args = normalize_tool_args(arguments, _SHOW_ACCESS_PARAMS)
     credential_id = args.get("credential_id", "")
@@ -625,7 +635,8 @@ async def handle_show_access(env: CallEnv, arguments: dict[str, Any]) -> mcp_typ
             CODE_RESOLVE_FAILED,
             f"no active credential binding for {credential_id!r}",
             actionable="check whoami (`jentic whoami`) for your credential bindings and their "
-            "credential ids; a suspended binding is hidden until your operator resumes it",
+            "credential ids; a suspended or expired binding is hidden until your operator "
+            "resumes or renews it",
             next_tool="whoami",
         ) from None
     addable = await ConnectSessionService(env.ctx).scope_options(credential_id)

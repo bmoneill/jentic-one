@@ -43,7 +43,7 @@ func (s *mcpServer) accessToolSpecs() []mcpToolSpec {
 					"whether the binding is suspended. " +
 					`Example: {"credential_id": "cred_…"} — credential ids come from whoami's bindings. ` +
 					"Call it before asking for a change to your access, and when such a request fails. " +
-					"A credential you are not bound to (or whose binding is suspended) is not found: " +
+					"A credential you are not bound to (or whose binding is suspended or expired) is not found: " +
 					"call whoami to list your bindings.",
 				InputSchema: showAccessSchema,
 				Annotations: &mcp.ToolAnnotations{ReadOnlyHint: true},

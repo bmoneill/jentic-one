@@ -121,7 +121,13 @@ The outcomes:
   the refusal is `403 credential_binding_suspended`: only the operator can
   resume the binding, so the directive offers no connect, and a new connect
   for the same agent and API answers `409 connect_session_binding_suspended`
-  until the binding is resumed or removed.
+  until the binding is resumed or removed. When the binding has *expired*
+  (its `expires_at` has passed), the refusal is
+  `403 credential_binding_expired`, shaped the same way: only the operator
+  can renew it (`PATCH /agents/{agent_id}/credentials/{credential_id}`), a
+  new connect answers `409 connect_session_binding_expired`, and the agent
+  can no longer read the credential through the expired binding.
+  Suspension is reported first.
 - **1 winner → use it.** The response carries `Jentic-Credential-Id` and
   `Jentic-Credential-Name` (absent when no stored credential was used), and
   the execution record carries the same attribution — every execution names

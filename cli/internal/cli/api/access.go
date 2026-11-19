@@ -49,7 +49,7 @@ func newAccessShowCmd(app *app) *cobra.Command {
 
 // getBindingAccess reads the calling agent's binding to credentialID
 // (GET /credentials/{cid}/agents/{aid}/permissions), verbatim. A credential
-// the agent is not bound to (or whose binding is suspended, which hides it)
+// the agent is not bound to (or whose binding is suspended or expired, which hides it)
 // is a RESOLVE_FAILED pointing at whoami.
 func (a *app) getBindingAccess(ctx context.Context, credentialID string) (map[string]any, error) {
 	me, err := a.getMe(ctx)
@@ -68,7 +68,8 @@ func (a *app) getBindingAccess(ctx context.Context, credentialID string) (map[st
 				Code: ux.CodeResolveFailed,
 				Msg:  fmt.Sprintf("no active credential binding for %q", credentialID),
 				Actionable: "check whoami (`jentic whoami`) for your credential bindings and their " +
-					"credential ids; a suspended binding is hidden until your operator resumes it",
+					"credential ids; a suspended or expired binding is hidden until your operator " +
+					"resumes or renews it",
 			}
 		}
 		return nil, err

@@ -137,6 +137,10 @@ code:
 - **`credential_binding_suspended` (403)** — your operator suspended your
   binding for this API. Do not run `jentic connect` for it; ask your
   operator to resume the binding, then retry.
+- **`credential_binding_expired` (403)** — your binding for this API has
+  expired. Do not run `jentic connect` for it (it is refused with 409
+  `connect_session_binding_expired`); ask your operator to renew the
+  binding, then retry.
 - **`credential_identity_mismatch` (403)** — read the directive's
   `parameters.expected` vs `parameters.found` and ask your operator to fix
   or re-provision the credential so it targets `expected`, then retry.

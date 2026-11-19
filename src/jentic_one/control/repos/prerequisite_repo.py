@@ -14,6 +14,7 @@ from sqlalchemy import Boolean, String, bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import BindParameter
 
+from jentic_one.shared.auth.agent_expiry import as_utc, binding_expired
 from jentic_one.shared.db.locks import lock_credential_bindings
 from jentic_one.shared.db.types import UTCDateTime
 from jentic_one.shared.pagination import Cursor
@@ -75,6 +76,8 @@ class AgentCredentialBindingRow(NamedTuple):
     rule_set_id: str | None
     agent_name: str | None = None
     credential_name: str | None = None
+    #: When the binding stops authorizing calls; ``None`` never expires.
+    expires_at: datetime | None = None
 
 
 class RuleSetBindingRow(NamedTuple):
@@ -122,27 +125,31 @@ class PrerequisiteRepository:
         return {str(row[0]) for row in result.fetchall()}
 
     @staticmethod
-    async def list_credential_ids_for_agent(session: AsyncSession, *, agent_id: str) -> list[str]:
+    async def list_credential_ids_for_agent(
+        session: AsyncSession, *, agent_id: str, now: datetime | None = None
+    ) -> list[str]:
         """Return the credential ids the agent is directly and actively bound to.
 
         Read-scoping seam (theme 5 phase 1): an agent must be able to read a
         credential it is bound to even when it owns nothing — same
-        orphaned-agent rationale as issues #665/#682. Suspended bindings
-        grant no visibility: a suspension is a cut-off, so the agent keeps
-        seeing the binding (with its flag) in ``/me`` but loses the widened
-        read of the credential itself until resumed. Runs against an admin
+        orphaned-agent rationale as issues #665/#682. Suspended and expired
+        bindings grant no visibility: both are a cut-off, so the agent keeps
+        seeing the binding (with its flags) in ``/me`` but loses the widened
+        read of the credential itself until it is resumed or renewed. Expiry
+        is compared in Python against ``now`` (default: the clock), with the
+        broker's rule (:func:`binding_expired`). Runs against an admin
         session and returns plain ids for ``build_access_filters`` (the
         control scoping module must not import admin ORM models or query
         across databases).
         """
         result = await session.execute(
             text(
-                "SELECT credential_id FROM agent_credential_bindings "
+                "SELECT credential_id, expires_at FROM agent_credential_bindings "
                 "WHERE agent_id = :agent_id AND suspended = false"
             ),
             {"agent_id": agent_id},
         )
-        return [row[0] for row in result.fetchall()]
+        return [str(row[0]) for row in result.fetchall() if not binding_expired(row[1], now=now)]
 
     @staticmethod
     async def list_agent_ids_owned_by(session: AsyncSession, *, owner_id: str) -> list[str]:
@@ -294,7 +301,7 @@ class PrerequisiteRepository:
         credential_id: str,
         visible_to: AgentVisibility | None = None,
     ) -> AgentCredentialBindingRow | None:
-        """Return the direct binding's (id, suspended, rule_set_id, agent name), or ``None``.
+        """Return the direct binding's (id, suspended, rule set, agent name, expiry), or ``None``.
 
         Existence check for the per-binding permission endpoints (theme 5
         phase 1): the binding row lives in the admin DB while the rules live
@@ -310,14 +317,16 @@ class PrerequisiteRepository:
         where = "b.agent_id = :agent_id AND b.credential_id = :credential_id"
         if visible_to is None:
             stmt = text(
-                "SELECT b.id, b.suspended, b.rule_set_id, a.name FROM agent_credential_bindings b "
+                "SELECT b.id, b.suspended, b.rule_set_id, a.name, b.expires_at "
+                "FROM agent_credential_bindings b "
                 "LEFT JOIN agents a ON a.id = b.agent_id "
                 f"WHERE {where}"
             )
         else:
             params.update(self_id=visible_to.self_id, owner_ids=list(visible_to.owner_ids))
             stmt = text(
-                "SELECT b.id, b.suspended, b.rule_set_id, a.name FROM agent_credential_bindings b "
+                "SELECT b.id, b.suspended, b.rule_set_id, a.name, b.expires_at "
+                "FROM agent_credential_bindings b "
                 "JOIN agents a ON a.id = b.agent_id "
                 f"WHERE {where} AND (a.id = :self_id OR a.owner_id IN :owner_ids)"
             ).bindparams(bindparam("owner_ids", expanding=True))
@@ -330,6 +339,7 @@ class PrerequisiteRepository:
             suspended=bool(row[1]),
             rule_set_id=str(row[2]) if row[2] is not None else None,
             agent_name=str(row[3]) if row[3] is not None else None,
+            expires_at=as_utc(row[4]) if row[4] is not None else None,
         )
 
     @staticmethod

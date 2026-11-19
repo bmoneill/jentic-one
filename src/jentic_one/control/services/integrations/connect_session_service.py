@@ -113,6 +113,7 @@ from jentic_one.control.services.integrations.errors import (
     AgentNotFoundError,
     AmendFieldsMismatchError,
     BaselineChangedError,
+    BindingExpiredError,
     BindingSuspendedError,
     ConfirmationForbiddenError,
     ConfirmKindMismatchError,
@@ -183,6 +184,7 @@ from jentic_one.control.services.vendors.service import (
 )
 from jentic_one.shared.access_guidance import catalog_api_id_covers, catalog_import_name
 from jentic_one.shared.audit import AuditAction, AuditTargetType, record_audit_best_effort
+from jentic_one.shared.auth.agent_expiry import binding_expired
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.permission_catalog import (
     AGENTS_WRITE,
@@ -1221,7 +1223,7 @@ class ConnectSessionService:
         handler = handler_cls(self._ctx)
 
         api_scope = await self._vendor_api_scope(entry.vendor)
-        await self._refuse_suspended_binding(agent_id, api_scope)
+        await self._refuse_cut_off_binding(agent_id, api_scope)
         # The hold is on the agent asking again; a person can still connect for it.
         await self._check_rejection_cooldown(
             agent_id if agent_id == initiator_actor_id else None,
@@ -1400,7 +1402,7 @@ class ConnectSessionService:
         api_scope = canonical_credential_scope(
             vendor=view.vendor, name=view.name, version=view.version
         )
-        await self._refuse_suspended_binding(agent_id, api_scope)
+        await self._refuse_cut_off_binding(agent_id, api_scope)
         await self._check_rejection_cooldown(
             agent_id if agent_id == initiator_actor_id else None,
             target_kind=TARGET_KIND_API,
@@ -1622,28 +1624,31 @@ class ConnectSessionService:
         )
         raise ConnectOpenError(row.id, self._approval_url_for(row.id))
 
-    async def _refuse_suspended_binding(self, agent_id: str | None, scope: CredentialScope) -> None:
-        """Refuse a connect for an agent whose suspended binding covers the requested API.
+    async def _refuse_cut_off_binding(self, agent_id: str | None, scope: CredentialScope) -> None:
+        """Refuse a connect for an agent whose suspended or expired binding covers the API.
 
         A suspended binding is the operator's cut-off for that agent and
-        credential; a new connect for an API the suspended credential covers
-        would hand the agent that access again, so only the operator may lift
-        it (resume or remove the binding). Coverage is the bind-time rule: a
-        NULL credential axis is a wildcard, and an unscoped requested axis
-        matches any credential value. Called only after the caller's right to
-        name the agent is settled, so it says nothing about another owner's
-        agent.
+        credential, and an expired one has stopped authorizing calls; a new
+        connect for an API either credential covers would hand the agent that
+        access again, so only the operator may lift it (resume, renew or
+        remove the binding). Suspension is reported first
+        (:class:`BindingSuspendedError`), then expiry
+        (:class:`BindingExpiredError`), as the broker does. Coverage is the
+        bind-time rule: a NULL credential axis is a wildcard, and an unscoped
+        requested axis matches any credential value. Called only after the
+        caller's right to name the agent is settled, so it says nothing about
+        another owner's agent.
 
         Accepted semantics:
 
-        - Any suspended binding covering the API refuses the connect, even
-          when another, active binding already covers the same API. The
-          suspension stands until the operator resumes or removes it.
+        - Any suspended or expired binding covering the API refuses the
+          connect, even when another, active binding already covers the same
+          API. The cut-off stands until the operator acts on that binding.
         - The check reads in its own sessions before the bind transaction,
-          so a suspension that lands in the milliseconds between this check
-          and a ``confirm`` bind is not caught here. A suspension made after
-          the bind is outside this check by design; the broker enforces it
-          per call.
+          so a suspension, or an expiry, that lands in the milliseconds
+          between this check and a ``confirm`` bind is not caught here. One
+          after the bind is outside this check by design; the broker enforces
+          it per call.
         """
         if agent_id is None:
             return
@@ -1651,28 +1656,30 @@ class ConnectSessionService:
             suspended = await EffectsRepository.list_suspended_credential_ids(
                 admin_session, agent_id
             )
-        if not suspended:
+            expired = await EffectsRepository.list_expired_credential_ids(admin_session, agent_id)
+        if not suspended and not expired:
             return
         async with self._ctx.control_db.session() as session:
-            covered = await CredentialRepository.any_covering(
-                session,
-                credential_ids=suspended,
-                vendor=scope.vendor,
-                name=scope.name,
-                version=scope.version,
-            )
-        if covered:
-            raise BindingSuspendedError(agent_id)
+            for credential_ids, error in (
+                (suspended, BindingSuspendedError),
+                (expired, BindingExpiredError),
+            ):
+                if credential_ids and await CredentialRepository.any_covering(
+                    session,
+                    credential_ids=credential_ids,
+                    vendor=scope.vendor,
+                    name=scope.name,
+                    version=scope.version,
+                ):
+                    raise error(agent_id)
 
-    async def _refuse_suspended_binding_for_session(
-        self, row: ConnectSession, agent_id: str
-    ) -> None:
-        """:meth:`_refuse_suspended_binding` for the API a session's pending credential targets."""
+    async def _refuse_cut_off_binding_for_session(self, row: ConnectSession, agent_id: str) -> None:
+        """:meth:`_refuse_cut_off_binding` for the API a session's pending credential targets."""
         async with self._ctx.control_db.session() as session:
             credential = await CredentialRepository.get_by_id(session, row.credential_id)
         if credential is None:
             return
-        await self._refuse_suspended_binding(
+        await self._refuse_cut_off_binding(
             agent_id,
             canonical_credential_scope(
                 vendor=credential.api_vendor,
@@ -3401,11 +3408,14 @@ class ConnectSessionService:
     ) -> AgentCredentialBindingRow:
         """The binding an edit opens on, refusing callers who may not edit it.
 
-        An agent may edit only its own active binding. A human must be the
-        agent's approver *and* the credential's owner, as the direct rule
-        write and the direct resume both require: the rules bound what the
-        agent does with someone else's secret, and a suspension is that
-        owner's cut-off. Every refusal is the same not-found error.
+        An agent may edit only its own active binding: a suspended or expired
+        one is hidden from it, as it is from the agent's credential reads, and
+        no rule change would bring it back (only the operator resumes or
+        renews it). A human must be the agent's approver *and* the
+        credential's owner, as the direct rule write and the direct resume
+        both require: the rules bound what the agent does with someone else's
+        secret, and a suspension is that owner's cut-off. Every refusal is the
+        same not-found error.
         """
         if identity.actor_type == ActorType.AGENT:
             if agent_id != identity.sub:
@@ -3418,7 +3428,10 @@ class ConnectSessionService:
             binding = await PrerequisiteRepository.get_agent_credential_binding(
                 admin_session, agent_id=agent_id, credential_id=credential_id
             )
-        if binding is None or (binding.suspended and identity.actor_type == ActorType.AGENT):
+        if binding is None or (
+            identity.actor_type == ActorType.AGENT
+            and (binding.suspended or binding_expired(binding.expires_at))
+        ):
             raise EditBindingNotFoundError(credential_id)
         return binding
 
@@ -4382,8 +4395,8 @@ class ConnectSessionService:
                 effective_agent_id, identity, late_bound=late_bound
             )
             # A late-bound agent was never checked at create, and a binding
-            # may have been suspended since the session opened.
-            await self._refuse_suspended_binding_for_session(row, effective_agent_id)
+            # may have been suspended, or expired, since the session opened.
+            await self._refuse_cut_off_binding_for_session(row, effective_agent_id)
         credential_owner_id = (
             target_agent.owner_id
             if target_agent is not None and target_agent.owner_id is not None
@@ -4588,8 +4601,8 @@ class ConnectSessionService:
                 effective_agent_id, identity, late_bound=late_bound
             )
             # A late-bound agent was never checked at create, and a binding
-            # may have been suspended since the session opened.
-            await self._refuse_suspended_binding_for_session(row, effective_agent_id)
+            # may have been suspended, or expired, since the session opened.
+            await self._refuse_cut_off_binding_for_session(row, effective_agent_id)
         credential_owner_id = (
             target_agent.owner_id
             if target_agent is not None and target_agent.owner_id is not None

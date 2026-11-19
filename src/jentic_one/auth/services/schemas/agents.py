@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from jentic_one.shared.auth.agent_expiry import agent_expired
+from jentic_one.shared.auth.agent_expiry import agent_expired, binding_expired
 from jentic_one.shared.schemas import ServedApiRef
 
 
@@ -92,4 +92,4 @@ class CredentialBindingView(BaseModel):
     @property
     def expired(self) -> bool:
         """Whether ``expires_at`` has passed."""
-        return agent_expired(self.expires_at)
+        return binding_expired(self.expires_at)

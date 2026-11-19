@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from sqlalchemy import bindparam, text
 
 from jentic_one.shared.auth.agent_expiry import as_utc
+from jentic_one.shared.auth.agent_expiry import binding_expired as is_binding_expired
 from jentic_one.shared.broker.protocols import (
     BoundCredential,
     CredentialDerivation,
@@ -157,13 +158,12 @@ class CredentialBindingResolver:
             if suspended:
                 suspended_ids.add(credential_id)
                 continue
-            expiry = as_utc(expires_at) if expires_at is not None else None
-            if expiry is not None and expiry <= now:
+            if is_binding_expired(expires_at, now=now):
                 expired_ids.add(credential_id)
                 continue
             rule_sets[credential_id] = rule_set_id
-            if expiry is not None:
-                expiries[credential_id] = expiry
+            if expires_at is not None:
+                expiries[credential_id] = as_utc(expires_at)
 
         async with self._control_db.session() as session:
             covering_rows = (
