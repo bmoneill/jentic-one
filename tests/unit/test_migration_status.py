@@ -46,10 +46,7 @@ def _upgrade_to_one_behind_head(db_name: str) -> None:
     script = ScriptDirectory.from_config(run_mod._build_config(db_name))
     (head,) = script.get_heads()
     parent = script.get_revision(head).down_revision
-    # A merge head lists several parents; any one of them leaves the database behind head.
-    if isinstance(parent, tuple):
-        parent = parent[0]
-    assert isinstance(parent, str), f"{db_name} head {head} must have a parent"
+    assert isinstance(parent, str), f"{db_name} head {head} must have a single parent"
     run_mod.upgrade(db_name, parent)
 
 

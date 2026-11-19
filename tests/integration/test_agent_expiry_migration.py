@@ -23,7 +23,7 @@ from tests.harness.postgres import alembic_config_for
 pytestmark = pytest.mark.integration
 
 _REVISION = "d4a8f1c2b9e5"  # pragma: allowlist secret
-_PARENT = "c7d2e9a41b30"  # pragma: allowlist secret
+_PARENT = "f6a2c8d4e1b7"  # pragma: allowlist secret
 
 
 async def _cleanup(db: DatabaseSession) -> None:
