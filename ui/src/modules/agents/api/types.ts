@@ -151,6 +151,7 @@ export interface CredentialBindingEntity {
 export interface ApiLastUseEntity {
 	vendor: string;
 	name: string | null;
+	version?: string | null;
 	lastUsedAt: string;
 }
 

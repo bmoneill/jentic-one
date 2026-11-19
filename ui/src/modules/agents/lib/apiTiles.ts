@@ -178,19 +178,24 @@ export function tileLastUsedAt(
 	binding: Pick<CredentialBindingEntity, 'lastUsedAt' | 'lastUsedByApi'>,
 	vendor: string,
 	apiName: string | null,
+	version: string | null = null,
 ): string | null | undefined {
 	if (binding.lastUsedAt === undefined) return undefined;
 	if (apiName == null || binding.lastUsedByApi === undefined) return binding.lastUsedAt;
-	const match = binding.lastUsedByApi.find((u) => u.vendor === vendor && u.name === apiName);
-	return match?.lastUsedAt ?? null;
+	const uses = binding.lastUsedByApi.filter((u) => u.vendor === vendor && u.name === apiName);
+	if (version === null) return uses[0]?.lastUsedAt ?? null;
+	const match = uses.find((u) => u.version === version);
+	// Older servers and records may lack a version. Its activity cannot be attributed to this tile.
+	return match?.lastUsedAt ?? (uses.some((u) => u.version == null) ? undefined : null);
 }
 
 function lastUsedField(
 	binding: CredentialBindingEntity,
 	vendor: string,
 	apiName: string | null,
+	version: string | null = null,
 ): Pick<ApiTileModel, 'lastUsedAt'> {
-	const lastUsedAt = tileLastUsedAt(binding, vendor, apiName);
+	const lastUsedAt = tileLastUsedAt(binding, vendor, apiName, version);
 	return lastUsedAt === undefined ? {} : { lastUsedAt };
 }
 
@@ -227,7 +232,12 @@ export function composeApiTiles(
 			// Not imported here — render from the reference's machine tuple.
 			tiles.push({
 				...base,
-				...lastUsedField(binding, served.vendor, served.name ?? null),
+				...lastUsedField(
+					binding,
+					served.vendor,
+					served.name ?? null,
+					served.version ?? null,
+				),
 				title:
 					apiRefDisplayName({ vendor: served.vendor, name: served.name }) ||
 					served.vendor,
@@ -245,7 +255,7 @@ export function composeApiTiles(
 		// `ably-io` here.
 		tiles.push({
 			...base,
-			...lastUsedField(binding, api.api.vendor, api.api.name),
+			...lastUsedField(binding, api.api.vendor, api.api.name, api.api.version),
 			title:
 				apiRefDisplayName({
 					displayName: api.display_name,

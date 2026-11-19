@@ -43,6 +43,7 @@ class ApiLastUseView(BaseModel):
     api_vendor: str
     # None when the recorded calls carried no API name.
     api_name: str | None = None
+    api_version: str | None = None
     last_used_at: datetime
 
 

@@ -759,14 +759,24 @@ describe('last used on tiles', () => {
 		const binding = makeBinding({
 			lastUsedAt: '2026-03-05T00:00:00Z',
 			lastUsedByApi: [
-				{ vendor: 'slack.com', name: 'default', lastUsedAt: '2026-03-05T00:00:00Z' },
+				{
+					vendor: 'slack.com',
+					name: 'default',
+					version: '1.0.0',
+					lastUsedAt: '2026-03-05T00:00:00Z',
+				},
 			],
 		});
-		const tiles = composeApiTiles([binding], [makeCredential()], apis);
+		const tiles = composeApiTiles(
+			[binding],
+			[makeCredential()],
+			[...apis, makeApi({ vendor: 'slack.com', version: '2.0', display_name: 'Slack v2' })],
+		);
 		expect(tiles.map((t) => [t.title, t.lastUsedAt])).toEqual([
 			['Slack', '2026-03-05T00:00:00Z'],
 			// Called through the credential, but never this API.
 			['Slack Admin', null],
+			['Slack v2', null],
 		]);
 	});
 

@@ -1477,7 +1477,12 @@ def _apply_last_use(view: CredentialBindingView, last_uses: list[ApiLastUseRow])
     own = [r for r in last_uses if r.credential_id == view.credential_id]
     view.last_used_at = max((r.last_used_at for r in own), default=None)
     view.last_used_by_api = [
-        ApiLastUseView(api_vendor=r.api_vendor, api_name=r.api_name, last_used_at=r.last_used_at)
+        ApiLastUseView(
+            api_vendor=r.api_vendor,
+            api_name=r.api_name,
+            api_version=r.api_version,
+            last_used_at=r.last_used_at,
+        )
         for r in sorted(own, key=lambda r: r.last_used_at, reverse=True)
         if r.api_vendor is not None
     ]

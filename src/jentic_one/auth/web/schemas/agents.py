@@ -129,6 +129,7 @@ class ApiLastUseResponse(BaseModel):
         description="Name of the API called; null when the recorded calls carry none.",
         examples=["github"],
     )
+    api_version: str | None = Field(default=None, description="Recorded API version, when known.")
     last_used_at: datetime = Field(
         description="When the agent last called this API through the credential (RFC 3339).",
         examples=["2026-02-03T14:05:00Z"],

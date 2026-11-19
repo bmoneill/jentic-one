@@ -21,6 +21,7 @@ class ApiLastUseRow(NamedTuple):
     credential_id: str
     api_vendor: str | None
     api_name: str | None
+    api_version: str | None
     last_used_at: datetime
 
 
@@ -158,6 +159,7 @@ class ExecutionRecordRepository:
                 ExecutionRecord.credential_id,
                 ExecutionRecord.api_vendor,
                 ExecutionRecord.api_name,
+                ExecutionRecord.api_version,
                 func.max(ExecutionRecord.started_at),
             )
             .where(
@@ -165,12 +167,21 @@ class ExecutionRecordRepository:
                 ExecutionRecord.credential_id.in_(list(credential_ids)),
             )
             .group_by(
-                ExecutionRecord.credential_id, ExecutionRecord.api_vendor, ExecutionRecord.api_name
+                ExecutionRecord.credential_id,
+                ExecutionRecord.api_vendor,
+                ExecutionRecord.api_name,
+                ExecutionRecord.api_version,
             )
         )
         result = await session.execute(stmt)
         return [
-            ApiLastUseRow(credential_id=str(cid), api_vendor=vendor, api_name=name, last_used_at=ts)
-            for cid, vendor, name, ts in result.all()
+            ApiLastUseRow(
+                credential_id=str(cid),
+                api_vendor=vendor,
+                api_name=name,
+                api_version=version,
+                last_used_at=ts,
+            )
+            for cid, vendor, name, version, ts in result.all()
             if cid is not None and ts is not None
         ]
