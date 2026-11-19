@@ -246,6 +246,17 @@ func connectOutcomeCoded(sessionID, status, errorCode, rerun string) *ux.CodedEr
 			Msg:        fmt.Sprintf("connect session %s expired before it was approved", sessionID),
 			Actionable: "Run `" + rerun + "` again and relay the fresh approval_url to your human user.",
 		}
+	case errorCode == "binding_expired" || errorCode == "binding_suspended":
+		action := "Ask your operator to renew the expired binding."
+		if errorCode == "binding_suspended" {
+			action = "Ask your operator to resume the suspended binding."
+		}
+		return &ux.CodedError{
+			Code:       ux.CodeBrokerDenied,
+			Msg:        fmt.Sprintf("connect session %s ended (%s)", sessionID, errorCode),
+			Actionable: action,
+			Details:    map[string]any{"error_code": errorCode},
+		}
 	case errorCode == "rejected":
 		return &ux.CodedError{
 			Code: ux.CodeBrokerDenied,

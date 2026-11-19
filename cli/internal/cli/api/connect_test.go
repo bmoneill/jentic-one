@@ -697,6 +697,8 @@ func TestConnect_WaitTerminalOutcomes(t *testing.T) {
 		status, code, wantCode, wantStep string
 	}{
 		{`{"status":"failed","error_code":"cancelled"}`, "cancelled", ux.CodeResolveFailed, "still want"},
+		{`{"status":"failed","error_code":"binding_expired"}`, "binding_expired", ux.CodeBrokerDenied, "renew the expired binding"},
+		{`{"status":"failed","error_code":"binding_suspended"}`, "binding_suspended", ux.CodeBrokerDenied, "resume the suspended binding"},
 		{`{"status":"failed","error_code":"scheme_changed"}`, "scheme_changed", ux.CodeResolveFailed, "jentic connect --api acme/acme-api/v1"},
 		{`{"status":"expired"}`, "", ux.CodeResolveFailed, "jentic connect --api acme/acme-api/v1"},
 		{`{"status":"failed","error_code":"vendor_error"}`, "vendor_error", ux.CodeBrokerDenied, "dashboard"},

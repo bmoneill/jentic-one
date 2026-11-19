@@ -11,6 +11,7 @@ reads, like a suspended one. A binding with a future expiry is still active.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -39,6 +40,7 @@ from jentic_one.control.services.integrations.errors import (
 )
 from jentic_one.control.services.integrations.flow_handlers.manual import ApiKeySecret
 from jentic_one.control.web.routers.credentials import binding_access_response
+from jentic_one.shared.auth.agent_expiry import binding_expired
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.permission_catalog import DEFAULT_AGENT_PERMISSIONS
 from jentic_one.shared.context import Context
@@ -463,3 +465,63 @@ async def test_an_existing_credential_for_another_version_still_binds(env: Conte
     )
 
     assert await is_bound(env, AGENT_ID, exact)
+
+
+@pytest.mark.parametrize("direct", [False, True])
+async def test_deadline_crossed_during_bind_rolls_back_the_insert(
+    env: Context, monkeypatch: pytest.MonkeyPatch, direct: bool
+) -> None:
+    await import_spec(env, KEY_SCHEME)
+    await _bound(env, expires_at=_FUTURE)
+    fresh = await existing_credential(env, name="New")
+    created = await connect(env)
+    # The sibling is live during preflight and while the writer obtains its locks.
+    # Advance the guard's clock across its deadline between the check and the insert's return.
+    instants = iter((_FUTURE - timedelta(seconds=1), _FUTURE))
+
+    def expired(at: datetime | str | None) -> bool:
+        return binding_expired(at, now=next(instants))
+
+    monkeypatch.setattr("jentic_one.shared.auth.binding_write.binding_expired", expired)
+    if direct:
+        with pytest.raises(SelfBindOverExpiredBindingError):
+            await _self_bind(env, fresh, _SELF_BINDING_AGENT)
+    else:
+        with pytest.raises(BindingExpiredError):
+            await svc(env).confirm_variant(
+                created.session_id,
+                poll_token=None,
+                identity=OWNER,
+                variant=ExistingCredentialConfirm(
+                    credential_id=fresh,
+                    checks=checks(
+                        await digest(env, created.session_id),
+                        revision_id=await revision(env, created.session_id),
+                    ),
+                ),
+            )
+    assert not await is_bound(env, AGENT_ID, fresh)
+
+
+async def test_a_bind_waits_for_a_concurrent_suspension_of_its_sibling(env: Context) -> None:
+    """The bind locks the agent's bindings, so a suspension in flight is seen, not raced."""
+    if env.config.databases.admin.backend == "sqlite":
+        pytest.skip("SQLite serialises writers; the race needs PostgreSQL row locking")
+    sibling = await _bound(env, expires_at=_FUTURE)
+    fresh = await existing_credential(env, name="Fresh")
+
+    async with env.admin_db.transaction() as blocker:
+        await blocker.execute(
+            text(
+                "UPDATE agent_credential_bindings SET suspended = true"
+                " WHERE agent_id = :a AND credential_id = :c"
+            ),
+            {"a": AGENT_ID, "c": sibling},
+        )
+        writer = asyncio.create_task(_self_bind(env, fresh, _SELF_BINDING_AGENT))
+        await asyncio.sleep(0.3)
+        assert not writer.done()
+
+    with pytest.raises(SelfBindOverSuspendedBindingError):
+        await writer
+    assert not await is_bound(env, AGENT_ID, fresh)
