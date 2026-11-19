@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import time
 from collections import OrderedDict
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -87,6 +87,7 @@ class CachingCredentialDeriver:
         cache_ttl_seconds: float = DEFAULT_CREDENTIAL_CACHE_TTL_SECONDS,
         max_entries: int = DEFAULT_MAX_CACHE_ENTRIES,
         clock: Callable[[], datetime] = _utc_now,
+        candidates_live: Callable[[str, CredentialDerivation], Awaitable[bool]] | None = None,
     ) -> None:
         if max_entries < 1:
             raise ValueError("max_entries must be >= 1")
@@ -94,6 +95,7 @@ class CachingCredentialDeriver:
         self._cache_ttl_seconds = cache_ttl_seconds
         self._max_entries = max_entries
         self._clock = clock
+        self._candidates_live = candidates_live
         self._cache: OrderedDict[str, _CacheEntry] = OrderedDict()
         self._single_flight: SingleFlight[CredentialDerivation] = SingleFlight()
 
@@ -104,13 +106,30 @@ class CachingCredentialDeriver:
         key = self._make_key(agent_id=agent_id, vendor=vendor, name=name, version=version)
         now = time.monotonic()
 
+        async def reusable(value: CredentialDerivation) -> bool:
+            return (
+                not value.credentials
+                or self._candidates_live is None
+                or await self._candidates_live(agent_id, value)
+            )
+
         cached = self._cache.get(key)
-        if cached is not None and self._is_fresh(cached, now):
+        if (
+            cached is not None
+            and self._is_fresh(cached, now)
+            and await reusable(cached.value)
+            and self._cache.get(key) is cached
+            and self._is_fresh(cached, time.monotonic())
+        ):
             self._cache.move_to_end(key)
             _cache_hits.add(1)
             return cached.value
 
+        loaded_here = False
+
         async def _load() -> CredentialDerivation:
+            nonlocal loaded_here
+            loaded_here = True
             result = await self._inner.derive_credentials(
                 agent_id=agent_id, vendor=vendor, name=name, version=version
             )
@@ -120,10 +139,13 @@ class CachingCredentialDeriver:
             return result
 
         while True:
+            loaded_here = False
             result = await self._single_flight.do(key, _load)
             # The database read or this waiter's wakeup can straddle a deadline.
             # Re-derive so surviving bindings and the denial are decided together.
-            if result.valid_until is None or self._clock() < result.valid_until:
+            if (loaded_here or await reusable(result)) and (
+                result.valid_until is None or self._clock() < result.valid_until
+            ):
                 return result
 
     def _is_fresh(self, entry: _CacheEntry, now: float) -> bool:

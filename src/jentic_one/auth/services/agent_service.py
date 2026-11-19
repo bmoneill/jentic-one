@@ -1156,9 +1156,9 @@ class AgentService:
         ``suspended``. Audited with before/after, and broker caches are
         invalidated so the new policy applies on the next call.
         """
-        agent = await self._load_binding_agent(agent_id, identity=identity)
-        if self._is_own_binding(agent_id, identity):
+        if identity.actor_type != ActorType.USER:
             raise CredentialNotVisibleError(credential_id)
+        agent = await self._load_binding_agent(agent_id, identity=identity)
         ref = None
         if self._ctx.is_db_allowed("control"):
             async with self._ctx.control_db.session() as session:

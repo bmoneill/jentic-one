@@ -27082,7 +27082,7 @@
       },
       "description": "`PATCH`: Renew a credential binding. `DELETE`: Suspend or remove a credential binding.",
       "patch": {
-        "description": "Set, extend or clear when a binding stops authorizing calls.\n\n`expires_at` (future only, otherwise 422) sets or moves the end date; null\nclears it, so the binding never expires. This is how an expired binding is\nrenewed, and it never changes `suspended`: renewing does not resume a\nsuspension, and resuming does not extend an expiry. Renewing re-grants the\ncredential, so it takes the same checks as `:resume`: the caller must own\nthe credential (or hold `org:admin`) as well as see the agent, and an agent\ncannot renew its own binding. Audited; broker caches are invalidated, so\nthe change takes effect at once. Returns the binding.",
+        "description": "Set, extend or clear when a binding stops authorizing calls.\n\n`expires_at` (future only, otherwise 422) sets or moves the end date; null\nclears it, so the binding never expires. This is how an expired binding is\nrenewed, and it never changes `suspended`: renewing does not resume a\nsuspension, and resuming does not extend an expiry. Renewing re-grants the\ncredential, so it takes the same checks as `:resume`: the caller must own\nthe credential (or hold `org:admin`) as well as see the agent, and an agent\ncannot renew its own binding. Audited; broker caches are invalidated, so\na shortened deadline is checked on every broker. A separate broker may cache a denial\nuntil its binding-cache TTL elapses. Returns the binding.",
         "operationId": "renewAgentCredentialBinding",
         "parameters": [
           {

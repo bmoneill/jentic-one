@@ -254,6 +254,11 @@ respective TTL to `0` to disable caching). Queued async executions bypass these
 caches and re-authorize against live database state when the worker claims the
 job (`build_queued_execution_authorizer`).
 
+For an execution with cached credential candidates, the broker checks their earliest
+current expiry in the admin database before reuse. Shortening a deadline on another
+replica therefore takes effect at that deadline even when the original binding had
+no expiry. A cached denial can take up to the binding-cache TTL to reflect a renewal.
+
 ## What gets recorded
 
 Executions land as append-only `ExecutionRecord` rows in the admin DB

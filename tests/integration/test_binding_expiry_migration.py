@@ -107,3 +107,19 @@ async def test_downgrade_suspends_lapsed_bindings_and_reupgrade_restores_column(
             )
         ).scalar_one()
     assert remaining == 0
+
+
+@pytest.mark.parametrize("starting_head", ["f6a2c8d4e1b7", _PARENT])  # pragma: allowlist secret
+async def test_upgrade_from_independent_branch(
+    integration_config: AppConfig, admin_db: DatabaseSession, restore_head: None, starting_head: str
+) -> None:
+    cfg = alembic_config_for("admin", integration_config.databases.admin)
+    await asyncio.to_thread(command.downgrade, cfg, "c7d2e9a41b30")  # pragma: allowlist secret
+    await asyncio.to_thread(command.upgrade, cfg, starting_head)
+    await asyncio.to_thread(command.upgrade, cfg, "head")
+    assert await _has_expires_at(admin_db)
+    async with admin_db.session() as session:
+        await session.execute(text("SELECT expires_at FROM agents LIMIT 0"))
+        conn = await session.connection()
+        indexes = await conn.run_sync(lambda c: inspect(c).get_indexes("execution_records"))
+        assert "ix_execution_records_actor_credential_last_used" in {idx["name"] for idx in indexes}

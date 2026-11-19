@@ -565,7 +565,8 @@ async def renew_credential_binding(
     credential, so it takes the same checks as `:resume`: the caller must own
     the credential (or hold `org:admin`) as well as see the agent, and an agent
     cannot renew its own binding. Audited; broker caches are invalidated, so
-    the change takes effect at once. Returns the binding.
+    a shortened deadline is checked on every broker. A separate broker may cache a denial
+    until its binding-cache TTL elapses. Returns the binding.
     """
     binding = await agent_svc.renew_credential(
         agent_id,
