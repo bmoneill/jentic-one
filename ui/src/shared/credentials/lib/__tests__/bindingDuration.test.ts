@@ -5,6 +5,7 @@ import {
 	INITIAL_CUSTOM_DURATION,
 	bindingDurationError,
 	expiresAtFromDuration,
+	expiresAtIso,
 	parseDurationAmount,
 	type CustomDurationUnit,
 } from '@/shared/credentials/lib/bindingDuration';
@@ -117,5 +118,16 @@ describe('expiresAtFromDuration', () => {
 	it("is 'never' for No expiry, whatever the amount field holds", () => {
 		expect(expiresAtFromDuration(custom('10', 'never'), NOW)).toBe('never');
 		expect(expiresAtFromDuration(custom('', 'never'), NOW)).toBe('never');
+	});
+});
+
+describe('expiresAtIso', () => {
+	it('is an ISO string for a duration, and undefined for none, No expiry or a bad amount', () => {
+		expect(expiresAtIso({ kind: 'preset', preset: '1h' }, NOW)).toBe(
+			'2026-01-31T13:00:00.000Z',
+		);
+		expect(expiresAtIso(null, NOW)).toBeUndefined();
+		expect(expiresAtIso(custom('', 'never'), NOW)).toBeUndefined();
+		expect(expiresAtIso(custom('', 'days'), NOW)).toBeUndefined();
 	});
 });

@@ -10,7 +10,8 @@
  * described by what it grants), then Deny (tonal — its reason dialog carries
  * the destructive red), then Review as a quiet link-weight action. Approve and
  * Deny show only to a caller who may decide (`agents:write` or `org:admin`);
- * Review stays.
+ * Review stays. Next to Approve, an optional expiry: approving without one
+ * leaves the agent with no expiry.
  */
 import { useEffect, useId, useReducer, useRef } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -19,6 +20,11 @@ import { formatTimestamp, timeAgo } from '@/shared/lib/utils';
 import { AGENTS_WRITE, useCanAccess } from '@/shared/auth';
 import { ACTION_LABEL, ACTION_VARIANT, type AgentEntity } from '@/modules/agents/api';
 import { ApprovalGrantNote } from '@/modules/agents/components/ApprovalGrantNote';
+import { ApprovalExpiryField } from '@/modules/agents/components/ApprovalExpiryField';
+import {
+	bindingDurationError,
+	type BindingDuration,
+} from '@/shared/credentials/lib/bindingDuration';
 import { AgentNameText } from '@/modules/agents/components/AgentNameText';
 
 interface PendingApprovalBannerProps {
@@ -30,7 +36,13 @@ interface PendingApprovalBannerProps {
 	atLeast: boolean;
 	/** Select the agent in the strip (`?agent=<id>`) for review. */
 	onReview: (id: string) => void;
+	/** Approve the agent, with its `expiryFor` choice if one is made. */
 	onApprove: (id: string) => void;
+	/** The optional expiry Approve applies to an agent (page-owned, so every
+	 * approve surface for the same agent shares it). Without these, no expiry
+	 * control is shown. */
+	expiryFor?: (id: string) => BindingDuration | null;
+	onExpiryChange?: (id: string, value: BindingDuration | null) => void;
 	/** Open the page's reason-required deny dialog. */
 	onDeny: (agent: { id: string; name: string }) => void;
 	/** The agent id with an approve in flight, if any (per-id scoping). */
@@ -53,6 +65,8 @@ export function PendingApprovalBanner({
 	atLeast,
 	onReview,
 	onApprove,
+	expiryFor,
+	onExpiryChange,
 	onDeny,
 	approvePendingId,
 }: PendingApprovalBannerProps) {
@@ -90,6 +104,8 @@ export function PendingApprovalBanner({
 	}, [hasPending]);
 
 	const busy = longest ? approvePendingId === longest.id : false;
+	const expiry = longest && expiryFor ? expiryFor(longest.id) : null;
+	const expiryInvalid = bindingDurationError(expiry) !== null;
 	const grantId = useId();
 
 	// When the named agent is decided and the next one takes its place, focus
@@ -152,13 +168,22 @@ export function PendingApprovalBanner({
 								className="text-muted-foreground block pt-0.5"
 							/>
 						</p>
-						<span className="flex items-center gap-2">
+						<span className="flex flex-wrap items-center gap-2">
 							{canDecide && (
 								<>
+									{onExpiryChange && (
+										<ApprovalExpiryField
+											compact
+											value={expiry}
+											onChange={(value) => onExpiryChange(longest.id, value)}
+											disabled={busy}
+											testIdPrefix="banner-approve-expiry"
+										/>
+									)}
 									<Button
 										size="sm"
 										variant={ACTION_VARIANT.approve}
-										disabled={busy}
+										disabled={busy || expiryInvalid}
 										loading={busy}
 										onClick={() => onApprove(longest.id)}
 										aria-label={`${ACTION_LABEL.approve} ${longest.name}`}

@@ -78,11 +78,9 @@ import {
 } from '@/modules/agents/lib/apiPreflight';
 import type { QueueBackSeed } from '@/modules/agents/lib/setupQueue';
 import { usePreflightInputs } from '@/modules/agents/lib/usePreflightInputs';
-import { describeAgentExpiry } from '@/modules/agents/lib/agentExpiry';
-import { BindingDurationField } from '@/shared/credentials/components';
+import { ApprovalExpiryField } from '@/modules/agents/components/ApprovalExpiryField';
 import {
 	bindingDurationError,
-	expiresAtFromDuration,
 	type BindingDuration,
 } from '@/shared/credentials/lib/bindingDuration';
 
@@ -113,25 +111,23 @@ function StateBanner({
 	deniedBy,
 	onApprove,
 	approvePending,
+	approveExpiry,
+	onApproveExpiryChange,
 	onDeny,
 }: {
 	agentId: string;
 	status: BanneredStatus;
 	denialReason: string | null;
 	deniedBy: string | null;
-	/** Approve, optionally with when the agent stops working (ISO 8601). */
-	onApprove: (expiresAt?: string) => void;
+	onApprove: () => void;
 	approvePending: boolean;
+	/** The optional expiry Approve applies (shared with the dock's Approve). */
+	approveExpiry: BindingDuration | null;
+	onApproveExpiryChange: (value: BindingDuration | null) => void;
 	onDeny: () => void;
 }) {
 	const grantId = useId();
-	// Optional: approving without a choice leaves the agent without an expiry.
-	const [duration, setDuration] = useState<BindingDuration | null>(null);
-	const durationInvalid = bindingDurationError(duration) !== null;
-	const approve = (): void => {
-		const end = expiresAtFromDuration(duration);
-		onApprove(end instanceof Date ? end.toISOString() : undefined);
-	};
+	const durationInvalid = bindingDurationError(approveExpiry) !== null;
 	// Approving or denying needs `agents:write` (or `org:admin`); anyone else
 	// reads the state without the verbs.
 	const canDecide = useCanAccess(AGENTS_WRITE);
@@ -165,13 +161,10 @@ function StateBanner({
 			}
 			below={
 				status === 'pending' && canDecide ? (
-					<BindingDurationField
-						value={duration}
-						onChange={setDuration}
+					<ApprovalExpiryField
+						value={approveExpiry}
+						onChange={onApproveExpiryChange}
 						disabled={approvePending}
-						label="Stops working after (optional)"
-						describe={describeAgentExpiry}
-						testIdPrefix="approve-expiry"
 					/>
 				) : undefined
 			}
@@ -186,7 +179,7 @@ function StateBanner({
 							variant={ACTION_VARIANT.approve}
 							loading={approvePending}
 							disabled={durationInvalid}
-							onClick={approve}
+							onClick={onApprove}
 							aria-describedby={grantId}
 							data-testid="state-banner-approve"
 						>
@@ -232,9 +225,12 @@ export interface SelectedAgentPanelProps {
 	openTileKey: string | null;
 	onOpenTile: (key: string) => void;
 	onCloseTile: () => void;
-	/** Approve this (pending) agent, optionally with when it stops working (ISO 8601). */
-	onApprove: (expiresAt?: string) => void;
+	/** Approve this (pending) agent, with `approveExpiry` if one is chosen. */
+	onApprove: () => void;
 	approvePending: boolean;
+	/** The optional expiry Approve applies; owned by the page so the dock shares it. */
+	approveExpiry: BindingDuration | null;
+	onApproveExpiryChange: (value: BindingDuration | null) => void;
 	/** Open the page's reason-required deny dialog for this (pending) agent. */
 	onDeny: () => void;
 	/** This agent was just created and its APIs are the next step. */
@@ -280,6 +276,8 @@ export function SelectedAgentPanel({
 	onCloseTile,
 	onApprove,
 	approvePending,
+	approveExpiry,
+	onApproveExpiryChange,
 	onDeny,
 	autoOpenAddApis,
 	onAutoOpenAddApisConsumed,
@@ -847,6 +845,8 @@ export function SelectedAgentPanel({
 							deniedBy={agent.attribution.deniedBy}
 							onApprove={onApprove}
 							approvePending={approvePending}
+							approveExpiry={approveExpiry}
+							onApproveExpiryChange={onApproveExpiryChange}
 							onDeny={onDeny}
 						/>
 					) : null

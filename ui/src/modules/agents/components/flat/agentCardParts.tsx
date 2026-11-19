@@ -71,6 +71,10 @@ const BANNER_TINT: Record<BanneredStatus, { shell: string; chip: string }> = {
  * The banner's chrome: the state's tinted shell and icon chip, a title over one
  * line of detail, and the actions at the end (wrapping under on a narrow
  * card). The content and the actions' behaviour are the caller's.
+ *
+ * `role` (a live region) covers the title and detail only: the actions and
+ * anything `below` are controls, which must not sit inside a live region, or
+ * every change to them would be announced.
  */
 export function StateBannerFrame({
 	status,
@@ -86,9 +90,10 @@ export function StateBannerFrame({
 	status: BanneredStatus;
 	title: ReactNode;
 	detail?: ReactNode;
-	/** Block content under the detail line (a form control, say). */
+	/** Block content under the detail line (a form control, say); outside `role`. */
 	below?: ReactNode;
 	actions?: ReactNode;
+	/** Live-region role for the title and detail. */
 	role?: 'status';
 	/** Below `sm`, put the actions on their own line under the words, so a
 	 * narrow card never squeezes the detail into a sliver. */
@@ -100,7 +105,6 @@ export function StateBannerFrame({
 	const Icon = STATUS_ICON[status];
 	return (
 		<div
-			role={role}
 			data-testid={testId}
 			className={cn(
 				'flex flex-wrap items-center gap-x-3 gap-y-3 rounded-lg p-3 sm:flex-nowrap',
@@ -114,9 +118,13 @@ export function StateBannerFrame({
 			>
 				<Icon className="h-4 w-4" />
 			</span>
-			<div className="min-w-0 flex-1 space-y-0.5">
-				<p className="text-foreground text-sm leading-tight font-medium">{title}</p>
-				{detail && <p className="text-muted-foreground text-xs leading-snug">{detail}</p>}
+			<div className="min-w-0 flex-1">
+				<div role={role} className="space-y-0.5">
+					<p className="text-foreground text-sm leading-tight font-medium">{title}</p>
+					{detail && (
+						<p className="text-muted-foreground text-xs leading-snug">{detail}</p>
+					)}
+				</div>
 				{below && <div className="pt-2">{below}</div>}
 			</div>
 			{actions && (

@@ -75,6 +75,11 @@ import {
 } from '@/modules/agents/components/flat/AgentAccessStates';
 import type { PreflightItem } from '@/modules/agents/lib/apiPreflight';
 import { useFirstAgentLanding } from '@/modules/agents/lib/useFirstAgentLanding';
+import {
+	bindingDurationError,
+	expiresAtIso,
+	type BindingDuration,
+} from '@/shared/credentials/lib/bindingDuration';
 import { AgentDock, type AgentDockSurface } from '@/modules/agents/components/flat/AgentDock';
 import {
 	AgentActivitySheet,
@@ -156,6 +161,25 @@ export function FlatAgentsSection({
 
 	const agentParam = searchParams.get('agent');
 	const approve = useApproveAgent();
+	// The optional expiry each pending agent will be approved with, by agent id.
+	// Page-owned so every Approve for the same agent (the pinned banner, the
+	// panel and the dock) applies the same choice.
+	const [approveExpiries, setApproveExpiries] = useState<Record<string, BindingDuration | null>>(
+		{},
+	);
+	const expiryFor = useCallback(
+		(id: string): BindingDuration | null => approveExpiries[id] ?? null,
+		[approveExpiries],
+	);
+	const setExpiryFor = useCallback(
+		(id: string, value: BindingDuration | null) =>
+			setApproveExpiries((prev) => ({ ...prev, [id]: value })),
+		[],
+	);
+	const approveWithExpiry = (id: string): void => {
+		const expiresAt = expiresAtIso(expiryFor(id));
+		approve.mutate(expiresAt ? { id, expiresAt } : id);
+	};
 	const deny = useDenyAgent();
 	const landing = useFirstAgentLanding({
 		approve,
@@ -514,8 +538,11 @@ export function FlatAgentsSection({
 				<FirstAgentLanding
 					onCreateAgent={() => setCreateOpen(true)}
 					agent={landingAgent}
-					onApprove={() => {
-						if (landingAgent) approve.mutate(landingAgent.id);
+					onApprove={(expiresAt) => {
+						if (landingAgent)
+							approve.mutate(
+								expiresAt ? { id: landingAgent.id, expiresAt } : landingAgent.id,
+							);
 					}}
 					approvePending={landing.approving}
 					onDeny={() => {
@@ -547,7 +574,9 @@ export function FlatAgentsSection({
 				pending={pendingAgents}
 				atLeast={pendingAtLeast}
 				onReview={selectAgent}
-				onApprove={(id) => approve.mutate(id)}
+				onApprove={approveWithExpiry}
+				expiryFor={expiryFor}
+				onExpiryChange={setExpiryFor}
 				onDeny={({ id, name }) => setConfirm({ kind: 'deny', id, name })}
 				approvePendingId={approve.isPending ? approveInputId(approve.variables) : null}
 			/>
@@ -588,15 +617,13 @@ export function FlatAgentsSection({
 							openTileKey={openTileKey}
 							onOpenTile={setOpenTileKey}
 							onCloseTile={() => setOpenTileKey(null)}
-							onApprove={(expiresAt) =>
-								approve.mutate(
-									expiresAt ? { id: panelAgent.id, expiresAt } : panelAgent.id,
-								)
-							}
+							onApprove={() => approveWithExpiry(panelAgent.id)}
 							approvePending={
 								approve.isPending &&
 								approveInputId(approve.variables) === panelAgent.id
 							}
+							approveExpiry={expiryFor(panelAgent.id)}
+							onApproveExpiryChange={(value) => setExpiryFor(panelAgent.id, value)}
 							onDeny={() =>
 								setConfirm({
 									kind: 'deny',
@@ -646,10 +673,11 @@ export function FlatAgentsSection({
 					<AgentDock
 						agent={selected}
 						onOpenSurface={setDockSurface}
-						onApprove={() => approve.mutate(selected.id)}
+						onApprove={() => approveWithExpiry(selected.id)}
 						approvePending={
 							approve.isPending && approveInputId(approve.variables) === selected.id
 						}
+						approveBlocked={bindingDurationError(expiryFor(selected.id)) !== null}
 						onArchive={() =>
 							setConfirm({ kind: 'archive', id: selected.id, name: selected.name })
 						}
