@@ -12,6 +12,7 @@ too (consumed by ``routers/credentials.py`` and ``schemas/credentials.py``).
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
@@ -249,6 +250,22 @@ class BindingAccessResponse(PermissionRuleListResponse):
     suspended: bool = Field(
         description="True when the binding is suspended and the agent cannot use it.",
         examples=[False],
+    )
+    expires_at: datetime | None = Field(
+        default=None,
+        examples=["2026-12-31T23:59:00Z"],
+        description=(
+            "When the binding stops authorizing calls (RFC 3339); null if it never "
+            "expires. Independent of `suspended`."
+        ),
+    )
+    expired: bool = Field(
+        default=False,
+        examples=[False],
+        description=(
+            "True when `expires_at` has passed: the agent cannot use the binding, and "
+            "no rule change brings it back. Only the operator can renew it."
+        ),
     )
     scopes_editable: bool = Field(
         default=False,

@@ -371,9 +371,13 @@ export class AgentsService {
      * must be able to see the agent and must own the credential (or hold
      * `org:admin`). A credential that does not exist or that the caller does
      * not own returns 404; binding the same credential twice returns 409
-     * (`credential_binding_conflict`). An optional `expires_at` (future only,
-     * otherwise 422) ends the binding at that time; omit it for a binding that
-     * never expires. Returns the new binding.
+     * (`credential_binding_conflict`). An agent binding itself is refused with
+     * 409 while it holds a suspended (`credential_binding_suspended`) or expired
+     * (`credential_binding_expired`) binding for an API the credential also
+     * serves: only the operator lifts that cut-off, and a second binding would
+     * route around it (suspension is reported first). An optional `expires_at`
+     * (future only, otherwise 422) ends the binding at that time; omit it for a
+     * binding that never expires. Returns the new binding.
      * @returns CredentialBindingResponse Successful Response
      * @throws ApiError
      */
@@ -403,7 +407,7 @@ export class AgentsService {
                 401: `Unauthorized`,
                 403: `Forbidden`,
                 404: `The agent is not visible to the caller (\`actor_not_found\`), or a credential that does not exist or that the caller does not own (\`credential_not_found\`)`,
-                409: `The same credential is already bound to this agent (\`credential_binding_conflict\`)`,
+                409: `The same credential is already bound to this agent (\`credential_binding_conflict\`), or an agent binding itself already holds a suspended (\`credential_binding_suspended\`) or expired (\`credential_binding_expired\`) binding for an API the credential serves`,
                 422: `Unprocessable Entity`,
                 500: `Internal Server Error`,
                 503: `Service Unavailable`,

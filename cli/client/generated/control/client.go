@@ -3323,12 +3323,22 @@ type BearerTokenUpdateRequestType string
 
 // BindingAccessResponse A binding's permission rules plus the rest of what it grants.
 //
-// Examples: {"data":[{"_comment":"Read-only access to charges.","_system":false,"effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"granted_scopes":["repo","read:user"],"rule_set":{"curated":false,"id":"prs_6968b3987c22b63e87e79f05","name":"Stripe read-only","rules":[{"_comment":"Read-only access to charges.","_system":false,"effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}]},"scope_catalog":[{"classification":"write","description":"Send email as the user.","name":"gmail.send"}],"scopes_editable":true,"suspended":false}
+// Examples: {"data":[{"_comment":"Read-only access to charges.","_system":false,"effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"expired":false,"expires_at":"2026-12-31T23:59:00Z","granted_scopes":["repo","read:user"],"rule_set":{"curated":false,"id":"prs_6968b3987c22b63e87e79f05","name":"Stripe read-only","rules":[{"_comment":"Read-only access to charges.","_system":false,"effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}]},"scope_catalog":[{"classification":"write","description":"Send email as the user.","name":"gmail.send"}],"scopes_editable":true,"suspended":false}
 type BindingAccessResponse struct {
 	// Data The binding's permission rules, in evaluation order.
 	//
 	// Examples: [{"_comment":"Read-only access to charges.","_system":false,"effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}]
 	Data []PermissionRuleReadSchema `json:"data"`
+
+	// Expired True when `expires_at` has passed: the agent cannot use the binding, and no rule change brings it back. Only the operator can renew it.
+	//
+	// Examples: false
+	Expired *bool `json:"expired,omitempty"`
+
+	// ExpiresAt When the binding stops authorizing calls (RFC 3339); null if it never expires. Independent of `suspended`.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// GrantedScopes Scopes the credential's OAuth grant holds; null when it has none.
 	//
@@ -12772,9 +12782,13 @@ type ClientInterface interface {
 	// must be able to see the agent and must own the credential (or hold
 	// `org:admin`). A credential that does not exist or that the caller does
 	// not own returns 404; binding the same credential twice returns 409
-	// (`credential_binding_conflict`). An optional `expires_at` (future only,
-	// otherwise 422) ends the binding at that time; omit it for a binding that
-	// never expires. Returns the new binding.
+	// (`credential_binding_conflict`). An agent binding itself is refused with
+	// 409 while it holds a suspended (`credential_binding_suspended`) or expired
+	// (`credential_binding_expired`) binding for an API the credential also
+	// serves: only the operator lifts that cut-off, and a second binding would
+	// route around it (suspension is reported first). An optional `expires_at`
+	// (future only, otherwise 422) ends the binding at that time; omit it for a
+	// binding that never expires. Returns the new binding.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -12790,9 +12804,13 @@ type ClientInterface interface {
 	// must be able to see the agent and must own the credential (or hold
 	// `org:admin`). A credential that does not exist or that the caller does
 	// not own returns 404; binding the same credential twice returns 409
-	// (`credential_binding_conflict`). An optional `expires_at` (future only,
-	// otherwise 422) ends the binding at that time; omit it for a binding that
-	// never expires. Returns the new binding.
+	// (`credential_binding_conflict`). An agent binding itself is refused with
+	// 409 while it holds a suspended (`credential_binding_suspended`) or expired
+	// (`credential_binding_expired`) binding for an API the credential also
+	// serves: only the operator lifts that cut-off, and a second binding would
+	// route around it (suspension is reported first). An optional `expires_at`
+	// (future only, otherwise 422) ends the binding at that time; omit it for a
+	// binding that never expires. Returns the new binding.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -16193,9 +16211,13 @@ func (c *Client) ListAgentCredentials(ctx context.Context, agentId string, reqEd
 // must be able to see the agent and must own the credential (or hold
 // `org:admin`). A credential that does not exist or that the caller does
 // not own returns 404; binding the same credential twice returns 409
-// (`credential_binding_conflict`). An optional `expires_at` (future only,
-// otherwise 422) ends the binding at that time; omit it for a binding that
-// never expires. Returns the new binding.
+// (`credential_binding_conflict`). An agent binding itself is refused with
+// 409 while it holds a suspended (`credential_binding_suspended`) or expired
+// (`credential_binding_expired`) binding for an API the credential also
+// serves: only the operator lifts that cut-off, and a second binding would
+// route around it (suspension is reported first). An optional `expires_at`
+// (future only, otherwise 422) ends the binding at that time; omit it for a
+// binding that never expires. Returns the new binding.
 //
 // Takes any type of body and a specified content type.
 //
@@ -16221,9 +16243,13 @@ func (c *Client) BindAgentCredentialWithBody(ctx context.Context, agentId string
 // must be able to see the agent and must own the credential (or hold
 // `org:admin`). A credential that does not exist or that the caller does
 // not own returns 404; binding the same credential twice returns 409
-// (`credential_binding_conflict`). An optional `expires_at` (future only,
-// otherwise 422) ends the binding at that time; omit it for a binding that
-// never expires. Returns the new binding.
+// (`credential_binding_conflict`). An agent binding itself is refused with
+// 409 while it holds a suspended (`credential_binding_suspended`) or expired
+// (`credential_binding_expired`) binding for an API the credential also
+// serves: only the operator lifts that cut-off, and a second binding would
+// route around it (suspension is reported first). An optional `expires_at`
+// (future only, otherwise 422) ends the binding at that time; omit it for a
+// binding that never expires. Returns the new binding.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -30356,9 +30382,13 @@ type ClientWithResponsesInterface interface {
 	// must be able to see the agent and must own the credential (or hold
 	// `org:admin`). A credential that does not exist or that the caller does
 	// not own returns 404; binding the same credential twice returns 409
-	// (`credential_binding_conflict`). An optional `expires_at` (future only,
-	// otherwise 422) ends the binding at that time; omit it for a binding that
-	// never expires. Returns the new binding.
+	// (`credential_binding_conflict`). An agent binding itself is refused with
+	// 409 while it holds a suspended (`credential_binding_suspended`) or expired
+	// (`credential_binding_expired`) binding for an API the credential also
+	// serves: only the operator lifts that cut-off, and a second binding would
+	// route around it (suspension is reported first). An optional `expires_at`
+	// (future only, otherwise 422) ends the binding at that time; omit it for a
+	// binding that never expires. Returns the new binding.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -30374,9 +30404,13 @@ type ClientWithResponsesInterface interface {
 	// must be able to see the agent and must own the credential (or hold
 	// `org:admin`). A credential that does not exist or that the caller does
 	// not own returns 404; binding the same credential twice returns 409
-	// (`credential_binding_conflict`). An optional `expires_at` (future only,
-	// otherwise 422) ends the binding at that time; omit it for a binding that
-	// never expires. Returns the new binding.
+	// (`credential_binding_conflict`). An agent binding itself is refused with
+	// 409 while it holds a suspended (`credential_binding_suspended`) or expired
+	// (`credential_binding_expired`) binding for an API the credential also
+	// serves: only the operator lifts that cut-off, and a second binding would
+	// route around it (suspension is reported first). An optional `expires_at`
+	// (future only, otherwise 422) ends the binding at that time; omit it for a
+	// binding that never expires. Returns the new binding.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -49848,9 +49882,13 @@ func (c *ClientWithResponses) ListAgentCredentialsWithResponse(ctx context.Conte
 // must be able to see the agent and must own the credential (or hold
 // `org:admin`). A credential that does not exist or that the caller does
 // not own returns 404; binding the same credential twice returns 409
-// (`credential_binding_conflict`). An optional `expires_at` (future only,
-// otherwise 422) ends the binding at that time; omit it for a binding that
-// never expires. Returns the new binding.
+// (`credential_binding_conflict`). An agent binding itself is refused with
+// 409 while it holds a suspended (`credential_binding_suspended`) or expired
+// (`credential_binding_expired`) binding for an API the credential also
+// serves: only the operator lifts that cut-off, and a second binding would
+// route around it (suspension is reported first). An optional `expires_at`
+// (future only, otherwise 422) ends the binding at that time; omit it for a
+// binding that never expires. Returns the new binding.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -49872,9 +49910,13 @@ func (c *ClientWithResponses) BindAgentCredentialWithBodyWithResponse(ctx contex
 // must be able to see the agent and must own the credential (or hold
 // `org:admin`). A credential that does not exist or that the caller does
 // not own returns 404; binding the same credential twice returns 409
-// (`credential_binding_conflict`). An optional `expires_at` (future only,
-// otherwise 422) ends the binding at that time; omit it for a binding that
-// never expires. Returns the new binding.
+// (`credential_binding_conflict`). An agent binding itself is refused with
+// 409 while it holds a suspended (`credential_binding_suspended`) or expired
+// (`credential_binding_expired`) binding for an API the credential also
+// serves: only the operator lifts that cut-off, and a second binding would
+// route around it (suspension is reported first). An optional `expires_at`
+// (future only, otherwise 422) ends the binding at that time; omit it for a
+// binding that never expires. Returns the new binding.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

@@ -1646,9 +1646,10 @@ class ConnectSessionService:
           API. The cut-off stands until the operator acts on that binding.
         - The check reads in its own sessions before the bind transaction,
           so a suspension, or an expiry, that lands in the milliseconds
-          between this check and a ``confirm`` bind is not caught here. One
-          after the bind is outside this check by design; the broker enforces
-          it per call.
+          between this check and a ``confirm`` bind is not caught here. A
+          bind held for a vendor consent is checked again when the grant
+          lands (:meth:`_finalise_edit`). One after the bind is outside this
+          check by design; the broker enforces it per call.
         """
         if agent_id is None:
             return
@@ -4891,6 +4892,22 @@ class ConnectSessionService:
         chosen = next((c for c in candidates if c.credential_id == variant.credential_id), None)
         if chosen is None:
             raise ExistingCredentialNotFoundError(variant.credential_id)
+        # The confirm checked the API the session asks for, but an existing
+        # credential can serve more than that (a NULL name or version is a
+        # wildcard). Checked against the chosen credential's own scope, the
+        # rule becomes an overlap: a cut-off binding for any API it serves
+        # refuses the bind, or a broader credential would route around it.
+        async with self._ctx.control_db.session() as session:
+            chosen_row = await CredentialRepository.get_by_id(session, chosen.credential_id)
+        if chosen_row is not None:
+            await self._refuse_cut_off_binding(
+                agent_id,
+                canonical_credential_scope(
+                    vendor=chosen_row.api_vendor,
+                    name=chosen_row.api_name,
+                    version=chosen_row.api_version,
+                ),
+            )
         if chosen.missing_scopes:
             if not chosen.needs_vendor_consent:
                 raise InsufficientGrantedScopesError(chosen.credential_id, chosen.missing_scopes)
@@ -5758,6 +5775,22 @@ class ConnectSessionService:
                 row.id, "failed", "no approved change held", error_code="approval_missing"
             )
             return StatusResult(status="failed", error_code="approval_missing")
+        if change["bind"] and row.agent_id is not None:
+            # A held bind (an existing credential that needed more scopes) was
+            # checked at confirm, but the vendor consent can take minutes: a
+            # binding that was suspended, or expired, while it was out must not
+            # be routed around by binding this credential now. Nothing is
+            # written, the grant included.
+            try:
+                await self._refuse_cut_off_binding_for_session(row, row.agent_id)
+            except (BindingSuspendedError, BindingExpiredError) as exc:
+                error_code = (
+                    "binding_suspended"
+                    if isinstance(exc, BindingSuspendedError)
+                    else "binding_expired"
+                )
+                await self._mark_terminal(row.id, "failed", str(exc), error_code=error_code)
+                return StatusResult(status="failed", error_code=error_code)
         async with self._ctx.control_db.session() as session:
             credential = await CredentialRepository.get_by_id(session, row.credential_id)
         consent = await self._consent_source(credential) if credential is not None else None

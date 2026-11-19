@@ -497,7 +497,10 @@ async def list_credentials(
             "(`credential_not_found`)"
         ),
         conflict(
-            "The same credential is already bound to this agent (`credential_binding_conflict`)"
+            "The same credential is already bound to this agent "
+            "(`credential_binding_conflict`), or an agent binding itself already holds a "
+            "suspended (`credential_binding_suspended`) or expired "
+            "(`credential_binding_expired`) binding for an API the credential serves"
         ),
     ),
 )
@@ -514,9 +517,13 @@ async def bind_credential(
     must be able to see the agent and must own the credential (or hold
     `org:admin`). A credential that does not exist or that the caller does
     not own returns 404; binding the same credential twice returns 409
-    (`credential_binding_conflict`). An optional `expires_at` (future only,
-    otherwise 422) ends the binding at that time; omit it for a binding that
-    never expires. Returns the new binding.
+    (`credential_binding_conflict`). An agent binding itself is refused with
+    409 while it holds a suspended (`credential_binding_suspended`) or expired
+    (`credential_binding_expired`) binding for an API the credential also
+    serves: only the operator lifts that cut-off, and a second binding would
+    route around it (suspension is reported first). An optional `expires_at`
+    (future only, otherwise 422) ends the binding at that time; omit it for a
+    binding that never expires. Returns the new binding.
     """
     binding = await agent_svc.bind_credential(
         agent_id,

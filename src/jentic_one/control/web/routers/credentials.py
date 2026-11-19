@@ -614,6 +614,8 @@ def binding_access_response(
         rule_set=rule_set,
         granted_scopes=access.granted_scopes,
         suspended=access.suspended,
+        expires_at=access.expires_at,
+        expired=binding_expired(access.expires_at),
         scopes_editable=scopes.supported if scopes is not None else False,
         scope_catalog=(
             [

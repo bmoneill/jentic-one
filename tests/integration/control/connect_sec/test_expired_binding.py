@@ -17,6 +17,11 @@ import pytest
 from pydantic import SecretStr
 from sqlalchemy import func, select, text
 
+from jentic_one.auth.services.agent_service import AgentService
+from jentic_one.auth.services.errors import (
+    SelfBindOverExpiredBindingError,
+    SelfBindOverSuspendedBindingError,
+)
 from jentic_one.control.core.schema.connect_sessions import ConnectSession
 from jentic_one.control.core.schema.credentials import Credential
 from jentic_one.control.repos.effects_repo import EffectsRepository
@@ -25,6 +30,7 @@ from jentic_one.control.services.credentials.errors import CredentialNotFoundErr
 from jentic_one.control.services.credentials.service import CredentialService
 from jentic_one.control.services.integrations.connect_session_service import (
     ConfirmChecks,
+    ExistingCredentialConfirm,
     SecretConfirm,
 )
 from jentic_one.control.services.integrations.errors import (
@@ -32,7 +38,11 @@ from jentic_one.control.services.integrations.errors import (
     BindingSuspendedError,
 )
 from jentic_one.control.services.integrations.flow_handlers.manual import ApiKeySecret
+from jentic_one.control.web.routers.credentials import binding_access_response
+from jentic_one.shared.auth.identity import Identity
+from jentic_one.shared.auth.permission_catalog import DEFAULT_AGENT_PERMISSIONS
 from jentic_one.shared.context import Context
+from jentic_one.shared.models import ActorType
 from tests.integration.control.connect_sec.support import (
     AGENT,
     AGENT_ID,
@@ -40,14 +50,19 @@ from tests.integration.control.connect_sec.support import (
     KEY_SCHEME,
     NAME,
     OWNER,
+    OWNER_ID,
     RULES,
     TARGET,
+    VERSION,
     bind,
+    checks,
     client,
     connect,
+    digest,
     existing_credential,
     import_spec,
     is_bound,
+    revision,
     session_row,
     svc,
 )
@@ -280,3 +295,171 @@ async def test_renewed_binding_widens_credential_reads_again(env: Context) -> No
     view = await CredentialService(env).get(credential_id, identity=AGENT)
 
     assert view.credential_id == credential_id
+
+
+# ---- show_access ------------------------------------------------------------
+
+#: The agent as its token carries it: the owner-delegated read lets it see the
+#: owner's credentials whatever its bindings, so an expired binding is still
+#: shown rather than hidden, and must say it has expired.
+_DELEGATED_AGENT = Identity(
+    sub=AGENT_ID,
+    permissions=list(DEFAULT_AGENT_PERMISSIONS),
+    actor_type=ActorType.AGENT,
+    parent_actor_id=OWNER_ID,
+)
+
+
+async def _show_access(env: Context, credential_id: str) -> dict[str, object]:
+    """The binding access read as the route and the MCP tool both project it."""
+    access = await CredentialService(env).get_binding_access(
+        credential_id, AGENT_ID, identity=_DELEGATED_AGENT
+    )
+    return binding_access_response(access).model_dump(mode="json")
+
+
+async def test_show_access_reports_an_expired_binding_as_expired(env: Context) -> None:
+    credential_id = await _bound(env)
+
+    body = await _show_access(env, credential_id)
+
+    assert body["expired"] is True
+    assert body["expires_at"] is not None
+    assert body["suspended"] is False
+
+
+async def test_show_access_reports_a_live_binding_as_not_expired(env: Context) -> None:
+    credential_id = await _bound(env, expires_at=_FUTURE)
+
+    body = await _show_access(env, credential_id)
+
+    assert body["expired"] is False
+    assert body["expires_at"] is not None
+
+
+# ---- an agent binding itself -----------------------------------------------
+
+#: The agent with ``agents:write`` (not a default agent permission): it may
+#: bind its owner's credential to itself, but not beside its own cut-off.
+_SELF_BINDING_AGENT = Identity(
+    sub=AGENT_ID,
+    permissions=[*DEFAULT_AGENT_PERMISSIONS, "agents:write"],
+    actor_type=ActorType.AGENT,
+    parent_actor_id=OWNER_ID,
+)
+
+
+async def _self_bind(env: Context, credential_id: str, identity: Identity) -> None:
+    await AgentService(env).bind_credential(
+        AGENT_ID, credential_id=credential_id, identity=identity
+    )
+
+
+async def test_an_agent_cannot_bind_itself_beside_its_expired_binding(env: Context) -> None:
+    await _bound(env)
+    fresh = await existing_credential(env, name="Fresh")
+
+    with pytest.raises(SelfBindOverExpiredBindingError):
+        await _self_bind(env, fresh, _SELF_BINDING_AGENT)
+
+    assert not await is_bound(env, AGENT_ID, fresh)
+
+
+async def test_an_agent_self_bind_reports_suspension_before_expiry(env: Context) -> None:
+    await _bound(env)
+    suspended = await existing_credential(env, name="Suspended")
+    await bind(env, AGENT_ID, suspended)
+    await _set_binding(env, AGENT_ID, suspended, expires_at=None, suspended=True)
+    fresh = await existing_credential(env, name="Fresh")
+
+    with pytest.raises(SelfBindOverSuspendedBindingError):
+        await _self_bind(env, fresh, _SELF_BINDING_AGENT)
+
+
+async def test_an_agent_may_bind_itself_for_another_api(env: Context) -> None:
+    await _bound(env, name="some-other-api")
+    fresh = await existing_credential(env, name="Fresh")
+
+    await _self_bind(env, fresh, _SELF_BINDING_AGENT)
+
+    assert await is_bound(env, AGENT_ID, fresh)
+
+
+async def test_the_owner_may_still_bind_the_agent_beside_an_expired_binding(
+    env: Context,
+) -> None:
+    """The cut-off is the operator's to lift, so the operator's own bind is allowed."""
+    await _bound(env)
+    fresh = await existing_credential(env, name="Fresh")
+
+    await _self_bind(env, fresh, OWNER)
+
+    assert await is_bound(env, AGENT_ID, fresh)
+
+
+# ---- confirming with an existing credential --------------------------------
+
+
+async def _set_scope(env: Context, credential_id: str, *, version: str | None) -> None:
+    async with env.control_db.transaction() as session:
+        credential = await session.get(Credential, credential_id)
+        assert credential is not None
+        credential.api_version = version
+
+
+async def test_a_broader_existing_credential_cannot_route_around_an_expired_sibling(
+    env: Context,
+) -> None:
+    """The session asks for one version; the chosen credential serves every version.
+
+    The agent's binding for another version of the API has expired, so the
+    session opens (that binding doesn't cover the version asked for). The
+    approver then picks an existing credential with no version pinned: it
+    serves the expired version too, so binding it would hand that access back.
+    """
+    await import_spec(env, KEY_SCHEME)
+    sibling = await _bound(env)
+    await _set_scope(env, sibling, version="0.9.0")
+    created = await connect(env)
+    wide = await existing_credential(env, name="Every version")
+    await _set_scope(env, wide, version=None)
+
+    with pytest.raises(BindingExpiredError):
+        await svc(env).confirm_variant(
+            created.session_id,
+            poll_token=None,
+            variant=ExistingCredentialConfirm(
+                credential_id=wide,
+                checks=checks(
+                    await digest(env, created.session_id),
+                    revision_id=await revision(env, created.session_id),
+                ),
+            ),
+            identity=OWNER,
+        )
+
+    assert not await is_bound(env, AGENT_ID, wide)
+
+
+async def test_an_existing_credential_for_another_version_still_binds(env: Context) -> None:
+    await import_spec(env, KEY_SCHEME)
+    sibling = await _bound(env)
+    await _set_scope(env, sibling, version="0.9.0")
+    created = await connect(env)
+    exact = await existing_credential(env, name="This version")
+    await _set_scope(env, exact, version=VERSION)
+
+    await svc(env).confirm_variant(
+        created.session_id,
+        poll_token=None,
+        variant=ExistingCredentialConfirm(
+            credential_id=exact,
+            checks=checks(
+                await digest(env, created.session_id),
+                revision_id=await revision(env, created.session_id),
+            ),
+        ),
+        identity=OWNER,
+    )
+
+    assert await is_bound(env, AGENT_ID, exact)

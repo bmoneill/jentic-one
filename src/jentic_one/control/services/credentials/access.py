@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 from typing import TYPE_CHECKING, NamedTuple
 
 import structlog
@@ -74,6 +75,8 @@ class BindingAccess(NamedTuple):
     rule_set_rules: list[PermissionRuleSetRule]
     granted_scopes: list[str] | None
     suspended: bool
+    #: When the binding stops authorizing calls; ``None`` never expires.
+    expires_at: datetime | None = None
 
 
 logger = structlog.get_logger()
@@ -316,6 +319,7 @@ class _CredentialAccessMixin:
             rule_set_rules=rule_set_rules,
             granted_scopes=token.scope.split() if token is not None and token.scope else None,
             suspended=binding.suspended,
+            expires_at=binding.expires_at,
         )
 
     async def replace_agent_permissions(

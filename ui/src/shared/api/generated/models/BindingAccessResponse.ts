@@ -14,6 +14,14 @@ export type BindingAccessResponse = {
      */
     data: Array<PermissionRuleReadSchema>;
     /**
+     * True when `expires_at` has passed: the agent cannot use the binding, and no rule change brings it back. Only the operator can renew it.
+     */
+    expired?: boolean;
+    /**
+     * When the binding stops authorizing calls (RFC 3339); null if it never expires. Independent of `suspended`.
+     */
+    expires_at?: (string | null);
+    /**
      * Scopes the credential's OAuth grant holds; null when it has none.
      */
     granted_scopes?: (Array<string> | null);

@@ -47,6 +47,8 @@ from jentic_one.auth.services.errors import (
     InvalidOwnerError,
     InvalidTransitionError,
     OwnerTransferForbiddenError,
+    SelfBindOverExpiredBindingError,
+    SelfBindOverSuspendedBindingError,
 )
 from jentic_one.auth.services.oauth_grant_service import (
     AGENT_ARCHIVE_REVOCATION_REASON,
@@ -61,6 +63,7 @@ from jentic_one.auth.services.schemas.agents import (
     CredentialBindingView,
 )
 from jentic_one.shared.audit import AuditAction, AuditTargetType, record_audit
+from jentic_one.shared.auth.agent_expiry import binding_expired
 from jentic_one.shared.auth.agent_permission_ceiling import (
     ADMIN_ONLY_AGENT_PERMISSIONS,
     cap_agent_permissions,
@@ -927,6 +930,8 @@ class AgentService:
                 ref = await CredentialRefRepository.get_by_id(session, credential_id)
         if ref is None or not self._can_bind_credential(identity, ref.created_by):
             raise CredentialNotVisibleError(credential_id)
+        if self._is_own_binding(agent_id, identity):
+            await self._refuse_self_bind_over_cut_off(agent_id, ref)
         async with self._ctx.admin_db.transaction() as session:
             try:
                 binding = await AgentCredentialBindingRepository.bind(
@@ -973,6 +978,43 @@ class AgentService:
             )
         ]
         return view
+
+    async def _refuse_self_bind_over_cut_off(self, agent_id: str, ref: CredentialRef) -> None:
+        """Refuse an agent binding itself where its own binding is suspended or expired.
+
+        The agent-side twin of the connect flow's cut-off refusal: a suspended
+        or expired binding to a credential serving an API ``ref`` also serves
+        would be routed around by the new binding. Two credentials overlap when
+        they share a vendor and each of name and version is unscoped (NULL) on
+        either side or equal, the coverage rule the broker uses. Suspension is
+        reported first. Fails closed when the control database is unavailable.
+        """
+        async with self._ctx.admin_db.session() as session:
+            bindings = await AgentCredentialBindingRepository.list_for_agent(session, agent_id)
+        suspended = {b.credential_id for b in bindings if b.suspended}
+        expired = {
+            b.credential_id for b in bindings if not b.suspended and binding_expired(b.expires_at)
+        }
+        if not suspended and not expired:
+            return
+        if not self._ctx.is_db_allowed("control"):
+            raise (
+                SelfBindOverSuspendedBindingError(agent_id)
+                if suspended
+                else SelfBindOverExpiredBindingError(agent_id)
+            )
+        async with self._ctx.control_db.session() as session:
+            refs = await CredentialRefRepository.get_refs_for_ids(
+                session, sorted(suspended | expired)
+            )
+        for credential_ids, error in (
+            (suspended, SelfBindOverSuspendedBindingError),
+            (expired, SelfBindOverExpiredBindingError),
+        ):
+            if any(
+                _scopes_overlap(refs[cid], ref) for cid in sorted(credential_ids) if cid in refs
+            ):
+                raise error(agent_id)
 
     async def unbind_credential(
         self, agent_id: str, *, credential_id: str, purge: bool, identity: Identity
@@ -1588,3 +1630,12 @@ def _apply_last_use(view: CredentialBindingView, last_uses: list[ApiLastUseRow])
         for r in sorted(own, key=lambda r: r.last_used_at, reverse=True)
         if r.api_vendor is not None
     ]
+
+
+def _scopes_overlap(a: CredentialRef, b: CredentialRef) -> bool:
+    """Whether two credentials serve a common API: same vendor, each axis NULL or equal."""
+    return (
+        a.api_vendor == b.api_vendor
+        and (a.api_name is None or b.api_name is None or a.api_name == b.api_name)
+        and (a.api_version is None or b.api_version is None or a.api_version == b.api_version)
+    )

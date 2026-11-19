@@ -615,9 +615,9 @@ async def handle_show_access(env: CallEnv, arguments: dict[str, Any]) -> mcp_typ
     """GET /credentials/{cid}/agents/{me}/permissions in-process (Go: ``handleShowAccess``).
 
     The calling agent's own binding to ``credential_id``, in the route's wire
-    shape. A credential it is not bound to, or whose binding is suspended or
-    expired (which hides the credential from the agent), is RESOLVE_FAILED
-    pointing at whoami.
+    shape, with its ``suspended`` and ``expired`` flags. A credential it is
+    not bound to, or cannot read (a suspended or expired binding no longer
+    widens its reads), is RESOLVE_FAILED pointing at whoami.
     """
     args = normalize_tool_args(arguments, _SHOW_ACCESS_PARAMS)
     credential_id = args.get("credential_id", "")
@@ -635,8 +635,8 @@ async def handle_show_access(env: CallEnv, arguments: dict[str, Any]) -> mcp_typ
             CODE_RESOLVE_FAILED,
             f"no active credential binding for {credential_id!r}",
             actionable="check whoami (`jentic whoami`) for your credential bindings and their "
-            "credential ids; a suspended or expired binding is hidden until your operator "
-            "resumes or renews it",
+            "credential ids; a suspended or expired binding may be hidden: only your "
+            "operator can resume or renew it",
             next_tool="whoami",
         ) from None
     addable = await ConnectSessionService(env.ctx).scope_options(credential_id)
@@ -884,6 +884,18 @@ def _edit_scopes(raw: Any) -> dict[str, Any]:
     }
 
 
+#: The recovery for :class:`EditBindingNotFoundError` (Go twin:
+#: ``editBindingNotFoundHint``): no binding, or (for an agent) a suspended or
+#: expired one. "Fix the request" would loop the agent between show_access
+#: and request_access_change; only the operator can act.
+_EDIT_BINDING_NOT_FOUND_HINT = (
+    "No binding of yours to this credential can be changed: you are not bound to it, or "
+    "the binding is suspended or expired. No change to your access brings those back; only "
+    "your operator can resume or renew them. Check whoami, and ask your operator; do not "
+    "request a new connection to get around it."
+)
+
+
 def _edit_refusal(env: CallEnv, exc: Exception, what: str) -> ToolError:
     """A refused edit or amend as a coded error (Go: ``editErrorResult``)."""
     extra: dict[str, Any] | None = None
@@ -903,7 +915,7 @@ def _edit_refusal(env: CallEnv, exc: Exception, what: str) -> ToolError:
             next_tool="show_access",
             extra={"unknown_scopes": exc.unknown},
         )
-    # The three refusals the generic arm's "fix the request, then retry" is
+    # The refusals the generic arm's "fix the request, then retry" is
     # wrong for: the request as sent is fine, and what has to happen next is
     # not another call of this tool.
     if isinstance(exc, RevisionChangedError):
@@ -931,6 +943,14 @@ def _edit_refusal(env: CallEnv, exc: Exception, what: str) -> ToolError:
             # directive naming this binding, and a pointer at show_access with
             # nothing to go with it is half an answer.
             extra={**(extra or {}), "retryable": False, "session_id": exc.session_id},
+        )
+    if isinstance(exc, EditBindingNotFoundError):
+        return ToolError(
+            CODE_RESOLVE_FAILED,
+            f"{what} was refused: {exc}",
+            actionable=_EDIT_BINDING_NOT_FOUND_HINT,
+            next_tool="whoami",
+            extra={"retryable": False},
         )
     if isinstance(exc, TooManyRevisionsError):
         return ToolError(

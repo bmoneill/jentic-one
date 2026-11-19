@@ -5306,6 +5306,8 @@
                 "path": "/v1/charges"
               }
             ],
+            "expired": false,
+            "expires_at": "2026-12-31T23:59:00Z",
             "granted_scopes": [
               "repo",
               "read:user"
@@ -5367,6 +5369,29 @@
               "$ref": "#/components/schemas/PermissionRuleReadSchema"
             },
             "type": "array"
+          },
+          "expired": {
+            "default": false,
+            "description": "True when `expires_at` has passed: the agent cannot use the binding, and no rule change brings it back. Only the operator can renew it.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the binding stops authorizing calls (RFC 3339); null if it never expires. Independent of `suspended`.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
+            ]
           },
           "granted_scopes": {
             "anyOf": [
@@ -26804,7 +26829,7 @@
         ]
       },
       "post": {
-        "description": "Let an agent use a credential by binding it directly.\n\nA new binding starts with no permission rules, so the agent can make no\ncalls with it until rules are set or a rule set is attached. The caller\nmust be able to see the agent and must own the credential (or hold\n`org:admin`). A credential that does not exist or that the caller does\nnot own returns 404; binding the same credential twice returns 409\n(`credential_binding_conflict`). An optional `expires_at` (future only,\notherwise 422) ends the binding at that time; omit it for a binding that\nnever expires. Returns the new binding.",
+        "description": "Let an agent use a credential by binding it directly.\n\nA new binding starts with no permission rules, so the agent can make no\ncalls with it until rules are set or a rule set is attached. The caller\nmust be able to see the agent and must own the credential (or hold\n`org:admin`). A credential that does not exist or that the caller does\nnot own returns 404; binding the same credential twice returns 409\n(`credential_binding_conflict`). An agent binding itself is refused with\n409 while it holds a suspended (`credential_binding_suspended`) or expired\n(`credential_binding_expired`) binding for an API the credential also\nserves: only the operator lifts that cut-off, and a second binding would\nroute around it (suspension is reported first). An optional `expires_at`\n(future only, otherwise 422) ends the binding at that time; omit it for a\nbinding that never expires. Returns the new binding.",
         "operationId": "bindAgentCredential",
         "parameters": [
           {
@@ -26922,7 +26947,7 @@
                 }
               }
             },
-            "description": "The same credential is already bound to this agent (`credential_binding_conflict`)"
+            "description": "The same credential is already bound to this agent (`credential_binding_conflict`), or an agent binding itself already holds a suspended (`credential_binding_suspended`) or expired (`credential_binding_expired`) binding for an API the credential serves"
           },
           "422": {
             "$ref": "#/components/responses/UnprocessableEntity"
@@ -34162,6 +34187,8 @@
                       "path": "/v1/charges"
                     }
                   ],
+                  "expired": false,
+                  "expires_at": "2026-12-31T23:59:00Z",
                   "granted_scopes": [
                     "repo",
                     "read:user"
