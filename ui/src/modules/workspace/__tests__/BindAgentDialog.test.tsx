@@ -491,6 +491,81 @@ describe('BindAgentDialog — how long the access lasts', () => {
 		await user.click(screen.getByRole('radio', { name: /Read-only/ }));
 	}
 
+	/** Bound rows with an end date (and, optionally, paused). */
+	function serveBound(
+		pickable: string[],
+		bound: { id: string; expiresAt: string | null; suspended?: boolean }[],
+	): void {
+		worker.use(
+			http.get('/agents', () =>
+				HttpResponse.json({
+					data: pickable.map(pickerAgent),
+					has_more: false,
+					next_cursor: null,
+				}),
+			),
+			http.get('/credentials/:cid/agents', () =>
+				HttpResponse.json({
+					data: bound.map((b) => ({
+						...boundAgent(b.id),
+						suspended: b.suspended ?? false,
+						expires_at: b.expiresAt,
+						expired: b.expiresAt != null && Date.parse(b.expiresAt) <= Date.now(),
+					})),
+					has_more: false,
+					next_cursor: null,
+				}),
+			),
+		);
+	}
+
+	it("says what each bound agent's binding is: expired, suspended, ending or open", async () => {
+		const past = new Date(Date.now() - DAY).toISOString();
+		serveBound(
+			['agent_1', 'agent_expired', 'agent_paused', 'agent_soon', 'agent_open'],
+			[
+				{ id: 'agent_expired', expiresAt: past },
+				// Paused and lapsed: the pause is what to fix first, as the broker says.
+				{ id: 'agent_paused', expiresAt: past, suspended: true },
+				{
+					id: 'agent_soon',
+					expiresAt: new Date(Date.now() + 3 * DAY + 60_000).toISOString(),
+				},
+				{ id: 'agent_open', expiresAt: null },
+			],
+		);
+		renderDialog();
+
+		await screen.findByRole('checkbox', { name: 'agent_expired' });
+		const note = (name: string): string | null =>
+			within(optionFor(name)).getByTestId('bind-agent-bound-note').textContent;
+		await waitFor(() => expect(note('agent_expired')).toBe('Bound · expired'));
+		expect(note('agent_paused')).toBe('Bound · suspended');
+		expect(note('agent_soon')).toBe('Already bound · ends in 3d');
+		expect(note('agent_open')).toBe('Already bound');
+		expect(
+			within(optionFor('agent_1')).queryByTestId('bind-agent-bound-note'),
+		).not.toBeInTheDocument();
+		// Still not bindable again (a 409): renewing is the way back.
+		expect(screen.getByRole('checkbox', { name: 'agent_expired' })).toBeDisabled();
+		expect(screen.getByTestId('bind-agent-expired-note')).toHaveTextContent(
+			"One agent's access through this credential has expired. Binding again won't restore it: renew it from the agent's page or from the credential.",
+		);
+	});
+
+	it('every agent bound, one of them expired: says to renew, not bind', async () => {
+		serveBound(
+			['agent_expired'],
+			[{ id: 'agent_expired', expiresAt: new Date(Date.now() - DAY).toISOString() }],
+		);
+		renderDialog();
+
+		expect(await screen.findByTestId('bind-agent-all-bound')).toBeInTheDocument();
+		expect(screen.getByTestId('bind-agent-expired-note')).toHaveTextContent(
+			/One agent's access through this credential has expired\./,
+		);
+	});
+
 	it('preselects no duration, and a chosen one becomes the end date at Bind', async () => {
 		const user = userEvent.setup();
 		renderWithProviders(

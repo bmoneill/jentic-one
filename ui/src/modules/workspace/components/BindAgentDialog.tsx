@@ -25,9 +25,11 @@
  * — the server lets a non-admin bind only credentials they created (else 404).
  * Only ACTIVE agents are offered (a pending, disabled, archived or rejected
  * agent serves nothing). Agents already bound to the chosen credential are
- * shown, disabled — read in full (every page, `useAllCredentialAgents`), so an
- * agent past the first page can't pass for unbound and be bound twice. Until
- * that read is whole, nothing can be ticked or bound.
+ * shown, disabled, with what their binding says — suspended, expired (renewed
+ * elsewhere, never bound again), or when it ends — read in full (every page,
+ * `useAllCredentialAgents`), so an agent past the first page can't pass for
+ * unbound and be bound twice. Until that read is whole, nothing can be ticked
+ * or bound.
  *
  * State lifecycle (dialog-state rule): the draft (credential, ticks, rules,
  * duration) persists across dismissals and resets on a successful bind; transient errors
@@ -49,11 +51,16 @@ import {
 	type PermissionRuleInput,
 } from '@/shared/ui';
 import { ROUTES } from '@/shared/app/routes';
+import { cn } from '@/shared/lib/utils';
 import { useOptionalCurrentUser } from '@/shared/auth';
 import { credentialsBindableBy } from '@/shared/credentials/lib/bindAuthority';
 import { apiScopeReach } from '@/shared/credentials/lib/apiIdentity';
 import { credentialSiblingHint } from '@/shared/credentials/lib/credentialIdentity';
-import { useAllCredentialAgents, type Credential } from '@/shared/credentials/api';
+import {
+	useAllCredentialAgents,
+	type Credential,
+	type CredentialAgentResponse,
+} from '@/shared/credentials/api';
 import {
 	useAgentsForPicker,
 	useApplyBindingRules,
@@ -70,8 +77,13 @@ import {
 import { expiresAtIso, type BindingDuration } from '@/shared/credentials/lib/bindingDuration';
 import {
 	NO_DURATION_HINT,
+	bindingExpiresSoon,
+	bindingExpiryLabel,
+	bindingExpiryShortLabel,
+	bindingIsExpired,
 	choosesNoExpiry,
 	durationChosen,
+	type BindingExpiryFields,
 } from '@/shared/credentials/lib/bindingExpiry';
 import {
 	rulesForPreset,
@@ -194,8 +206,14 @@ export function BindAgentDialog({
 	});
 	// A credential that doesn't exist yet has no agents bound to it.
 	const boundKnown = pendingCreate != null || boundHere.complete;
+	// Each bound agent's binding, so its row can say whether it still works: a
+	// suspended or expired binding is still a binding (binding again is a 409),
+	// and must never read as plain "Already bound".
 	const alreadyBound = useMemo(
-		() => new Set(pendingCreate ? [] : boundHere.items.map((a) => a.agent_id)),
+		() =>
+			new Map<string, CredentialAgentResponse>(
+				pendingCreate ? [] : boundHere.items.map((a) => [a.agent_id, a]),
+			),
 		[boundHere.items, pendingCreate],
 	);
 
@@ -208,6 +226,12 @@ export function BindAgentDialog({
 		: [];
 	const everyAgentBound =
 		boundKnown && candidates.length > 0 && candidates.every((a) => alreadyBound.has(a.id));
+	// Offered agents whose binding has ended (and isn't also paused): binding
+	// them again won't restore access, renewing will.
+	const expiredBound = candidates.filter((a) => {
+		const row = alreadyBound.get(a.id);
+		return row != null && !row.suspended && bindingIsExpired(expiryOf(row));
+	}).length;
 
 	// The rules every picked agent gets, or null while the choice is incomplete.
 	const rules = useMemo<PermissionRuleInput[] | null>(
@@ -427,7 +451,8 @@ export function BindAgentDialog({
 							data-testid="bind-agent-list"
 						>
 							{candidates.map((a) => {
-								const bound = alreadyBound.has(a.id);
+								const boundRow = alreadyBound.get(a.id);
+								const bound = boundRow != null;
 								return (
 									<li
 										key={a.id}
@@ -444,15 +469,23 @@ export function BindAgentDialog({
 												{a.name}
 											</span>
 										</Checkbox>
-										{bound && (
-											<span className="text-muted-foreground shrink-0 text-[11px]">
-												Already bound
-											</span>
-										)}
+										{boundRow && <BoundAgentNote row={boundRow} />}
 									</li>
 								);
 							})}
 						</ul>
+					)}
+					{expiredBound > 0 && (
+						<p
+							className="text-muted-foreground text-xs"
+							data-testid="bind-agent-expired-note"
+						>
+							{expiredBound === 1
+								? "One agent's access through this credential has expired."
+								: `${expiredBound} agents' access through this credential has expired.`}{' '}
+							Binding again won&apos;t restore it: renew it from the agent&apos;s page
+							or from the credential.
+						</p>
 					)}
 				</fieldset>
 				{!everyAgentBound && (
@@ -546,5 +579,53 @@ export function BindAgentDialog({
 				fieldRef={durationRef}
 			/>
 		</>
+	);
+}
+
+/** A roster row's end date, in the shape the expiry helpers read. */
+function expiryOf(row: CredentialAgentResponse): BindingExpiryFields {
+	return { expiresAt: row.expires_at ?? null, expired: row.expired ?? false };
+}
+
+/**
+ * What an already-bound agent's row says about its binding: paused, ended, or
+ * bound (with when it ends, if it does). Suspended first, as the broker reports
+ * them — renewing alone would not restore a paused binding.
+ */
+function BoundAgentNote({ row }: { row: CredentialAgentResponse }) {
+	const binding = expiryOf(row);
+	if (row.suspended) {
+		return (
+			<span
+				className="text-muted-foreground shrink-0 text-[11px]"
+				data-testid="bind-agent-bound-note"
+			>
+				Bound · suspended
+			</span>
+		);
+	}
+	if (bindingIsExpired(binding)) {
+		return (
+			<span
+				className="text-caution shrink-0 text-[11px]"
+				data-testid="bind-agent-bound-note"
+				title={bindingExpiryLabel(binding) ?? undefined}
+			>
+				Bound · expired
+			</span>
+		);
+	}
+	const ends = bindingExpiryShortLabel(binding);
+	return (
+		<span
+			className={cn(
+				'shrink-0 text-[11px]',
+				bindingExpiresSoon(binding) ? 'text-caution' : 'text-muted-foreground',
+			)}
+			data-testid="bind-agent-bound-note"
+			title={bindingExpiryLabel(binding) ?? undefined}
+		>
+			Already bound{ends ? ` · ${ends.charAt(0).toLowerCase()}${ends.slice(1)}` : ''}
+		</span>
 	);
 }
