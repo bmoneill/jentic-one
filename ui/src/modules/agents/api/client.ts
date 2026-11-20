@@ -232,52 +232,6 @@ export async function listAgentCredentialBindings(
 }
 
 /**
- * Bind a credential directly to an agent, with the operator's chosen initial
- * grant.
- *
- * The phase-1 bind body carries ONLY `credential_id` — there is no inline
- * `allow_all`/`permissions` field — so the "decide
- * the grant at bind time" wizard composes two calls: the bind, then a rules
- * PUT on the fresh binding. The seam between them is fail-CLOSED: a binding
- * with zero rules default-denies everything, so if the PUT fails the agent
- * has gained no access — we surface an honest "bound but blocked" error and
- * the Access card's zero-rules warning points at the repair (edit rules).
- * `rules === null` is the deliberate "start blocked" mode (bind only).
- */
-export async function bindCredentialToAgent(
-	agentId: string,
-	credentialId: string,
-	rules: PermissionRuleSchema[] | null,
-): Promise<CredentialBindingEntity> {
-	let binding: CredentialBindingEntity;
-	try {
-		binding = bindingToEntity(
-			await AgentsService.bindAgentCredential({
-				agentId,
-				requestBody: { credential_id: credentialId },
-			}),
-		);
-	} catch (error) {
-		throw toAgentsError(error, 'Failed to bind the credential.');
-	}
-	if (rules != null && rules.length > 0) {
-		try {
-			await CredentialsService.replaceAgentCredentialPermissions({
-				credentialId,
-				agentId,
-				requestBody: rules,
-			});
-		} catch (error) {
-			throw toAgentsError(
-				error,
-				'The credential was bound, but saving its rules failed — the binding starts blocked (default deny). Edit its rules to grant access.',
-			);
-		}
-	}
-	return binding;
-}
-
-/**
  * Unbind a credential from an agent. Default (`purge: false`) is a reversible
  * SUSPEND — the binding row and its permission rules survive and `:resume`
  * restores access. `purge: true` deletes the binding (and its rules) outright.
