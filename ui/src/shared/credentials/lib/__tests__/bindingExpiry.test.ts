@@ -81,10 +81,12 @@ describe('bindingExpiryShortLabel', () => {
 });
 
 describe('bindingExpiresSoon', () => {
-	it('is true within a week of the end, and not once it has passed', () => {
-		expect(bindingExpiresSoon(endsIn(7 * DAY), NOW)).toBe(true);
+	it('is true within 48 hours of the end, and not once it has passed', () => {
+		expect(bindingExpiresSoon(endsIn(2 * DAY), NOW)).toBe(true);
 		expect(bindingExpiresSoon(endsIn(HOUR), NOW)).toBe(true);
-		expect(bindingExpiresSoon(endsIn(7 * DAY + 1), NOW)).toBe(false);
+		expect(bindingExpiresSoon(endsIn(2 * DAY + 1), NOW)).toBe(false);
+		// A binding just made for a week (or longer) doesn't start out as a caution.
+		expect(bindingExpiresSoon(endsIn(7 * DAY), NOW)).toBe(false);
 		expect(bindingExpiresSoon(endsIn(-HOUR), NOW)).toBe(false);
 		expect(bindingExpiresSoon({ expiresAt: null }, NOW)).toBe(false);
 	});

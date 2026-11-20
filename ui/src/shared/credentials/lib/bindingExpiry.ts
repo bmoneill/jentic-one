@@ -15,8 +15,13 @@ const MINUTE_MS = 60_000;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
 
-/** Within this long of its end, a binding's end date reads as a caution. */
-export const EXPIRES_SOON_MS = 7 * DAY_MS;
+/**
+ * Within this long of its end, a binding's end date reads as a caution: the
+ * same 48 hours the owner is warned before an idle limit (D13). A window as
+ * long as a common duration (a week, say) would mark every binding of that
+ * length as ending soon from the moment it was made.
+ */
+export const EXPIRES_SOON_MS = 2 * DAY_MS;
 
 /** What a binding carries about its end date, as the API reports it. */
 export interface BindingExpiryFields {
