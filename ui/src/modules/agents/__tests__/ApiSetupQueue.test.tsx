@@ -1429,7 +1429,8 @@ describe('ApiSetupQueue — how long the access lasts', () => {
 		await user.click(within(step).getByRole('button', { name: 'Add stripe' }));
 		await user.click(await screen.findByRole('button', { name: 'Add stripe without expiry' }));
 		await waitFor(() => expect(calls).toHaveLength(1));
-		expect(calls[0].body).toEqual({ credential_id: 'cred_stripe' });
+		// A confirmed "No expiry" is said, not left out (an org default would fill a gap).
+		expect(calls[0].body).toEqual({ credential_id: 'cred_stripe', expires_at: null });
 		await waitFor(() => expect(rowFor('stripe')).toHaveAttribute('data-status', 'added'));
 	});
 });

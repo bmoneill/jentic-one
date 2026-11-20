@@ -160,8 +160,8 @@ export function BindAgentDialog({
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [preset, setPreset] = useState<RulesPreset | null>(null);
 	const [customRules, setCustomRules] = useState<PermissionRule[]>([]);
-	// How long the access lasts; null = nothing chosen (binds with no expiry,
-	// after the warning).
+	// How long the access lasts; null = nothing chosen yet, and Bind waits for a
+	// choice ("No expiry" is a choice, made in Custom… and confirmed).
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();

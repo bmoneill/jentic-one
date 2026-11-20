@@ -510,4 +510,43 @@ describe('BoundAgentsSection — when access ends', () => {
 		expect(at - Date.now()).toBeLessThanOrEqual(12 * DAY);
 		expect(credentialSaves).toBe(0);
 	});
+
+	it('an end date the server refused says why, not "Unprocessable Entity"', async () => {
+		worker.use(
+			http.patch('/agents/:aid/credentials/:cid', () =>
+				HttpResponse.json(
+					{
+						detail: [
+							{
+								type: 'value_error',
+								loc: ['body', 'expires_at'],
+								msg: 'Value error, expires_at must be in the future',
+							},
+						],
+					},
+					{ status: 422 },
+				),
+			),
+		);
+		seedBoundAgents('cred_gh_1', [
+			{ agent_id: 'agnt_old', agent_name: 'old-agent', expires_at: null },
+		]);
+		const user = userEvent.setup();
+		renderSheet('cred_gh_1');
+
+		await user.click(await screen.findByRole('button', { name: /old-agent/, expanded: false }));
+		await user.selectOptions(
+			screen.getByTestId('bound-agent-renew-control-duration-preset'),
+			'1h',
+		);
+		await user.click(screen.getByTestId('bound-agent-renew-control-save'));
+		const control = screen.getByTestId('bound-agent-renew-control');
+		expect(
+			await within(control).findByText(
+				/That end date had already passed when it reached the server/,
+			),
+		).toBeVisible();
+		expect(within(control).getByText(/check this device’s clock/)).toBeVisible();
+		expect(within(control).queryByText(/Unprocessable/)).not.toBeInTheDocument();
+	});
 });

@@ -141,7 +141,7 @@ function errorText(e: unknown): string {
 }
 
 /** One item's access draft — the preset and the custom rules being written,
- * and how long the access lasts (null = nothing chosen: no expiry). */
+ * and how long the access lasts (null = nothing chosen yet: adding waits). */
 interface AccessDraft {
 	preset: RulesPreset | null;
 	customRules: PermissionRule[];
@@ -149,7 +149,7 @@ interface AccessDraft {
 }
 
 /** Custom rules, preselected: the operator says what the agent may call. No
- * duration: the operator chooses one, or confirms going without. */
+ * duration: the operator must choose one ("No expiry" included, confirmed). */
 const DEFAULT_DRAFT: AccessDraft = { preset: 'custom', customRules: [], duration: null };
 
 const RULES_SAVE_FAILED = "The access rules weren't saved.";

@@ -605,6 +605,33 @@ describe('BindAgentDialog — how long the access lasts', () => {
 		expect(screen.getByTestId('bind-agent-confirm')).toBeEnabled();
 	});
 
+	it('an end date the server refused says why, not "Unprocessable Entity"', async () => {
+		worker.use(
+			http.post('/agents/:id/credentials', () =>
+				HttpResponse.json(
+					{
+						detail: [
+							{
+								type: 'value_error',
+								loc: ['body', 'expires_at'],
+								msg: 'Value error, expires_at must be in the future',
+							},
+						],
+					},
+					{ status: 422 },
+				),
+			),
+		);
+		const user = userEvent.setup();
+		renderDialog();
+		await ready(user);
+		await bind(user, '1h');
+		expect(
+			await screen.findByText(/That end date had already passed when it reached the server/),
+		).toBeVisible();
+		expect(screen.queryByText(/Unprocessable/)).not.toBeInTheDocument();
+	});
+
 	it('binding with No expiry warns first, and binds nothing until confirmed', async () => {
 		const user = userEvent.setup();
 		renderDialog();
@@ -629,6 +656,7 @@ describe('BindAgentDialog — how long the access lasts', () => {
 		await user.click(screen.getByTestId('bind-agent-confirm'));
 		await user.click(await screen.findByRole('button', { name: 'Bind without expiry' }));
 		await waitFor(() => expect(bodies).toHaveLength(1));
-		expect(bodies[0].body).toEqual({ credential_id: 'cred_big' });
+		// A confirmed "No expiry" is said, not left out (an org default would fill a gap).
+		expect(bodies[0].body).toEqual({ credential_id: 'cred_big', expires_at: null });
 	});
 });

@@ -383,7 +383,8 @@ export interface BindResult {
  * ({@link useApplyBindingRules}). Caches are invalidated whatever the outcome,
  * so a run that fails partway still shows the binds that landed. Every binding
  * gets the same `expiresAt` (RFC 3339), worked out once when the run starts;
- * omitted, none of them expires.
+ * `null` is a confirmed "No expiry", sent as such (see
+ * {@link bindCredentialToAgentBlocked}).
  */
 export function useBindCredentialToAgents() {
 	const client = useQueryClient();

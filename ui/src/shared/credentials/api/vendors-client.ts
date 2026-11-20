@@ -142,7 +142,9 @@ export function startEditConnection(body: EditConnectionBody): Promise<EditConne
  * without crossing the module-vs-module boundary. Uses the generated
  * ``AgentsService`` (allowed at this repository tier) so a schema
  * change lands automatically. ``expiresAt`` (RFC 3339, in the future) ends
- * the binding then; omitted, the binding never expires.
+ * the binding then. ``null`` is the operator's confirmed "No expiry" and is
+ * sent as such, so it stays distinct from a request that names no end date
+ * (``undefined``, left out), which an org default will fill once there is one.
  */
 export async function bindCredentialToAgentBlocked(
 	agentId: string,
@@ -154,11 +156,13 @@ export async function bindCredentialToAgentBlocked(
 			agentId,
 			requestBody: {
 				credential_id: credentialId,
-				...(expiresAt ? { expires_at: expiresAt } : {}),
+				...(expiresAt !== undefined ? { expires_at: expiresAt } : {}),
 			},
 		});
 	} catch (err) {
-		throw generatedCallError(err, 'Failed to bind the credential.');
+		throw expiryRejected(err)
+			? generatedCallError(err, LAPSED_EXPIRY_MESSAGE, true)
+			: generatedCallError(err, 'Failed to bind the credential.');
 	}
 }
 
@@ -180,11 +184,35 @@ export async function renewCredentialBinding(
 			requestBody: { expires_at: expiresAt },
 		});
 	} catch (err) {
-		// The server's own words: a lapsed choice ("must be in the future") or a
-		// credential the viewer may not renew reads better than a status line.
-		const detail = problemDetailText((err as { body?: unknown })?.body);
+		// The server's own words (a credential the viewer may not renew, say), or
+		// what an end date it refused means: either reads better than a status line.
+		const detail =
+			problemDetailText((err as { body?: unknown })?.body) ??
+			(expiryRejected(err) ? LAPSED_EXPIRY_MESSAGE : null);
 		throw generatedCallError(err, detail ?? 'Failed to renew the binding.', detail != null);
 	}
+}
+
+/**
+ * Why the server refused an `expires_at`: it is only ever refused for not being
+ * in the future. The end date is worked out on this device as the operator
+ * confirms, so it lapses in transit only for a very short custom duration, or
+ * when this device's clock runs behind the server's.
+ */
+const LAPSED_EXPIRY_MESSAGE =
+	'That end date had already passed when it reached the server. Choose the duration again; if this keeps happening, check this device’s clock.';
+
+/** A 422 whose field errors include `expires_at` (FastAPI's `detail` list). */
+function expiryRejected(err: unknown): boolean {
+	if ((err as { status?: unknown })?.status !== 422) return false;
+	const detail = (err as { body?: { detail?: unknown } })?.body?.detail;
+	return (
+		Array.isArray(detail) &&
+		detail.some((d) => {
+			const loc = (d as { loc?: unknown })?.loc;
+			return Array.isArray(loc) && loc[loc.length - 1] === 'expires_at';
+		})
+	);
 }
 
 /** A generated-client failure as an {@link IntegrationsApiError}: the error's

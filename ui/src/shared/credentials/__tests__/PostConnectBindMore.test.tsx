@@ -77,6 +77,7 @@ describe('PostConnectBindMore — how long the access lasts', () => {
 		expect(posts).toHaveLength(0);
 		await user.click(screen.getByRole('button', { name: 'Bind without expiry' }));
 		await waitFor(() => expect(posts).toHaveLength(1));
-		expect(posts[0].body).toEqual({ credential_id: 'cred_new' });
+		// A confirmed "No expiry" is said, not left out (an org default would fill a gap).
+		expect(posts[0].body).toEqual({ credential_id: 'cred_new', expires_at: null });
 	});
 });
