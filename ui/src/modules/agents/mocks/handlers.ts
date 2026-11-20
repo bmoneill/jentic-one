@@ -2105,6 +2105,7 @@ export const agentsHandlers = [
 				return {
 					agent_id: b.agent_id,
 					agent_name: agent?.name ?? b.agent_id,
+					owner_id: agent?.owner_id ?? null,
 					bound_at: b.bound_at,
 					rule_set_id: b.rule_set_id,
 					status: agent?.status ?? 'active',

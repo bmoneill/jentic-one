@@ -3998,6 +3998,7 @@ components:
           expired: false
           expires_at: '2026-12-31T23:59:00Z'
           last_used_at: '2026-02-03T14:05:00Z'
+          owner_id: usr_6968b3987ee4c3ec0b4ee3b9
           rule_set_id: prs_6968b3987c22b63e87e79f05
           status: active
           suspended: false
@@ -4037,6 +4038,7 @@ components:
         expired: false
         expires_at: '2026-12-31T23:59:00Z'
         last_used_at: '2026-02-03T14:05:00Z'
+        owner_id: usr_6968b3987ee4c3ec0b4ee3b9
         rule_set_id: prs_6968b3987c22b63e87e79f05
         status: active
         suspended: false
@@ -4077,6 +4079,13 @@ components:
           examples:
           - '2026-02-03T14:05:00Z'
           format: date-time
+          type:
+          - string
+          - 'null'
+        owner_id:
+          description: ID of the user who owns the bound agent; null for an unclaimed self-registration. Changing the binding (suspending, resuming or renewing it) takes the agent's owner or an `org:admin`, on top of the credential's own checks.
+          examples:
+          - usr_6968b3987ee4c3ec0b4ee3b9
           type:
           - string
           - 'null'

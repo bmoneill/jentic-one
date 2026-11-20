@@ -6704,6 +6704,7 @@
                 "expired": false,
                 "expires_at": "2026-12-31T23:59:00Z",
                 "last_used_at": "2026-02-03T14:05:00Z",
+                "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
                 "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                 "status": "active",
                 "suspended": false,
@@ -6726,6 +6727,7 @@
                   "expired": false,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "last_used_at": "2026-02-03T14:05:00Z",
+                  "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "status": "active",
                   "suspended": false,
@@ -6776,6 +6778,7 @@
             "expired": false,
             "expires_at": "2026-12-31T23:59:00Z",
             "last_used_at": "2026-02-03T14:05:00Z",
+            "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
             "rule_set_id": "prs_6968b3987c22b63e87e79f05",
             "status": "active",
             "suspended": false,
@@ -6841,6 +6844,20 @@
             "description": "When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.",
             "examples": [
               "2026-02-03T14:05:00Z"
+            ]
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ID of the user who owns the bound agent; null for an unclaimed self-registration. Changing the binding (suspending, resuming or renewing it) takes the agent's owner or an `org:admin`, on top of the credential's own checks.",
+            "examples": [
+              "usr_6968b3987ee4c3ec0b4ee3b9"
             ]
           },
           "rule_set_id": {
@@ -34094,6 +34111,7 @@
                       "expired": false,
                       "expires_at": "2026-12-31T23:59:00Z",
                       "last_used_at": "2026-02-03T14:05:00Z",
+                      "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
                       "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                       "status": "active",
                       "suspended": false,

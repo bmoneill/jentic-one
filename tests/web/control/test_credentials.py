@@ -29,6 +29,7 @@ from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.config import PipedreamProviderConfig
 from jentic_one.shared.context import Context
 from jentic_one.shared.models import ActorType
+from tests.web.conftest import seeded_jwt_user
 from tests.web.control.conftest import CRED_WRITER_IDENTITY, _build_app, _effective
 
 pytestmark = pytest.mark.integration
@@ -760,6 +761,33 @@ async def test_list_credential_agents_expiry(
     assert rows[expired_id]["expired"] is True
     assert rows[open_id]["expires_at"] is None
     assert rows[open_id]["expired"] is False
+
+
+async def test_list_credential_agents_owner(
+    cred_writer_client: TestClient, web_context: Context, bound_agents: tuple[str, list[str]]
+) -> None:
+    """Each row names the bound agent's owner, so a client can offer a change to
+    the binding (renewing it, say) only where the agent's owner check would pass;
+    an unclaimed agent reads null."""
+    credential_id, (owned_id, unclaimed_id) = bound_agents
+    async with seeded_jwt_user(web_context, "usr_webtest_agent_owner") as owner_id:
+        async with web_context.admin_db.transaction() as session:
+            await session.execute(
+                text("UPDATE agents SET owner_id = :owner WHERE id = :id"),
+                {"owner": owner_id, "id": owned_id},
+            )
+        try:
+            resp = cred_writer_client.get(f"/credentials/{credential_id}/agents")
+            assert resp.status_code == 200, resp.text
+            rows = {r["agent_id"]: r for r in resp.json()["data"]}
+            assert rows[owned_id]["owner_id"] == owner_id
+            assert rows[unclaimed_id]["owner_id"] is None
+        finally:
+            # The owner row goes when this block ends; the agent can't point at it.
+            async with web_context.admin_db.transaction() as session:
+                await session.execute(
+                    text("UPDATE agents SET owner_id = NULL WHERE id = :id"), {"id": owned_id}
+                )
 
 
 def test_list_credential_agents_empty(cred_writer_client: TestClient) -> None:

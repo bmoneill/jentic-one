@@ -31,6 +31,10 @@ export type CredentialAgentResponse = {
      */
     last_used_at?: (string | null);
     /**
+     * ID of the user who owns the bound agent; null for an unclaimed self-registration. Changing the binding (suspending, resuming or renewing it) takes the agent's owner or an `org:admin`, on top of the credential's own checks.
+     */
+    owner_id?: (string | null);
+    /**
      * Shared permission rule set this binding points at, if any. While attached, the set's ordered list is the binding's effective policy; null means the binding's inline rules apply.
      */
     rule_set_id?: (string | null);

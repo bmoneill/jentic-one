@@ -561,6 +561,7 @@ async def list_credential_agents(
             CredentialAgentResponse(
                 agent_id=row.agent_id,
                 agent_name=row.agent_name,
+                owner_id=row.agent_owner_id,
                 status=row.agent_status,
                 bound_at=row.bound_at,
                 suspended=row.suspended,

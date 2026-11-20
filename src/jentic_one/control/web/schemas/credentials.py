@@ -999,6 +999,16 @@ class CredentialAgentResponse(BaseModel):
 
     agent_id: str = Field(description="ID of the bound agent.", examples=[ex.AGENT_ID])
     agent_name: str = Field(description="Name of the bound agent.", examples=["billing-assistant"])
+    owner_id: str | None = Field(
+        default=None,
+        examples=[ex.USER_ID],
+        description=(
+            "ID of the user who owns the bound agent; null for an unclaimed "
+            "self-registration. Changing the binding (suspending, resuming or "
+            "renewing it) takes the agent's owner or an `org:admin`, on top of "
+            "the credential's own checks."
+        ),
+    )
     status: str = Field(description="Status of the bound agent.", examples=["active"])
     bound_at: datetime = Field(
         description="When the agent was bound to the credential (RFC 3339).",
