@@ -14,9 +14,11 @@
  * page.
  *
  * The one write here is renewing a binding's end date: Renew opens the shared
- * renew control under its row. It is offered to a viewer who may re-grant this
- * credential — `agents:write`, and its owner or an `org:admin`, the same checks
- * as resuming a binding.
+ * renew control under its row. It takes the same checks as resuming a binding:
+ * `agents:write`, the credential's owner or an `org:admin`, AND the agent's
+ * owner or an `org:admin`. A credential's owner sees other users' agents here
+ * too, so Renew is offered row by row, only on the viewer's own agents (every
+ * row, for an admin).
  *
  * Every host renders this inside an overlay, and on the Agents surface that
  * overlay covers the destination. So a plain in-tab click asks the host to
@@ -36,6 +38,7 @@ import { cn, formatTimestamp, isolateText, timeAgo } from '@/shared/lib/utils';
 import { AGENTS_WRITE, useCanAccess, useOptionalCurrentUser } from '@/shared/auth';
 import { useCredentialAgents, type CredentialAgentResponse } from '@/shared/credentials/api';
 import { credentialEditableBy } from '@/shared/credentials/lib/credentialAuthority';
+import { agentBindingChangeableBy } from '@/shared/credentials/lib/bindAuthority';
 import {
 	bindingExpiresSoon,
 	bindingExpiryLabel,
@@ -70,8 +73,9 @@ export function BoundAgentsSection({
 		createdBy !== undefined && !credentialEditableBy({ created_by: createdBy }, viewer);
 	// Renewing re-grants the credential: its owner or an admin, with
 	// agents:write. An owner that can't be read is not the viewer — fail closed.
+	// Each row then also needs the viewer to own its agent (or be an admin).
 	const mayWriteAgents = useCanAccess(AGENTS_WRITE);
-	const canRenew =
+	const mayRenewCredential =
 		mayWriteAgents &&
 		createdBy !== undefined &&
 		credentialEditableBy({ created_by: createdBy }, viewer);
@@ -119,7 +123,9 @@ export function BoundAgentsSection({
 							key={row.agent_id}
 							row={row}
 							credentialId={credentialId}
-							canRenew={canRenew}
+							canRenew={
+								mayRenewCredential && agentBindingChangeableBy(row.owner_id, viewer)
+							}
 							renewOpen={renewing === row.agent_id}
 							onToggleRenew={(): void =>
 								setRenewing((current) =>

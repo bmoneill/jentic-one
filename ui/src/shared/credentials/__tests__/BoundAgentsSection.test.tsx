@@ -22,6 +22,7 @@ function seedBoundAgents(
 	rows: Array<{
 		agent_id: string;
 		agent_name: string;
+		owner_id?: string | null;
 		suspended?: boolean;
 		suspended_reason?: string | null;
 		last_used_at?: string | null;
@@ -38,6 +39,7 @@ function seedBoundAgents(
 				data: rows.map((r) => ({
 					agent_id: r.agent_id,
 					agent_name: r.agent_name,
+					...('owner_id' in r && { owner_id: r.owner_id }),
 					bound_at: '2026-05-02T09:00:00Z',
 					rule_set_id: null,
 					status: 'active',
@@ -256,6 +258,56 @@ describe('BoundAgentsSection — whose agents the list holds', () => {
 		expect(await screen.findByTestId('bound-agents-empty')).toHaveTextContent(
 			'No agents are bound to this credential.',
 		);
+	});
+
+	it.each([
+		[
+			"the credential's owner offers it only on their own agents",
+			'usr_owner',
+			['agents:write'],
+			['own-agent'],
+		],
+		[
+			'an org:admin offers it on every agent',
+			'usr_admin',
+			['org:admin'],
+			['own-agent', 'other-agent', 'unclaimed-agent'],
+		],
+	])('Renew: %s', async (_label, id, permissions, renewable) => {
+		// The server renews only for the agent's owner (or an admin) on top of the
+		// credential's: a Renew on someone else's agent would always 404.
+		seedViewer(id, permissions);
+		resetCredentialsStore([
+			makeMockCredential({ credential_id: 'cred_team_1', created_by: 'usr_owner' }),
+		]);
+		seedBoundAgents('cred_team_1', [
+			{
+				agent_id: 'agnt_own',
+				agent_name: 'own-agent',
+				owner_id: 'usr_owner',
+				expires_at: null,
+			},
+			{
+				agent_id: 'agnt_other',
+				agent_name: 'other-agent',
+				owner_id: 'usr_other',
+				expires_at: null,
+			},
+			{
+				agent_id: 'agnt_unclaimed',
+				agent_name: 'unclaimed-agent',
+				owner_id: null,
+				expires_at: null,
+			},
+		]);
+		renderAuthed('cred_team_1');
+
+		expect(await screen.findByText('Bound agents (3)')).toBeInTheDocument();
+		const offered = screen
+			.getAllByTestId('bound-agent-row')
+			.filter((row) => within(row).queryByTestId('bound-agent-renew') != null)
+			.map((row) => within(row).getByRole('link').textContent);
+		expect(offered).toEqual(renewable);
 	});
 
 	it('says "your agents" to a viewer the credential is shared with', async () => {
