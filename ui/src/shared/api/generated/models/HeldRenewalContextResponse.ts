@@ -1,0 +1,43 @@
+/* generated using openapi-typescript-codegen -- do not edit */
+/* istanbul ignore file */
+/* tslint:disable */
+/* eslint-disable */
+import type { GrantEndReason } from './GrantEndReason';
+/**
+ * The binding a `grant_renewal` hold would renew, as it stands now.
+ */
+export type HeldRenewalContextResponse = {
+    /**
+     * Whether the caller may grant fresh access (else it can only deny): a person who owns the agent and the credential, or an `org:admin`.
+     */
+    can_renew?: boolean;
+    /**
+     * Which limit ended it: `end_date`, `idle` or `uses`; null if it holds again (renewed since).
+     */
+    expired_reason?: (GrantEndReason | null);
+    /**
+     * Its current end date.
+     */
+    expires_at?: (string | null);
+    /**
+     * Whether its owner is warned before going idle.
+     */
+    idle_warning?: boolean;
+    /**
+     * Its last recorded use; null if never used.
+     */
+    last_used_at?: (string | null);
+    /**
+     * Its current idle limit in seconds.
+     */
+    max_idle_period?: (number | null);
+    /**
+     * Its use count (1 is single use).
+     */
+    max_quota?: (number | null);
+    /**
+     * Uses left under its count.
+     */
+    quota_remaining?: (number | null);
+};
+

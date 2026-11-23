@@ -47,6 +47,7 @@ from jentic_one.broker.core.errors import (
     ApprovalPendingLimitError,
     AsyncCookieEncryptionUnavailableError,
     BrokerError,
+    CredentialBindingExpiredError,
     IdempotencyConflictError,
     IdempotencyInProgressError,
     PayloadTooLargeError,
@@ -167,16 +168,21 @@ from jentic_one.shared.http.injection import (
 from jentic_one.shared.jobs.enqueue import enqueue_job
 from jentic_one.shared.jobs.hold import (
     ENCRYPTED_PAYLOAD_KEY,
+    GRANT_RENEWAL_AGENT_DIRECTIVE,
     HELD_AGENT_DIRECTIVE,
     INBOUND_COOKIE_PAYLOAD_KEY,
     PendingApprovalLimitError,
+    RenewalDeniedError,
+    RenewalPendingError,
     file_hold,
     review_page_path,
 )
 from jentic_one.shared.jobs.hold import agent_name as held_agent_name
 from jentic_one.shared.jobs.protocols import InjectedAuth
 from jentic_one.shared.metrics import get_meter
+from jentic_one.shared.models.actors import ActorType
 from jentic_one.shared.models.events import EventSeverity, EventType
+from jentic_one.shared.models.held_executions import HeldExecutionKind
 from jentic_one.shared.models.jobs import JobKind
 from jentic_one.shared.permissions.evaluation import rule_request_path
 from jentic_one.shared.tracing import (
@@ -704,27 +710,45 @@ async def _handle(
     # path — retired toolkit keys resolve as successor agents. The legacy
     # toolkit-derivation path was deleted in Phase 6b.
     with stage(ServerTimingStage.RULES):
-        authorization = await authorize_execution(
-            ctx=ctx,
-            identity=identity,
-            api=resolved.api,
-            operation_id=resolved.operation.id,
-            method=method,
-            path=rule_request_path(
-                resolved.operation.relative_path, upstream_url, operation_id=resolved.operation.id
-            ),
-            upstream_url=upstream_url,
-            instance=request.url.path,
-            credential_deriver=credential_deriver,
-            agent_rule_evaluator=agent_rule_evaluator,
-            credential_name=request.headers.get("jentic-credential-name"),
-            credential_id=request.headers.get("jentic-credential-id"),
-            request_server_variables=ctx_req.server_variables,
-            server_variables_unresolved=ctx_req.server_variables_unresolved,
-            trace_id=ctx_req.trace_id,
-            operation_path=resolved.operation.path,
-            spec_operation_id=resolved.operation.operation_id,
-        )
+        try:
+            authorization = await authorize_execution(
+                ctx=ctx,
+                identity=identity,
+                api=resolved.api,
+                operation_id=resolved.operation.id,
+                method=method,
+                path=rule_request_path(
+                    resolved.operation.relative_path,
+                    upstream_url,
+                    operation_id=resolved.operation.id,
+                ),
+                upstream_url=upstream_url,
+                instance=request.url.path,
+                credential_deriver=credential_deriver,
+                agent_rule_evaluator=agent_rule_evaluator,
+                credential_name=request.headers.get("jentic-credential-name"),
+                credential_id=request.headers.get("jentic-credential-id"),
+                request_server_variables=ctx_req.server_variables,
+                server_variables_unresolved=ctx_req.server_variables_unresolved,
+                trace_id=ctx_req.trace_id,
+                operation_path=resolved.operation.path,
+                spec_operation_id=resolved.operation.operation_id,
+            )
+        except CredentialBindingExpiredError as exc:
+            # The agent's binding has ended: hold the call so its owner can
+            # give fresh access (D14), when the call can be held at all.
+            if not _renewable(ctx, identity, exc):
+                raise
+            return await _hold_call(
+                request,
+                ctx_req,
+                ctx,
+                identity,
+                credential_id=exc.ended_credential_id or "",
+                allowed_credential_ids=[exc.ended_credential_id or ""],
+                matched_rule_id=None,
+                ended=exc,
+            )
     selected_credential = authorization.selected_credential
     allowed_credential_ids = authorization.allowed_credential_ids
     if selected_credential is not None:
@@ -1305,12 +1329,62 @@ def _review_url(ctx: Context, request: Request, approval_id: str) -> str:
     return build_link(request, path)
 
 
+def _renewable(ctx: Context, identity: Identity, exc: CredentialBindingExpiredError) -> bool:
+    """Whether an ended binding's call can be held for renewal instead of refused.
+
+    Only an agent's call through a binding the resolver named, and only where
+    a held request can be kept (the platform keyset encrypts it).
+    """
+    return (
+        identity.actor_type == ActorType.AGENT
+        and bool(exc.ended_credential_id)
+        and ctx.has_encryption_keyset
+    )
+
+
+def _renewal_refusal(
+    exc: CredentialBindingExpiredError, *, detail: str, extra: dict[str, object]
+) -> CredentialBindingExpiredError:
+    """The ended binding's 403, saying why no renewal was filed this time."""
+    refusal = CredentialBindingExpiredError(
+        f"{exc.detail}; {detail}",
+        extra={**exc.extra, **extra},
+        directive=exc.directive,
+        instance=exc.instance,
+    )
+    refusal.ended_credential_id = exc.ended_credential_id
+    return refusal
+
+
 async def _handle_hold(
     request: Request,
     ctx_req: ExecuteRequestContext,
     ctx: Context,
     identity: Identity,
     authorization: ExecutionAuthorization,
+) -> Response:
+    """File (or join) a require-approval hold on the selected credential (:func:`_hold_call`)."""
+    return await _hold_call(
+        request,
+        ctx_req,
+        ctx,
+        identity,
+        credential_id=authorization.selected_credential.credential_id,
+        allowed_credential_ids=authorization.allowed_credential_ids,
+        matched_rule_id=authorization.matched_rule_id,
+    )
+
+
+async def _hold_call(
+    request: Request,
+    ctx_req: ExecuteRequestContext,
+    ctx: Context,
+    identity: Identity,
+    *,
+    credential_id: str,
+    allowed_credential_ids: list[str],
+    matched_rule_id: str | None,
+    ended: CredentialBindingExpiredError | None = None,
 ) -> Response:
     """File (or join) a require-approval hold and answer the 202 held envelope.
 
@@ -1322,7 +1396,15 @@ async def _handle_hold(
     before anything is written. The fingerprint a join matches on includes the
     inbound ``Cookie`` and semantic headers so only semantically identical
     requests join an existing hold.
+
+    With ``ended`` (the 403 for a binding whose policy has ended), the hold is
+    a ``grant_renewal``: its reviewer can give the binding fresh access and
+    run the call. It never counts against the pending cap. When the binding
+    already has a pending renewal, or a reviewer denied one and nobody has
+    renewed it since, the 403 is raised instead, saying which (with the
+    pending review's link).
     """
+    kind = HeldExecutionKind.GRANT_RENEWAL if ended is not None else HeldExecutionKind.EXECUTION
     if not ctx.has_encryption_keyset:
         raise ApprovalHoldUnavailableError(
             "This call needs human approval, but the deployment has no credentials "
@@ -1331,7 +1413,6 @@ async def _handle_hold(
             instance=request.url.path,
         )
     cfg = ctx.config.held_executions
-    credential_id = authorization.selected_credential.credential_id
     parsed_url = urlparse(ctx_req.upstream_url)
     path = parsed_url.path
     execution_id = mint_execution_id()
@@ -1343,7 +1424,7 @@ async def _handle_hold(
         execution_id=execution_id,
         origin=identity.origin.value,
         selected_credential_id=credential_id,
-        allowed_credential_ids=authorization.allowed_credential_ids,
+        allowed_credential_ids=allowed_credential_ids,
         body=body,
         headers=replay_headers(request.headers),
         inbound_cookie_enc=_captured_cookie(
@@ -1367,7 +1448,7 @@ async def _handle_hold(
                 agent_id=identity.sub,
                 actor_type=identity.actor_type.value,
                 credential_id=credential_id,
-                matched_rule_id=authorization.matched_rule_id,
+                matched_rule_id=matched_rule_id,
                 api_vendor=ctx_req.api_vendor or "",
                 api_name=ctx_req.api_name or "",
                 api_version=ctx_req.api_version or "",
@@ -1384,7 +1465,26 @@ async def _handle_hold(
                 payload=payload,
                 ttl_seconds=cfg.ttl_seconds,
                 max_pending=cfg.max_pending_per_agent,
+                kind=kind,
             )
+        except RenewalPendingError as exc:
+            assert ended is not None
+            review = _review_url(ctx, request, exc.approval_id)
+            raise _renewal_refusal(
+                ended,
+                detail=f"a renewal is waiting for review at {review}",
+                extra={"held_execution_id": exc.approval_id, "review_url": review},
+            ) from exc
+        except RenewalDeniedError as exc:
+            assert ended is not None
+            raise _renewal_refusal(
+                ended,
+                detail=(
+                    f"renewing it was denied on {exc.denied_at.strftime('%Y-%m-%d %H:%M UTC')}"
+                    " and only the operator can renew it now"
+                ),
+                extra={"renewal_denied_at": exc.denied_at.isoformat()},
+            ) from exc
         except PendingApprovalLimitError as exc:
             raise ApprovalPendingLimitError(
                 f"Agent '{identity.sub}' already has {exc.pending} executions pending "
@@ -1400,11 +1500,17 @@ async def _handle_hold(
             # agent row then, so every approval event names the agent alike.
             name = identity.actor_name or await held_agent_name(session, identity.sub)
             agent = summary_label(name, identity.sub)
+            summary = f"Agent {agent} wants to {ctx_req.method} {summary_text(path)}"
+            if ended is not None:
+                summary = (
+                    f"Agent {agent}'s access to {ctx_req.api_vendor} has ended; it asks for "
+                    f"fresh access to {ctx_req.method} {summary_text(path)}"
+                )
             await emit_event_best_effort(
                 session,
                 type=EventType.EXECUTION_APPROVAL_REQUESTED,
                 severity=EventSeverity.WARNING,
-                summary=f"Agent {agent} wants to {ctx_req.method} {summary_text(path)}",
+                summary=summary,
                 requires_action=True,
                 trace_id=valid_trace_id_or_none(ctx_req.trace_id),
                 execution_id=execution_id,
@@ -1422,6 +1528,15 @@ async def _handle_hold(
                     "api_version": ctx_req.api_version,
                     "review_url": review_url,
                     "expires_at": hold.expires_at.isoformat(),
+                    "kind": kind.value,
+                    **(
+                        {
+                            "credential_id": credential_id,
+                            "expired_reason": ended.extra.get("expired_reason"),
+                        }
+                        if ended is not None
+                        else {}
+                    ),
                 },
             )
 
@@ -1431,6 +1546,7 @@ async def _handle_hold(
         job_id=hold.job_id,
         joined=hold.joined,
         method=ctx_req.method,
+        kind=kind.value,
     )
     base = ctx.config.broker.jobs_api_base_url or ""
     held = f"{base}/executions/holds/{hold.approval_id}"
@@ -1441,7 +1557,9 @@ async def _handle_hold(
         agent_directive=held_execution_directive(
             held_execution_id=hold.approval_id,
             review_url=review_url,
-            instruction=HELD_AGENT_DIRECTIVE,
+            instruction=(
+                GRANT_RENEWAL_AGENT_DIRECTIVE if ended is not None else HELD_AGENT_DIRECTIVE
+            ),
         ),
         links=HeldExecutionAcceptedLinks(
             self_link=held, result=f"{held}/result", withdraw=f"{held}:withdraw"

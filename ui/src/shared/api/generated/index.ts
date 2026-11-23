@@ -133,14 +133,17 @@ export type { ExistingCredentialConfirmSessionRequest } from './models/ExistingC
 export type { ExistingCredentialResponse } from './models/ExistingCredentialResponse';
 export type { GovernedHostsResponse } from './models/GovernedHostsResponse';
 export { GrantEndReason } from './models/GrantEndReason';
+export type { GrantRenewalRequest } from './models/GrantRenewalRequest';
 export { GroupBy } from './models/GroupBy';
 export type { HealthResponse } from './models/HealthResponse';
 export type { HeldExecutionDetailResponse } from './models/HeldExecutionDetailResponse';
+export { HeldExecutionKind } from './models/HeldExecutionKind';
 export type { HeldExecutionLinksResponse } from './models/HeldExecutionLinksResponse';
 export type { HeldExecutionListResponse } from './models/HeldExecutionListResponse';
 export type { HeldExecutionResponse } from './models/HeldExecutionResponse';
 export type { HeldExecutionResultResponse } from './models/HeldExecutionResultResponse';
 export { HeldExecutionState } from './models/HeldExecutionState';
+export type { HeldRenewalContextResponse } from './models/HeldRenewalContextResponse';
 export type { HeldRequestResponse } from './models/HeldRequestResponse';
 export type { InspectLinks } from './models/InspectLinks';
 export { InstanceIdentityResponse } from './models/InstanceIdentityResponse';

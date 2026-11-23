@@ -1220,6 +1220,34 @@ class AgentService:
         _apply_last_use(view, last_uses)
         return view
 
+    async def require_renewable(
+        self, agent_id: str, *, credential_id: str, identity: Identity
+    ) -> None:
+        """Raise unless ``identity`` may renew the binding (see :meth:`_require_renewable`)."""
+        await self._require_renewable(agent_id, credential_id=credential_id, identity=identity)
+
+    async def _require_renewable(
+        self, agent_id: str, *, credential_id: str, identity: Identity
+    ) -> tuple[AgentView, CredentialRef]:
+        """Check ``identity`` may renew the binding; return its agent and credential.
+
+        Renewing re-grants the credential, so it takes the checks of resuming
+        a binding: a human (never an agent), the agent's owner or an
+        ``org:admin`` (else ``ActorNotFoundError``), and the credential's owner
+        or an ``org:admin`` (else ``CredentialNotVisibleError``). The renew
+        endpoint and a ``grant_renewal`` decision both go through here.
+        """
+        if identity.actor_type != ActorType.USER:
+            raise CredentialNotVisibleError(credential_id)
+        agent = await self._load_binding_agent(agent_id, identity=identity)
+        ref = None
+        if self._ctx.is_db_allowed("control"):
+            async with self._ctx.control_db.session() as session:
+                ref = await CredentialRefRepository.get_by_id(session, credential_id)
+        if ref is None or not self._can_bind_credential(identity, ref.created_by):
+            raise CredentialNotVisibleError(credential_id)
+        return agent, ref
+
     async def renew_credential(
         self,
         agent_id: str,
@@ -1253,15 +1281,9 @@ class AgentService:
             policy["idle_warning"] = idle_warning
         if not isinstance(max_quota, Unset):
             policy["max_quota"] = max_quota
-        if identity.actor_type != ActorType.USER:
-            raise CredentialNotVisibleError(credential_id)
-        agent = await self._load_binding_agent(agent_id, identity=identity)
-        ref = None
-        if self._ctx.is_db_allowed("control"):
-            async with self._ctx.control_db.session() as session:
-                ref = await CredentialRefRepository.get_by_id(session, credential_id)
-        if ref is None or not self._can_bind_credential(identity, ref.created_by):
-            raise CredentialNotVisibleError(credential_id)
+        agent, ref = await self._require_renewable(
+            agent_id, credential_id=credential_id, identity=identity
+        )
         async with self._ctx.admin_db.transaction() as session:
             before = await AgentCredentialBindingRepository.get(
                 session, agent_id=agent_id, credential_id=credential_id

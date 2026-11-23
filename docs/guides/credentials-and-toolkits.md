@@ -126,7 +126,12 @@ The outcomes:
   `403 credential_binding_expired`, shaped the same way: only the operator
   can renew it (`PATCH /agents/{agent_id}/credentials/{credential_id}`), a
   new connect answers `409 connect_session_binding_expired`, and the agent
-  can no longer read the credential through the expired binding.
+  can no longer read the credential through the expired binding. Where the
+  broker can hold calls, an agent's call through an ended binding is held
+  for renewal instead (a `202`, see
+  [executions requiring approval](executions-requiring-approval.md)), and the
+  `403` is reserved for further calls while that renewal is pending or after
+  it was denied.
   Suspension is reported first. A binding can also carry an idle limit
   (`max_idle_period`, 1 to 999 days): it ends once it goes that long without
   a call, counted from its last use or its last renewal, whichever is later

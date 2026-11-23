@@ -8608,6 +8608,33 @@
               }
             ],
             "description": "Optional reason, recorded with the decision."
+          },
+          "renewal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrantRenewalRequest"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Approving a `grant_renewal` hold: the binding's fresh policy, which replaces its old one (renewing also restarts its idle clock and restores its uses). Required to approve one; refused on any other hold.",
+            "examples": [
+              {
+                "expires_at": "2026-02-15T09:30:00Z",
+                "idle_warning": false,
+                "max_idle_period": 1209600,
+                "max_quota": 1
+              }
+            ]
+          },
+          "run": {
+            "default": true,
+            "description": "With `renewal`: whether the held call runs once access is renewed. `false` renews and fails the call (for a stale one).",
+            "examples": [
+              true
+            ],
+            "type": "boolean"
           }
         },
         "required": [
@@ -11886,6 +11913,76 @@
         ],
         "type": "string"
       },
+      "GrantRenewalRequest": {
+        "additionalProperties": false,
+        "description": "Fresh access for an ended binding. Every field left out sets no such limit.",
+        "examples": [
+          {
+            "expires_at": "2026-02-15T09:30:00Z",
+            "idle_warning": false,
+            "max_idle_period": 1209600,
+            "max_quota": 1
+          }
+        ],
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New end date (RFC 3339, in the future); null for no end date.",
+            "examples": [
+              "2026-02-15T09:30:00Z"
+            ]
+          },
+          "idle_warning": {
+            "default": false,
+            "description": "Warn the agent's owner before the idle limit is reached.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "maximum": 86313600.0,
+                "minimum": 86400.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New idle limit in seconds (1 day to 999 days); null for none.",
+            "examples": [
+              1209600
+            ]
+          },
+          "max_quota": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "New use count (1 is single use); null for unlimited calls.",
+            "examples": [
+              1
+            ]
+          }
+        },
+        "type": "object"
+      },
       "GroupBy": {
         "description": "Grouping dimension for usage statistics.\n\n``CREDENTIAL`` groups by the credential an execution ran with\n(``execution_records.credential_id``).",
         "enum": [
@@ -11974,10 +12071,21 @@
             "execution_status": "held",
             "expires_at": "2026-01-15T10:30:00Z",
             "id": "held_6968b398a1c4e2d07b5f93c6",
+            "kind": "execution",
             "matched_rule_id": "apr_6968b398c4e1a2b3d5f60718",
             "method": "POST",
             "operation_id": "listCharges",
             "path": "/v1/refunds",
+            "renewal": {
+              "can_renew": true,
+              "expired_reason": "idle",
+              "expires_at": "2026-01-10T00:00:00Z",
+              "idle_warning": false,
+              "last_used_at": "2026-01-01T09:30:00Z",
+              "max_idle_period": 1209600,
+              "max_quota": 1,
+              "quota_remaining": 0
+            },
             "request": {
               "body": "charge=ch_3MmlLrLkdIwHu7ix0snN0B15",
               "body_truncated": false,
@@ -12167,6 +12275,14 @@
             ],
             "type": "string"
           },
+          "kind": {
+            "$ref": "#/components/schemas/HeldExecutionKind",
+            "default": "execution",
+            "description": "Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent's binding to the credential has ended; approving gives it fresh access first).",
+            "examples": [
+              "execution"
+            ]
+          },
           "matched_rule_id": {
             "anyOf": [
               {
@@ -12208,6 +12324,29 @@
               "/v1/refunds"
             ],
             "type": "string"
+          },
+          "renewal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HeldRenewalContextResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For a `grant_renewal` hold: the binding it would renew.",
+            "examples": [
+              {
+                "can_renew": true,
+                "expired_reason": "idle",
+                "expires_at": "2026-01-10T00:00:00Z",
+                "idle_warning": false,
+                "last_used_at": "2026-01-01T09:30:00Z",
+                "max_idle_period": 1209600,
+                "max_quota": 1,
+                "quota_remaining": 0
+              }
+            ]
           },
           "request": {
             "anyOf": [
@@ -12288,6 +12427,14 @@
           "_links"
         ],
         "type": "object"
+      },
+      "HeldExecutionKind": {
+        "description": "Why a call is held.\n\n``execution``: a ``require-approval`` rule matched; approving runs it.\n``grant_renewal``: the agent's binding to the credential has ended (its end\ndate, idle limit or uses); approving gives the binding fresh access first,\nand may then run the call.",
+        "enum": [
+          "execution",
+          "grant_renewal"
+        ],
+        "type": "string"
       },
       "HeldExecutionLinksResponse": {
         "description": "HAL-style links for a held execution.",
@@ -12380,6 +12527,7 @@
                 "execution_status": "held",
                 "expires_at": "2026-01-15T10:30:00Z",
                 "id": "held_6968b398a1c4e2d07b5f93c6",
+                "kind": "execution",
                 "matched_rule_id": "apr_6968b398c4e1a2b3d5f60718",
                 "method": "POST",
                 "operation_id": "listCharges",
@@ -12419,6 +12567,7 @@
                   "execution_status": "held",
                   "expires_at": "2026-01-15T10:30:00Z",
                   "id": "held_6968b398a1c4e2d07b5f93c6",
+                  "kind": "execution",
                   "matched_rule_id": "apr_6968b398c4e1a2b3d5f60718",
                   "method": "POST",
                   "operation_id": "listCharges",
@@ -12486,6 +12635,7 @@
             "execution_status": "held",
             "expires_at": "2026-01-15T10:30:00Z",
             "id": "held_6968b398a1c4e2d07b5f93c6",
+            "kind": "execution",
             "matched_rule_id": "apr_6968b398c4e1a2b3d5f60718",
             "method": "POST",
             "operation_id": "listCharges",
@@ -12644,6 +12794,14 @@
               "held_6968b398a1c4e2d07b5f93c6"
             ],
             "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/HeldExecutionKind",
+            "default": "execution",
+            "description": "Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent's binding to the credential has ended; approving gives it fresh access first).",
+            "examples": [
+              "execution"
+            ]
           },
           "matched_rule_id": {
             "anyOf": [
@@ -12839,6 +12997,126 @@
           "withdrawn"
         ],
         "type": "string"
+      },
+      "HeldRenewalContextResponse": {
+        "description": "The binding a `grant_renewal` hold would renew, as it stands now.",
+        "examples": [
+          {
+            "can_renew": true,
+            "expired_reason": "idle",
+            "expires_at": "2026-01-10T00:00:00Z",
+            "idle_warning": false,
+            "last_used_at": "2026-01-01T09:30:00Z",
+            "max_idle_period": 1209600,
+            "max_quota": 1,
+            "quota_remaining": 0
+          }
+        ],
+        "properties": {
+          "can_renew": {
+            "default": false,
+            "description": "Whether the caller may grant fresh access (else it can only deny): a person who owns the agent and the credential, or an `org:admin`.",
+            "examples": [
+              true
+            ],
+            "type": "boolean"
+          },
+          "expired_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrantEndReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which limit ended it: `end_date`, `idle` or `uses`; null if it holds again (renewed since).",
+            "examples": [
+              "idle"
+            ]
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its current end date.",
+            "examples": [
+              "2026-01-10T00:00:00Z"
+            ]
+          },
+          "idle_warning": {
+            "default": false,
+            "description": "Whether its owner is warned before going idle.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its last recorded use; null if never used.",
+            "examples": [
+              "2026-01-01T09:30:00Z"
+            ]
+          },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its current idle limit in seconds.",
+            "examples": [
+              1209600
+            ]
+          },
+          "max_quota": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its use count (1 is single use).",
+            "examples": [
+              1
+            ]
+          },
+          "quota_remaining": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Uses left under its count.",
+            "examples": [
+              0
+            ]
+          }
+        },
+        "type": "object"
       },
       "HeldRequestResponse": {
         "description": "The held call exactly as it runs if approved (credentials are injected at run time).",
@@ -37807,6 +38085,7 @@
                       "execution_status": "held",
                       "expires_at": "2026-01-15T10:30:00Z",
                       "id": "held_6968b398a1c4e2d07b5f93c6",
+                      "kind": "execution",
                       "matched_rule_id": "apr_6968b398c4e1a2b3d5f60718",
                       "method": "POST",
                       "operation_id": "listCharges",
@@ -37897,10 +38176,21 @@
                   "execution_status": "held",
                   "expires_at": "2026-01-15T10:30:00Z",
                   "id": "held_6968b398a1c4e2d07b5f93c6",
+                  "kind": "execution",
                   "matched_rule_id": "apr_6968b398c4e1a2b3d5f60718",
                   "method": "POST",
                   "operation_id": "listCharges",
                   "path": "/v1/refunds",
+                  "renewal": {
+                    "can_renew": true,
+                    "expired_reason": "idle",
+                    "expires_at": "2026-01-10T00:00:00Z",
+                    "idle_warning": false,
+                    "last_used_at": "2026-01-01T09:30:00Z",
+                    "max_idle_period": 1209600,
+                    "max_quota": 1,
+                    "quota_remaining": 0
+                  },
                   "request": {
                     "body": "charge=ch_3MmlLrLkdIwHu7ix0snN0B15",
                     "body_truncated": false,
@@ -38109,7 +38399,7 @@
     "/executions/holds/{held_execution_id}:decide": {
       "description": "`POST`: Approve or deny a held execution.",
       "post": {
-        "description": "Decide a pending held execution — the agent's owner or an ``org:admin`` only.\n\n``approve`` releases the call, which is re-authorized and run once; ``deny``\nfails it with a permission-denied result. The first decision wins: deciding\none that is no longer pending (or has expired) answers ``409``. An agent\ncaller is always refused (``403``), whatever its permissions.",
+        "description": "Decide a pending held execution — the agent's owner or an ``org:admin`` only.\n\n``approve`` releases the call, which is re-authorized and run once; ``deny``\nfails it with a permission-denied result. The first decision wins: deciding\none that is no longer pending (or has expired) answers ``409``. An agent\ncaller is always refused (``403``), whatever its permissions.\n\nA ``grant_renewal`` hold (the agent's binding ended) is approved with\n``renewal``, the binding's fresh policy, which replaces its old one; with\n``run: false`` the binding is renewed and the call fails instead of\nrunning. Only a reviewer who may renew the binding directly (a person who\nowns the agent and the credential, or an ``org:admin``) can approve one\n(``403 held_execution_renewal_forbidden`` otherwise); anyone who can\ndecide may deny it. ``renewal`` on any other hold is a ``422``.",
         "operationId": "decideHeldExecution",
         "parameters": [
           {
@@ -38155,6 +38445,7 @@
                   "execution_status": "held",
                   "expires_at": "2026-01-15T10:30:00Z",
                   "id": "held_6968b398a1c4e2d07b5f93c6",
+                  "kind": "execution",
                   "matched_rule_id": "apr_6968b398c4e1a2b3d5f60718",
                   "method": "POST",
                   "operation_id": "listCharges",
@@ -38245,6 +38536,7 @@
                   "execution_status": "held",
                   "expires_at": "2026-01-15T10:30:00Z",
                   "id": "held_6968b398a1c4e2d07b5f93c6",
+                  "kind": "execution",
                   "matched_rule_id": "apr_6968b398c4e1a2b3d5f60718",
                   "method": "POST",
                   "operation_id": "listCharges",

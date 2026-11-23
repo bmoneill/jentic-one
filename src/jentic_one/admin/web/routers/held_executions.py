@@ -31,6 +31,7 @@ from jentic_one.admin.web.schemas.held_executions import (
     HeldExecutionResultResponse,
     HeldRequestResponse,
 )
+from jentic_one.shared.auth.grant_renewal import GrantRenewalPolicy
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.jobs.hold import PROBLEM_CONTENT_TYPE, review_page_path
 from jentic_one.shared.models.held_executions import HeldExecutionState
@@ -251,10 +252,27 @@ async def decide_held_execution(
     fails it with a permission-denied result. The first decision wins: deciding
     one that is no longer pending (or has expired) answers ``409``. An agent
     caller is always refused (``403``), whatever its permissions.
+
+    A ``grant_renewal`` hold (the agent's binding ended) is approved with
+    ``renewal``, the binding's fresh policy, which replaces its old one; with
+    ``run: false`` the binding is renewed and the call fails instead of
+    running. Only a reviewer who may renew the binding directly (a person who
+    owns the agent and the credential, or an ``org:admin``) can approve one
+    (``403 held_execution_renewal_forbidden`` otherwise); anyone who can
+    decide may deny it. ``renewal`` on any other hold is a ``422``.
     """
     view = await svc.decide(
         held_execution_id,
-        DecideInput(decision=body.decision, reason=body.reason),
+        DecideInput(
+            decision=body.decision,
+            reason=body.reason,
+            renewal=(
+                GrantRenewalPolicy(**body.renewal.model_dump())
+                if body.renewal is not None
+                else None
+            ),
+            run=body.run,
+        ),
         identity=identity,
     )
     return _response(view, request)

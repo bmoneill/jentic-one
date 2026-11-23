@@ -151,6 +151,14 @@ export class HeldExecutionsService {
      * fails it with a permission-denied result. The first decision wins: deciding
      * one that is no longer pending (or has expired) answers ``409``. An agent
      * caller is always refused (``403``), whatever its permissions.
+     *
+     * A ``grant_renewal`` hold (the agent's binding ended) is approved with
+     * ``renewal``, the binding's fresh policy, which replaces its old one; with
+     * ``run: false`` the binding is renewed and the call fails instead of
+     * running. Only a reviewer who may renew the binding directly (a person who
+     * owns the agent and the credential, or an ``org:admin``) can approve one
+     * (``403 held_execution_renewal_forbidden`` otherwise); anyone who can
+     * decide may deny it. ``renewal`` on any other hold is a ``422``.
      * @returns HeldExecutionResponse Successful Response
      * @throws ApiError
      */

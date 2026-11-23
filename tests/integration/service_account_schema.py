@@ -68,6 +68,8 @@ _BINDING_IDLE_LIMIT_HEAD = "a7c3e9f1b2d4"  # pragma: allowlist secret
 _BINDING_IDLE_WARNING_HEAD = "b8d4f0a2c3e5"  # pragma: allowlist secret
 #: The binding use count (``max_quota``, ``quota_remaining``).
 _BINDING_USE_COUNT_HEAD = "c9e5a1b3d4f6"  # pragma: allowlist secret
+#: The held execution kind (``grant_renewal`` holds).
+_HELD_EXECUTION_KIND_HEAD = "d0f6b2c4e5a7"  # pragma: allowlist secret
 
 
 def _create_tables(op: Operations, *, pg: bool) -> None:
@@ -248,6 +250,7 @@ def restore_pre_sa_drop_admin(integration_config: AppConfig) -> None:
         [_BINDING_IDLE_LIMIT_HEAD],
         [_BINDING_IDLE_WARNING_HEAD],
         [_BINDING_USE_COUNT_HEAD],
+        [_HELD_EXECUTION_KIND_HEAD],
     ), f"extend restore_pre_sa_drop_admin for new heads {heads}"
     if not asyncio.run(_has_service_account_tables(db_config)):
         command.downgrade(cfg, _SA_DROP)

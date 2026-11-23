@@ -301,9 +301,14 @@ class CredentialBindingExpiredError(BrokerError):
     connect, which is refused while the expired binding stands. Distinct from
     ``action_denied`` (no rule change brings it back) and from suspension
     (resuming would not help).
+
+    ``ended_credential_id`` names the credential whose binding ended, when the
+    resolver knows it, so the execute route can hold the call for renewal
+    (D14). It is never rendered into the problem body.
     """
 
     default_type = "credential_binding_expired"
+    ended_credential_id: str | None = None
 
 
 class CredentialPendingError(BrokerError):

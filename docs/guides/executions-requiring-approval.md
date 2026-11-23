@@ -147,6 +147,34 @@ withdrawal and expiry is audit-logged and emits an event
 (`execution.approval_requested` when filed, `execution.approval_decided`,
 `execution.approval_withdrawn`, `execution.approval_expired`).
 
+## Calls held because access ended
+
+When an agent calls through a credential binding that has ended (its end
+date passed, it went unused for its idle limit, or its uses ran out), the
+call is held the same way, with `kind: grant_renewal`, instead of being
+refused. The agent gets the same `202` held envelope, telling it that its
+access ended and its owner has been asked to renew it.
+
+- **One pending renewal per binding.** The same call again joins it; any
+  other call through the binding gets `403 credential_binding_expired` with
+  the pending review's `review_url` and `held_execution_id`. Renewal holds do
+  not count against `held_executions.max_pending_per_agent`.
+- **Deciding.** Approve with the binding's fresh policy:
+  `{"decision": "approve", "renewal": {"expires_at": "…", "max_idle_period": …,
+  "idle_warning": false, "max_quota": 1}}` (each limit left out sets none).
+  The binding's policy is replaced in place (its rules stay), its idle clock
+  restarts and its uses are restored, then the call runs. Add `"run": false`
+  to renew without running a stale call (it fails with
+  `approval_renewed_without_run`). **Deny** leaves the binding ended.
+- **Who may approve:** someone who could renew the binding directly — a person
+  with `agents:write` who owns the agent and the credential, or an org admin
+  (`403 held_execution_renewal_forbidden` otherwise; the review read says so
+  in `renewal.can_renew`). Anyone who may review may deny.
+- **After a denial**, later calls get the `403` saying when it was denied,
+  and no new renewal is filed until the binding is renewed from the console.
+- A call whose agent no longer holds the binding at run time, or whose
+  renewal did not land, is refused when it runs: the run re-checks access.
+
 ## Lifecycle
 
 | `state` | `execution_status` | How |

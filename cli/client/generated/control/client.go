@@ -821,6 +821,24 @@ func (e HeldExecutionDetailResponseExecutionStatus) Valid() bool {
 	}
 }
 
+// Defines values for HeldExecutionKind.
+const (
+	Execution    HeldExecutionKind = "execution"
+	GrantRenewal HeldExecutionKind = "grant_renewal"
+)
+
+// Valid indicates whether the value is a known member of the HeldExecutionKind enum.
+func (e HeldExecutionKind) Valid() bool {
+	switch e {
+	case Execution:
+		return true
+	case GrantRenewal:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HeldExecutionResponseExecutionStatus.
 const (
 	HeldExecutionResponseExecutionStatusCancelled HeldExecutionResponseExecutionStatus = "cancelled"
@@ -4518,6 +4536,16 @@ type DecideHeldExecutionRequest struct {
 
 	// Reason Optional reason, recorded with the decision.
 	Reason *string `json:"reason,omitempty"`
+
+	// Renewal Approving a `grant_renewal` hold: the binding's fresh policy, which replaces its old one (renewing also restarts its idle clock and restores its uses). Required to approve one; refused on any other hold.
+	//
+	// Examples: {"expires_at":"2026-02-15T09:30:00Z","idle_warning":false,"max_idle_period":1209600,"max_quota":1}
+	Renewal *GrantRenewalRequest `json:"renewal,omitempty"`
+
+	// Run With `renewal`: whether the held call runs once access is renewed. `false` renews and fails the call (for a stale one).
+	//
+	// Examples: true
+	Run *bool `json:"run,omitempty"`
 }
 
 // DenyRequest Request body for denying an agent.
@@ -5583,6 +5611,31 @@ type GovernedHostsResponse struct {
 // GrantEndReason Which limit ended a grant, as binding responses and denials report it.
 type GrantEndReason string
 
+// GrantRenewalRequest Fresh access for an ended binding. Every field left out sets no such limit.
+//
+// Examples: {"expires_at":"2026-02-15T09:30:00Z","idle_warning":false,"max_idle_period":1209600,"max_quota":1}
+type GrantRenewalRequest struct {
+	// ExpiresAt New end date (RFC 3339, in the future); null for no end date.
+	//
+	// Examples: 2026-02-15T09:30:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// IdleWarning Warn the agent's owner before the idle limit is reached.
+	//
+	// Examples: false
+	IdleWarning *bool `json:"idle_warning,omitempty"`
+
+	// MaxIdlePeriod New idle limit in seconds (1 day to 999 days); null for none.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
+
+	// MaxQuota New use count (1 is single use); null for unlimited calls.
+	//
+	// Examples: 1
+	MaxQuota *int `json:"max_quota,omitempty"`
+}
+
 // GroupBy Grouping dimension for usage statistics.
 //
 // “CREDENTIAL“ groups by the credential an execution ran with
@@ -5616,7 +5669,7 @@ type HealthResponse struct {
 
 // HeldExecutionDetailResponse A held execution with the agent context and the held request a reviewer decides on.
 //
-// Examples: {"_links":{"execution":"https://jentic.example.com/executions/exec_6968b3982706c619fe73f0cf","result":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6/result","self":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6","withdraw":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6:withdraw"},"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","agent_owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10","created_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","decided_at":"2026-01-15T09:42:00Z","decided_by":"usr_6968b3987ee4c3ec0b4ee3b9","decision_reason":"Not this account","execution_id":"exec_6968b3982706c619fe73f0cf","execution_status":"held","expires_at":"2026-01-15T10:30:00Z","id":"held_6968b398a1c4e2d07b5f93c6","matched_rule_id":"apr_6968b398c4e1a2b3d5f60718","method":"POST","operation_id":"listCharges","path":"/v1/refunds","request":{"body":"charge=ch_3MmlLrLkdIwHu7ix0snN0B15","body_truncated":false,"method":"POST","url":"https://api.stripe.com/v1/refunds?expand[]=charge"},"review_url":"https://jentic.example.com/app/agents/approvals/held_6968b398a1c4e2d07b5f93c6","state":"pending","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","updated_at":"2026-01-15T09:42:00Z"}
+// Examples: {"_links":{"execution":"https://jentic.example.com/executions/exec_6968b3982706c619fe73f0cf","result":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6/result","self":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6","withdraw":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6:withdraw"},"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","agent_owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10","created_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","decided_at":"2026-01-15T09:42:00Z","decided_by":"usr_6968b3987ee4c3ec0b4ee3b9","decision_reason":"Not this account","execution_id":"exec_6968b3982706c619fe73f0cf","execution_status":"held","expires_at":"2026-01-15T10:30:00Z","id":"held_6968b398a1c4e2d07b5f93c6","kind":"execution","matched_rule_id":"apr_6968b398c4e1a2b3d5f60718","method":"POST","operation_id":"listCharges","path":"/v1/refunds","renewal":{"can_renew":true,"expired_reason":"idle","expires_at":"2026-01-10T00:00:00Z","idle_warning":false,"last_used_at":"2026-01-01T09:30:00Z","max_idle_period":1209600,"max_quota":1,"quota_remaining":0},"request":{"body":"charge=ch_3MmlLrLkdIwHu7ix0snN0B15","body_truncated":false,"method":"POST","url":"https://api.stripe.com/v1/refunds?expand[]=charge"},"review_url":"https://jentic.example.com/app/agents/approvals/held_6968b398a1c4e2d07b5f93c6","state":"pending","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","updated_at":"2026-01-15T09:42:00Z"}
 type HeldExecutionDetailResponse struct {
 	// UnderscoreLinks HAL-style links for a held execution.
 	//
@@ -5698,6 +5751,11 @@ type HeldExecutionDetailResponse struct {
 	// Examples: held_6968b398a1c4e2d07b5f93c6
 	Id string `json:"id"`
 
+	// Kind Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent's binding to the credential has ended; approving gives it fresh access first).
+	//
+	// Examples: execution
+	Kind *HeldExecutionKind `json:"kind,omitempty"`
+
 	// MatchedRuleId The require-approval permission rule that held the call.
 	//
 	// Examples: apr_6968b398c4e1a2b3d5f60718
@@ -5717,6 +5775,11 @@ type HeldExecutionDetailResponse struct {
 	//
 	// Examples: /v1/refunds
 	Path string `json:"path"`
+
+	// Renewal For a `grant_renewal` hold: the binding it would renew.
+	//
+	// Examples: {"can_renew":true,"expired_reason":"idle","expires_at":"2026-01-10T00:00:00Z","idle_warning":false,"last_used_at":"2026-01-01T09:30:00Z","max_idle_period":1209600,"max_quota":1,"quota_remaining":0}
+	Renewal *HeldRenewalContextResponse `json:"renewal,omitempty"`
 
 	// Request The held call.
 	//
@@ -5749,6 +5812,14 @@ type HeldExecutionDetailResponse struct {
 // Examples: held
 type HeldExecutionDetailResponseExecutionStatus string
 
+// HeldExecutionKind Why a call is held.
+//
+// “execution“: a “require-approval“ rule matched; approving runs it.
+// “grant_renewal“: the agent's binding to the credential has ended (its end
+// date, idle limit or uses); approving gives the binding fresh access first,
+// and may then run the call.
+type HeldExecutionKind string
+
 // HeldExecutionLinksResponse HAL-style links for a held execution.
 //
 // Examples: {"execution":"https://jentic.example.com/executions/exec_6968b3982706c619fe73f0cf","result":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6/result","self":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6","withdraw":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6:withdraw"}
@@ -5776,11 +5847,11 @@ type HeldExecutionLinksResponse struct {
 
 // HeldExecutionListResponse A page of held executions.
 //
-// Examples: {"data":[{"_links":{"execution":"https://jentic.example.com/executions/exec_6968b3982706c619fe73f0cf","result":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6/result","self":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6","withdraw":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6:withdraw"},"agent_id":"agnt_6968b3984d1c238dbe7e2e29","api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10","created_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","decided_at":"2026-01-15T09:42:00Z","decided_by":"usr_6968b3987ee4c3ec0b4ee3b9","decision_reason":"Not this account","execution_id":"exec_6968b3982706c619fe73f0cf","execution_status":"held","expires_at":"2026-01-15T10:30:00Z","id":"held_6968b398a1c4e2d07b5f93c6","matched_rule_id":"apr_6968b398c4e1a2b3d5f60718","method":"POST","operation_id":"listCharges","path":"/v1/refunds","review_url":"https://jentic.example.com/app/agents/approvals/held_6968b398a1c4e2d07b5f93c6","state":"pending","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","updated_at":"2026-01-15T09:42:00Z"}],"has_more":true,"next_cursor":"eyJ0IjogIjIwMjYtMDEtMTVUMDk6MzA6MDArMDA6MDAiLCAiaWQiOiAiM2YyYjhjMWUtN2Q0YS00ZTliLWE2YzUtMWQyZTNmNGE1YjZjIn0="}
+// Examples: {"data":[{"_links":{"execution":"https://jentic.example.com/executions/exec_6968b3982706c619fe73f0cf","result":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6/result","self":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6","withdraw":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6:withdraw"},"agent_id":"agnt_6968b3984d1c238dbe7e2e29","api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10","created_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","decided_at":"2026-01-15T09:42:00Z","decided_by":"usr_6968b3987ee4c3ec0b4ee3b9","decision_reason":"Not this account","execution_id":"exec_6968b3982706c619fe73f0cf","execution_status":"held","expires_at":"2026-01-15T10:30:00Z","id":"held_6968b398a1c4e2d07b5f93c6","kind":"execution","matched_rule_id":"apr_6968b398c4e1a2b3d5f60718","method":"POST","operation_id":"listCharges","path":"/v1/refunds","review_url":"https://jentic.example.com/app/agents/approvals/held_6968b398a1c4e2d07b5f93c6","state":"pending","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","updated_at":"2026-01-15T09:42:00Z"}],"has_more":true,"next_cursor":"eyJ0IjogIjIwMjYtMDEtMTVUMDk6MzA6MDArMDA6MDAiLCAiaWQiOiAiM2YyYjhjMWUtN2Q0YS00ZTliLWE2YzUtMWQyZTNmNGE1YjZjIn0="}
 type HeldExecutionListResponse struct {
 	// Data The page of held executions.
 	//
-	// Examples: [{"_links":{"execution":"https://jentic.example.com/executions/exec_6968b3982706c619fe73f0cf","result":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6/result","self":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6","withdraw":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6:withdraw"},"agent_id":"agnt_6968b3984d1c238dbe7e2e29","api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10","created_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","decided_at":"2026-01-15T09:42:00Z","decided_by":"usr_6968b3987ee4c3ec0b4ee3b9","decision_reason":"Not this account","execution_id":"exec_6968b3982706c619fe73f0cf","execution_status":"held","expires_at":"2026-01-15T10:30:00Z","id":"held_6968b398a1c4e2d07b5f93c6","matched_rule_id":"apr_6968b398c4e1a2b3d5f60718","method":"POST","operation_id":"listCharges","path":"/v1/refunds","review_url":"https://jentic.example.com/app/agents/approvals/held_6968b398a1c4e2d07b5f93c6","state":"pending","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","updated_at":"2026-01-15T09:42:00Z"}]
+	// Examples: [{"_links":{"execution":"https://jentic.example.com/executions/exec_6968b3982706c619fe73f0cf","result":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6/result","self":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6","withdraw":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6:withdraw"},"agent_id":"agnt_6968b3984d1c238dbe7e2e29","api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10","created_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","decided_at":"2026-01-15T09:42:00Z","decided_by":"usr_6968b3987ee4c3ec0b4ee3b9","decision_reason":"Not this account","execution_id":"exec_6968b3982706c619fe73f0cf","execution_status":"held","expires_at":"2026-01-15T10:30:00Z","id":"held_6968b398a1c4e2d07b5f93c6","kind":"execution","matched_rule_id":"apr_6968b398c4e1a2b3d5f60718","method":"POST","operation_id":"listCharges","path":"/v1/refunds","review_url":"https://jentic.example.com/app/agents/approvals/held_6968b398a1c4e2d07b5f93c6","state":"pending","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","updated_at":"2026-01-15T09:42:00Z"}]
 	Data []HeldExecutionResponse `json:"data"`
 
 	// HasMore Whether more results exist after this page.
@@ -5796,7 +5867,7 @@ type HeldExecutionListResponse struct {
 
 // HeldExecutionResponse A call held for a human decision, and where it stands.
 //
-// Examples: {"_links":{"execution":"https://jentic.example.com/executions/exec_6968b3982706c619fe73f0cf","result":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6/result","self":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6","withdraw":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6:withdraw"},"agent_id":"agnt_6968b3984d1c238dbe7e2e29","api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10","created_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","decided_at":"2026-01-15T09:42:00Z","decided_by":"usr_6968b3987ee4c3ec0b4ee3b9","decision_reason":"Not this account","execution_id":"exec_6968b3982706c619fe73f0cf","execution_status":"held","expires_at":"2026-01-15T10:30:00Z","id":"held_6968b398a1c4e2d07b5f93c6","matched_rule_id":"apr_6968b398c4e1a2b3d5f60718","method":"POST","operation_id":"listCharges","path":"/v1/refunds","review_url":"https://jentic.example.com/app/agents/approvals/held_6968b398a1c4e2d07b5f93c6","state":"pending","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","updated_at":"2026-01-15T09:42:00Z"}
+// Examples: {"_links":{"execution":"https://jentic.example.com/executions/exec_6968b3982706c619fe73f0cf","result":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6/result","self":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6","withdraw":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6:withdraw"},"agent_id":"agnt_6968b3984d1c238dbe7e2e29","api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10","created_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","decided_at":"2026-01-15T09:42:00Z","decided_by":"usr_6968b3987ee4c3ec0b4ee3b9","decision_reason":"Not this account","execution_id":"exec_6968b3982706c619fe73f0cf","execution_status":"held","expires_at":"2026-01-15T10:30:00Z","id":"held_6968b398a1c4e2d07b5f93c6","kind":"execution","matched_rule_id":"apr_6968b398c4e1a2b3d5f60718","method":"POST","operation_id":"listCharges","path":"/v1/refunds","review_url":"https://jentic.example.com/app/agents/approvals/held_6968b398a1c4e2d07b5f93c6","state":"pending","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","updated_at":"2026-01-15T09:42:00Z"}
 type HeldExecutionResponse struct {
 	// UnderscoreLinks HAL-style links for a held execution.
 	//
@@ -5867,6 +5938,11 @@ type HeldExecutionResponse struct {
 	//
 	// Examples: held_6968b398a1c4e2d07b5f93c6
 	Id string `json:"id"`
+
+	// Kind Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent's binding to the credential has ended; approving gives it fresh access first).
+	//
+	// Examples: execution
+	Kind *HeldExecutionKind `json:"kind,omitempty"`
 
 	// MatchedRuleId The require-approval permission rule that held the call.
 	//
@@ -5952,6 +6028,51 @@ type HeldExecutionResultResponse struct {
 
 // HeldExecutionState Lifecycle of an execution approval; every state but “pending“ is terminal.
 type HeldExecutionState string
+
+// HeldRenewalContextResponse The binding a `grant_renewal` hold would renew, as it stands now.
+//
+// Examples: {"can_renew":true,"expired_reason":"idle","expires_at":"2026-01-10T00:00:00Z","idle_warning":false,"last_used_at":"2026-01-01T09:30:00Z","max_idle_period":1209600,"max_quota":1,"quota_remaining":0}
+type HeldRenewalContextResponse struct {
+	// CanRenew Whether the caller may grant fresh access (else it can only deny): a person who owns the agent and the credential, or an `org:admin`.
+	//
+	// Examples: true
+	CanRenew *bool `json:"can_renew,omitempty"`
+
+	// ExpiredReason Which limit ended it: `end_date`, `idle` or `uses`; null if it holds again (renewed since).
+	//
+	// Examples: idle
+	ExpiredReason *GrantEndReason `json:"expired_reason,omitempty"`
+
+	// ExpiresAt Its current end date.
+	//
+	// Examples: 2026-01-10T00:00:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// IdleWarning Whether its owner is warned before going idle.
+	//
+	// Examples: false
+	IdleWarning *bool `json:"idle_warning,omitempty"`
+
+	// LastUsedAt Its last recorded use; null if never used.
+	//
+	// Examples: 2026-01-01T09:30:00Z
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+
+	// MaxIdlePeriod Its current idle limit in seconds.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
+
+	// MaxQuota Its use count (1 is single use).
+	//
+	// Examples: 1
+	MaxQuota *int `json:"max_quota,omitempty"`
+
+	// QuotaRemaining Uses left under its count.
+	//
+	// Examples: 0
+	QuotaRemaining *int `json:"quota_remaining,omitempty"`
+}
 
 // HeldRequestResponse The held call exactly as it runs if approved (credentials are injected at run time).
 //
@@ -14610,6 +14731,14 @@ type ClientInterface interface {
 	// one that is no longer pending (or has expired) answers ``409``. An agent
 	// caller is always refused (``403``), whatever its permissions.
 	//
+	// A ``grant_renewal`` hold (the agent's binding ended) is approved with
+	// ``renewal``, the binding's fresh policy, which replaces its old one; with
+	// ``run: false`` the binding is renewed and the call fails instead of
+	// running. Only a reviewer who may renew the binding directly (a person who
+	// owns the agent and the credential, or an ``org:admin``) can approve one
+	// (``403 held_execution_renewal_forbidden`` otherwise); anyone who can
+	// decide may deny it. ``renewal`` on any other hold is a ``422``.
+	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /executions/holds/{held_execution_id}:decide (the `DecideHeldExecution` operationId).
@@ -14623,6 +14752,14 @@ type ClientInterface interface {
 	// fails it with a permission-denied result. The first decision wins: deciding
 	// one that is no longer pending (or has expired) answers ``409``. An agent
 	// caller is always refused (``403``), whatever its permissions.
+	//
+	// A ``grant_renewal`` hold (the agent's binding ended) is approved with
+	// ``renewal``, the binding's fresh policy, which replaces its old one; with
+	// ``run: false`` the binding is renewed and the call fails instead of
+	// running. Only a reviewer who may renew the binding directly (a person who
+	// owns the agent and the credential, or an ``org:admin``) can approve one
+	// (``403 held_execution_renewal_forbidden`` otherwise); anyone who can
+	// decide may deny it. ``renewal`` on any other hold is a ``422``.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -19111,6 +19248,14 @@ func (c *Client) GetHeldExecutionResult(ctx context.Context, heldExecutionId Pat
 // one that is no longer pending (or has expired) answers “409“. An agent
 // caller is always refused (“403“), whatever its permissions.
 //
+// A “grant_renewal“ hold (the agent's binding ended) is approved with
+// “renewal“, the binding's fresh policy, which replaces its old one; with
+// “run: false“ the binding is renewed and the call fails instead of
+// running. Only a reviewer who may renew the binding directly (a person who
+// owns the agent and the credential, or an “org:admin“) can approve one
+// (“403 held_execution_renewal_forbidden“ otherwise); anyone who can
+// decide may deny it. “renewal“ on any other hold is a “422“.
+//
 // Takes any type of body and a specified content type.
 //
 // Corresponds with POST /executions/holds/{held_execution_id}:decide (the `DecideHeldExecution` operationId).
@@ -19134,6 +19279,14 @@ func (c *Client) DecideHeldExecutionWithBody(ctx context.Context, heldExecutionI
 // fails it with a permission-denied result. The first decision wins: deciding
 // one that is no longer pending (or has expired) answers “409“. An agent
 // caller is always refused (“403“), whatever its permissions.
+//
+// A “grant_renewal“ hold (the agent's binding ended) is approved with
+// “renewal“, the binding's fresh policy, which replaces its old one; with
+// “run: false“ the binding is renewed and the call fails instead of
+// running. Only a reviewer who may renew the binding directly (a person who
+// owns the agent and the credential, or an “org:admin“) can approve one
+// (“403 held_execution_renewal_forbidden“ otherwise); anyone who can
+// decide may deny it. “renewal“ on any other hold is a “422“.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -32409,6 +32562,14 @@ type ClientWithResponsesInterface interface {
 	// one that is no longer pending (or has expired) answers ``409``. An agent
 	// caller is always refused (``403``), whatever its permissions.
 	//
+	// A ``grant_renewal`` hold (the agent's binding ended) is approved with
+	// ``renewal``, the binding's fresh policy, which replaces its old one; with
+	// ``run: false`` the binding is renewed and the call fails instead of
+	// running. Only a reviewer who may renew the binding directly (a person who
+	// owns the agent and the credential, or an ``org:admin``) can approve one
+	// (``403 held_execution_renewal_forbidden`` otherwise); anyone who can
+	// decide may deny it. ``renewal`` on any other hold is a ``422``.
+	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /executions/holds/{held_execution_id}:decide (the `DecideHeldExecution` operationId).
@@ -32422,6 +32583,14 @@ type ClientWithResponsesInterface interface {
 	// fails it with a permission-denied result. The first decision wins: deciding
 	// one that is no longer pending (or has expired) answers ``409``. An agent
 	// caller is always refused (``403``), whatever its permissions.
+	//
+	// A ``grant_renewal`` hold (the agent's binding ended) is approved with
+	// ``renewal``, the binding's fresh policy, which replaces its old one; with
+	// ``run: false`` the binding is renewed and the call fails instead of
+	// running. Only a reviewer who may renew the binding directly (a person who
+	// owns the agent and the credential, or an ``org:admin``) can approve one
+	// (``403 held_execution_renewal_forbidden`` otherwise); anyone who can
+	// decide may deny it. ``renewal`` on any other hold is a ``422``.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -52653,6 +52822,14 @@ func (c *ClientWithResponses) GetHeldExecutionResultWithResponse(ctx context.Con
 // one that is no longer pending (or has expired) answers “409“. An agent
 // caller is always refused (“403“), whatever its permissions.
 //
+// A “grant_renewal“ hold (the agent's binding ended) is approved with
+// “renewal“, the binding's fresh policy, which replaces its old one; with
+// “run: false“ the binding is renewed and the call fails instead of
+// running. Only a reviewer who may renew the binding directly (a person who
+// owns the agent and the credential, or an “org:admin“) can approve one
+// (“403 held_execution_renewal_forbidden“ otherwise); anyone who can
+// decide may deny it. “renewal“ on any other hold is a “422“.
+//
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
 // Corresponds with POST /executions/holds/{held_execution_id}:decide (the `DecideHeldExecution` operationId).
@@ -52672,6 +52849,14 @@ func (c *ClientWithResponses) DecideHeldExecutionWithBodyWithResponse(ctx contex
 // fails it with a permission-denied result. The first decision wins: deciding
 // one that is no longer pending (or has expired) answers “409“. An agent
 // caller is always refused (“403“), whatever its permissions.
+//
+// A “grant_renewal“ hold (the agent's binding ended) is approved with
+// “renewal“, the binding's fresh policy, which replaces its old one; with
+// “run: false“ the binding is renewed and the call fails instead of
+// running. Only a reviewer who may renew the binding directly (a person who
+// owns the agent and the credential, or an “org:admin“) can approve one
+// (“403 held_execution_renewal_forbidden“ otherwise); anyone who can
+// decide may deny it. “renewal“ on any other hold is a “422“.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

@@ -25,6 +25,7 @@ import structlog
 from jentic_one.admin.core.schema.held_executions import HeldExecution
 from jentic_one.admin.core.schema.jobs import Job
 from jentic_one.admin.repos import AgentRepository, AuditRepository, JobResultRepository
+from jentic_one.admin.repos.agent_credential_binding_repo import AgentCredentialBindingRepository
 from jentic_one.admin.repos.held_execution_repo import HeldExecutionRepository
 from jentic_one.admin.repos.job_repo import JobRepository
 from jentic_one.admin.scoping.filters import build_access_filters
@@ -33,6 +34,9 @@ from jentic_one.admin.services.errors import (
     HeldExecutionForbiddenError,
     HeldExecutionJobNotHeldError,
     HeldExecutionNotFoundError,
+    HeldExecutionRenewalForbiddenError,
+    HeldExecutionRenewalInvalidError,
+    HeldExecutionRenewalUnavailableError,
     HeldExecutionResultExpiredError,
     HeldExecutionResultNotReadyError,
 )
@@ -42,8 +46,11 @@ from jentic_one.admin.services.schemas.held_executions import (
     HeldExecutionDetailView,
     HeldExecutionView,
     HeldRequestView,
+    RenewalContextView,
 )
 from jentic_one.admin.services.schemas.jobs import JobResultView
+from jentic_one.shared.auth.grant_policy import GrantPolicy, grant_end_reason
+from jentic_one.shared.auth.grant_renewal import GrantRenewalRefusedError, GrantRenewerProtocol
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
 from jentic_one.shared.events import emit_event_best_effort
@@ -52,12 +59,17 @@ from jentic_one.shared.jobs.hold import (
     PROBLEM_CONTENT_TYPE,
     approval_denied_problem,
     held_call_summary,
+    renewed_without_run_problem,
 )
 from jentic_one.shared.jobs.wakeup import notify_on_commit
 from jentic_one.shared.models.actors import ActorType
 from jentic_one.shared.models.audit import AuditAction, AuditTargetType
 from jentic_one.shared.models.events import EventSeverity, EventType
-from jentic_one.shared.models.held_executions import ApprovalDecision, HeldExecutionState
+from jentic_one.shared.models.held_executions import (
+    ApprovalDecision,
+    HeldExecutionKind,
+    HeldExecutionState,
+)
 from jentic_one.shared.models.jobs import JobKind, JobStatus
 from jentic_one.shared.pagination import Page, decode_cursor, encode_cursor
 
@@ -84,8 +96,11 @@ def _execution_status(job_status: str | None) -> str | None:
 class HeldExecutionService:
     """Read and decide execution approvals."""
 
-    def __init__(self, ctx: Context) -> None:
+    def __init__(self, ctx: Context, *, grant_renewer: GrantRenewerProtocol | None = None) -> None:
         self._ctx = ctx
+        # Renews a ``grant_renewal`` hold's binding (installed by the
+        # composition root; absent, such a hold can only be denied).
+        self._grant_renewer = grant_renewer
 
     async def list_all(
         self,
@@ -132,6 +147,13 @@ class HeldExecutionService:
             job = await JobRepository.get_held_execution(
                 session, row.job_id, filters=build_access_filters(identity, Job)
             )
+            binding = (
+                await AgentCredentialBindingRepository.get(
+                    session, agent_id=row.agent_id, credential_id=row.credential_id
+                )
+                if row.kind == HeldExecutionKind.GRANT_RENEWAL.value
+                else None
+            )
         view = HeldExecutionView.model_validate(row)
         return HeldExecutionDetailView(
             **view.model_dump(exclude={"execution_status"}),
@@ -139,6 +161,32 @@ class HeldExecutionService:
             agent_name=agent.name if agent is not None else None,
             agent_owner_id=agent.owner_id if agent is not None else None,
             request=self._held_request(job.payload if job is not None else None),
+            renewal=(
+                await self._renewal_context(row, binding, identity=identity)
+                if row.kind == HeldExecutionKind.GRANT_RENEWAL.value
+                else None
+            ),
+        )
+
+    async def _renewal_context(
+        self, row: HeldExecution, binding: Any, *, identity: Identity
+    ) -> RenewalContextView:
+        """The binding a renewal hold would renew, and whether ``identity`` may renew it."""
+        can_renew = self._grant_renewer is not None and await self._grant_renewer.may_renew(
+            identity=identity, agent_id=row.agent_id, credential_id=row.credential_id
+        )
+        if binding is None:
+            return RenewalContextView(can_renew=False)
+        reason = grant_end_reason(GrantPolicy.from_row(binding))
+        return RenewalContextView(
+            expired_reason=reason.value if reason is not None else None,
+            last_used_at=binding.last_used_at,
+            expires_at=binding.expires_at,
+            max_idle_period=binding.max_idle_period,
+            idle_warning=binding.idle_warning,
+            max_quota=binding.max_quota,
+            quota_remaining=binding.quota_remaining,
+            can_renew=can_renew,
         )
 
     async def get_result(self, approval_id: str, *, identity: Identity) -> JobResultView:
@@ -215,6 +263,9 @@ class HeldExecutionService:
         approve = body.decision == ApprovalDecision.APPROVE
         new_state = HeldExecutionState.APPROVED if approve else HeldExecutionState.DENIED
         filters = build_access_filters(identity, HeldExecution, for_write=True)
+        renewed = await self._renew_for_approval(approval_id, body, filters, identity=identity)
+        # A renewal's reviewer may renew without running a stale call.
+        release = approve and (not renewed or body.run)
         async with self._ctx.admin_db.transaction() as session:
             now = await HeldExecutionRepository.now(session)
             visible = await HeldExecutionRepository.get_by_id(session, approval_id, filters=filters)
@@ -243,22 +294,30 @@ class HeldExecutionService:
                 session,
                 updated.job_id,
                 from_status=JobStatus.HELD,
-                to_status=JobStatus.QUEUED if approve else JobStatus.FAILED,
+                to_status=JobStatus.QUEUED if release else JobStatus.FAILED,
             )
             if not moved:
                 # Raising rolls the decision back with the transaction.
                 raise HeldExecutionJobNotHeldError(approval_id, updated.job_id)
-            if approve:
+            if release:
                 # The released job is claimable once this commits; wake any
                 # worker in this process instead of waiting for its next poll.
                 notify_on_commit(session)
             else:
-                await JobRepository.update(session, updated.job_id, error="approval denied")
+                await JobRepository.update(
+                    session,
+                    updated.job_id,
+                    error="access renewed, call not run" if approve else "approval denied",
+                )
                 await JobResultRepository.create(
                     session,
                     job_id=updated.job_id,
                     kind=JobKind.EXECUTION.value,
-                    body=approval_denied_problem(approval_id, body.reason),
+                    body=(
+                        renewed_without_run_problem(approval_id)
+                        if approve
+                        else approval_denied_problem(approval_id, body.reason)
+                    ),
                     content_type=PROBLEM_CONTENT_TYPE,
                     created_by=identity.sub,
                 )
@@ -271,7 +330,10 @@ class HeldExecutionService:
                 actor_type=identity.actor_type,
                 actor_id=identity.sub,
                 before={"state": HeldExecutionState.PENDING.value},
-                after={"state": new_state.value},
+                after={
+                    "state": new_state.value,
+                    **({"renewed": True, "ran": release} if renewed else {}),
+                },
                 reason=body.reason,
             )
             await emit_event_best_effort(
@@ -295,12 +357,14 @@ class HeldExecutionService:
                     "decision": body.decision.value,
                     "method": updated.method,
                     "path": updated.path,
+                    "kind": updated.kind,
+                    **({"renewed": True, "ran": release} if renewed else {}),
                 },
             )
             view = HeldExecutionView.model_validate(updated).model_copy(
                 update={
                     "execution_status": (
-                        JobStatus.QUEUED.value if approve else JobStatus.FAILED.value
+                        JobStatus.QUEUED.value if release else JobStatus.FAILED.value
                     )
                 }
             )
@@ -311,6 +375,63 @@ class HeldExecutionService:
             actor_id=identity.sub,
         )
         return view
+
+    async def _renew_for_approval(
+        self,
+        approval_id: str,
+        body: DecideInput,
+        filters: list[Any],
+        *,
+        identity: Identity,
+    ) -> bool:
+        """Give a ``grant_renewal`` hold's binding fresh access before approving it.
+
+        Returns whether it did. Only approving a renewal hold renews, and only
+        with the fresh policy and a reviewer who may renew the binding directly
+        (the renew endpoint's own checks, through the installed renewer). The
+        renewal commits before the decision: if the decision then loses its
+        compare-and-set, the binding stays renewed, which is what the reviewer
+        asked for; if the renewal fails, nothing is decided.
+        """
+        async with self._ctx.admin_db.session() as session:
+            row = await HeldExecutionRepository.get_by_id(session, approval_id, filters=filters)
+        if row is None:
+            raise HeldExecutionNotFoundError(approval_id)
+        is_renewal = row.kind == HeldExecutionKind.GRANT_RENEWAL.value
+        if not is_renewal:
+            if body.renewal is not None:
+                raise HeldExecutionRenewalInvalidError(
+                    "Only a held call whose access ended (kind grant_renewal) takes `renewal`"
+                )
+            return False
+        if body.decision != ApprovalDecision.APPROVE:
+            return False
+        if body.renewal is None:
+            raise HeldExecutionRenewalInvalidError(
+                "Approving a renewal needs the binding's fresh policy (`renewal`)"
+            )
+        if row.state != HeldExecutionState.PENDING.value:
+            raise HeldExecutionAlreadyDecidedError(
+                f"Execution approval '{approval_id}' is already {row.state}"
+            )
+        if self._grant_renewer is None:
+            raise HeldExecutionRenewalUnavailableError(
+                "This deployment cannot renew agent access from a held call; renew it from "
+                "the agent's API, then deny this call"
+            )
+        try:
+            await self._grant_renewer.renew(
+                identity=identity,
+                agent_id=row.agent_id,
+                credential_id=row.credential_id,
+                policy=body.renewal,
+            )
+        except GrantRenewalRefusedError as exc:
+            raise HeldExecutionRenewalForbiddenError(
+                "Only someone who may renew this access can grant it: a person who owns the "
+                "agent and the credential, or an org admin. You can deny the call."
+            ) from exc
+        return True
 
     async def withdraw(self, approval_id: str, *, identity: Identity) -> HeldExecutionView:
         """Withdraw a pending approval — only the identity that filed the hold.

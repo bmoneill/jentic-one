@@ -193,8 +193,12 @@ _EXPIRED_DETAIL = {
 
 
 def _expired_binding_denial(
-    api: APIReference, *, instance: str, reason: str | None = None
-) -> BrokerError:
+    api: APIReference,
+    *,
+    instance: str,
+    reason: str | None = None,
+    credential_id: str | None = None,
+) -> CredentialBindingExpiredError:
     """The denial for an agent whose only binding covering the API has ended.
 
     Like the suspended case, its recovery is the operator's alone (a renewal),
@@ -209,7 +213,7 @@ def _expired_binding_denial(
             "vendor": api.vendor,
         },
     )
-    return CredentialBindingExpiredError(
+    error = CredentialBindingExpiredError(
         _EXPIRED_DETAIL.get(reason or "", "The credential binding for this API has expired"),
         extra={"expired_reason": reason} if reason else None,
         instance=instance,
@@ -217,6 +221,8 @@ def _expired_binding_denial(
             vendor=api.vendor, name=api.name, version=api.version
         ),
     )
+    error.ended_credential_id = credential_id
+    return error
 
 
 def _pending_credential_denial(
@@ -329,7 +335,12 @@ async def derive_credential_bindings(
         if derivation.binding_suspended:
             raise _suspended_binding_denial(api, instance=instance)
         if derivation.binding_expired:
-            raise _expired_binding_denial(api, instance=instance, reason=derivation.expired_reason)
+            raise _expired_binding_denial(
+                api,
+                instance=instance,
+                reason=derivation.expired_reason,
+                credential_id=derivation.expired_credential_id,
+            )
         if derivation.binding_pending:
             raise _pending_credential_denial(
                 api,
