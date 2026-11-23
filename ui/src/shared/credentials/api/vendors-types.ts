@@ -60,6 +60,8 @@ export interface ReviewSession {
 	 * the approver decides the binding's actual end date on confirm.
 	 */
 	requested_expires_in?: number | null;
+	/** The idle limit the requester asked for, in seconds; null when none. */
+	requested_max_idle_period?: number | null;
 	/** Where an API target's live revision came from; null for vendor targets. */
 	provenance?: ReviewProvenance | null;
 	/** The agent the session binds and its owner (server data). */
@@ -261,6 +263,8 @@ export interface ConfirmRequest {
 	revision_id?: string | null;
 	/** The new binding's end date (future); null or absent binds with no expiry. */
 	expires_at?: string | null;
+	/** The new binding's idle limit in seconds; null or absent sets none. */
+	max_idle_period?: number | null;
 }
 
 /** Fields every non-OAuth confirm carries: the rules and the review it answers. */
@@ -272,6 +276,8 @@ interface ReviewedConfirm {
 	revision_id: string | null;
 	/** The new binding's end date (future); null or absent binds with no expiry. */
 	expires_at?: string | null;
+	/** The new binding's idle limit in seconds; null or absent sets none. */
+	max_idle_period?: number | null;
 }
 
 export interface ApiKeyConfirmRequest extends ReviewedConfirm {

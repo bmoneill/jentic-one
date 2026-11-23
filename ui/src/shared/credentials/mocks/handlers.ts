@@ -407,6 +407,8 @@ export interface MockConnectSession {
 	requested_permission_rules: PermissionRule[];
 	/** How long the request asked the access to last, in seconds; null/absent = nothing. */
 	requested_expires_in?: number | null;
+	/** The idle limit the request asked for, in seconds. */
+	requested_max_idle_period?: number | null;
 	reason: string | null;
 	/** Status served by `/status` polls. Tests flip it to drive terminal states. */
 	status: StatusResponse;
@@ -740,6 +742,7 @@ const connectSessionsHandlers = [
 			target_kind: gated.target_kind ?? 'vendor',
 			requested_scopes: gated.requested_scopes,
 			requested_expires_in: gated.requested_expires_in ?? null,
+			requested_max_idle_period: gated.requested_max_idle_period ?? null,
 			provenance: gated.provenance ?? null,
 			agent: reviewAgent(gated),
 			scheme: gated.scheme ?? null,

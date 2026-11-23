@@ -4,7 +4,13 @@ import {
 	useAgentsForPicker,
 	useBindCredentialToAgents,
 } from '@/shared/credentials/api/vendors-hooks';
-import { expiresAtIso, type BindingDuration } from '@/shared/credentials/lib/bindingDuration';
+import {
+	expiresAtFromDuration,
+	expiresAtIso,
+	type BindingDuration,
+} from '@/shared/credentials/lib/bindingDuration';
+import { idleLimitError, idleSeconds, type IdleLimit } from '@/shared/credentials/lib/idleLimit';
+import { IdleLimitField } from '@/shared/credentials/components/IdleLimitField';
 import {
 	NO_DURATION_HINT,
 	choosesNoExpiry,
@@ -45,6 +51,7 @@ export function PostConnectBindMore({
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [done, setDone] = useState(false);
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
+	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
 
@@ -76,12 +83,18 @@ export function PostConnectBindMore({
 		if (selected.size === 0) return;
 		bindMany.mutate(
 			// The end date runs from now, as the operator confirms.
-			{ credentialId, agentIds: Array.from(selected), expiresAt: expiresAtIso(duration) },
+			{
+				credentialId,
+				agentIds: Array.from(selected),
+				expiresAt: expiresAtIso(duration),
+				maxIdlePeriod: idleSeconds(idle),
+			},
 			{
 				onSuccess: () => {
 					setDone(true);
 					setSelected(new Set());
 					setDuration(null);
+					setIdle(null);
 				},
 			},
 		);
@@ -117,6 +130,13 @@ export function PostConnectBindMore({
 				selectRef={durationRef}
 				testIdPrefix="bind-more"
 			/>
+			<IdleLimitField
+				value={idle}
+				onChange={setIdle}
+				end={expiresAtFromDuration(duration)}
+				disabled={bindMany.isPending}
+				testIdPrefix="bind-more"
+			/>
 			{bindMany.error && <ErrorAlert message={bindMany.error} />}
 			{done && !bindMany.error && (
 				<p className="text-success text-xs">Bound to selected agents.</p>
@@ -125,8 +145,18 @@ export function PostConnectBindMore({
 				type="button"
 				variant="secondary"
 				size="sm"
-				onClick={(): void => noExpiry.request(choosesNoExpiry(duration), handleBind)}
-				disabled={selected.size === 0 || bindMany.isPending || !durationChosen(duration)}
+				onClick={(): void =>
+					noExpiry.request(
+						choosesNoExpiry(duration) && idleSeconds(idle) === null,
+						handleBind,
+					)
+				}
+				disabled={
+					selected.size === 0 ||
+					bindMany.isPending ||
+					!durationChosen(duration) ||
+					idleLimitError(idle) !== null
+				}
 				loading={bindMany.isPending}
 			>
 				Bind{' '}

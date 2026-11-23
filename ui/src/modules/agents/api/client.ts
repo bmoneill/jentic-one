@@ -203,6 +203,10 @@ function bindingToEntity(r: CredentialBindingResponse): CredentialBindingEntity 
 		boundAt: r.bound_at,
 		expiresAt: r.expires_at ?? null,
 		expired: r.expired ?? false,
+		expiredReason: r.expired_reason ?? null,
+		maxIdlePeriod: r.max_idle_period ?? null,
+		idleExpiresAt: r.idle_expires_at ?? null,
+		renewedAt: r.renewed_at ?? null,
 		lastUsedAt: r.last_used_at,
 		lastUsedByApi: r.last_used_by_api?.map((u) => ({
 			vendor: u.api_vendor,

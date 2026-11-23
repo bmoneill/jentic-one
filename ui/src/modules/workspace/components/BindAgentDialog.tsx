@@ -70,11 +70,17 @@ import type { PermissionRule } from '@/shared/credentials/api/vendors-types';
 import {
 	AccessRulesStep,
 	BindingDurationField,
+	IdleLimitField,
 	NoExpiryConfirmDialog,
 	formatDurationEnd,
 	useNoExpiryConfirm,
 } from '@/shared/credentials/components';
-import { expiresAtIso, type BindingDuration } from '@/shared/credentials/lib/bindingDuration';
+import {
+	expiresAtFromDuration,
+	expiresAtIso,
+	type BindingDuration,
+} from '@/shared/credentials/lib/bindingDuration';
+import { idleLimitError, idleSeconds, type IdleLimit } from '@/shared/credentials/lib/idleLimit';
 import {
 	NO_DURATION_HINT,
 	bindingExpiresSoon,
@@ -163,6 +169,8 @@ export function BindAgentDialog({
 	// How long the access lasts; null = nothing chosen yet, and Bind waits for a
 	// choice ("No expiry" is a choice, made in Custom… and confirmed).
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
+	// The optional idle limit (null = off).
+	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
 	// A bind that landed but whose rules didn't, for some agents: kept so the
@@ -267,6 +275,7 @@ export function BindAgentDialog({
 		setPreset(null);
 		setCustomRules([]);
 		setDuration(null);
+		setIdle(null);
 		setRulesFailure(null);
 		onClose();
 	};
@@ -299,6 +308,7 @@ export function BindAgentDialog({
 				agentIds: agentsToBind.map((a) => a.id),
 				rules,
 				expiresAt,
+				maxIdlePeriod: idleSeconds(idle),
 			},
 			{
 				onSuccess: ({ rulesFailed }) => {
@@ -512,6 +522,15 @@ export function BindAgentDialog({
 						testIdPrefix="bind-agent"
 					/>
 				)}
+				{!everyAgentBound && (
+					<IdleLimitField
+						value={idle}
+						onChange={setIdle}
+						end={expiresAtFromDuration(duration)}
+						disabled={busy}
+						testIdPrefix="bind-agent"
+					/>
+				)}
 				{createError && (
 					<ErrorAlert
 						title="Couldn't create the no-auth credential"
@@ -543,12 +562,17 @@ export function BindAgentDialog({
 			<Button
 				size="sm"
 				onClick={(): void =>
-					noExpiry.request(choosesNoExpiry(duration), () => void handleBind())
+					noExpiry.request(
+						// An idle limit still ends the access, so only neither warns.
+						choosesNoExpiry(duration) && idleSeconds(idle) === null,
+						() => void handleBind(),
+					)
 				}
 				disabled={
 					picked.length === 0 ||
 					rules == null ||
 					!durationChosen(duration) ||
+					idleLimitError(idle) !== null ||
 					busy ||
 					(!credential && !pendingCreate) ||
 					!boundKnown
@@ -584,7 +608,13 @@ export function BindAgentDialog({
 
 /** A roster row's end date, in the shape the expiry helpers read. */
 function expiryOf(row: CredentialAgentResponse): BindingExpiryFields {
-	return { expiresAt: row.expires_at ?? null, expired: row.expired ?? false };
+	return {
+		expiresAt: row.expires_at ?? null,
+		expired: row.expired ?? false,
+		expiredReason: row.expired_reason ?? null,
+		maxIdlePeriod: row.max_idle_period ?? null,
+		idleExpiresAt: row.idle_expires_at ?? null,
+	};
 }
 
 /**

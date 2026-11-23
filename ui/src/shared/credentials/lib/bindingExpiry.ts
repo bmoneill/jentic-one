@@ -10,6 +10,7 @@
  */
 import type { BindingDuration } from '@/shared/credentials/lib/bindingDuration';
 import { expiresAtFromDuration } from '@/shared/credentials/lib/bindingDuration';
+import { idleLabel } from '@/shared/credentials/lib/idleLimit';
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 3_600_000;
@@ -23,12 +24,32 @@ const DAY_MS = 86_400_000;
  */
 export const EXPIRES_SOON_MS = 2 * DAY_MS;
 
-/** What a binding carries about its end date, as the API reports it. */
+/** What a binding carries about when it ends, as the API reports it. */
 export interface BindingExpiryFields {
 	/** RFC 3339; null when it never expires, undefined when not reported. */
 	expiresAt?: string | null;
 	/** The server's verdict as of its read. */
 	expired?: boolean;
+	/** When the idle limit ends it if it goes unused (RFC 3339); null without one. */
+	idleExpiresAt?: string | null;
+	/** Which limit ended it, as the server reported it (`end_date`, `idle`). */
+	expiredReason?: string | null;
+	/** The idle limit, in seconds; null without one. */
+	maxIdlePeriod?: number | null;
+}
+
+type EndKind = 'end_date' | 'idle';
+
+/** The limit that ends the binding first, and when; null when it never ends. */
+function firstEnd(binding: BindingExpiryFields): { ms: number; kind: EndKind } | null {
+	const ends = [
+		{ ms: endMs(binding.expiresAt), kind: 'end_date' as const },
+		{ ms: endMs(binding.idleExpiresAt), kind: 'idle' as const },
+	].filter((e): e is { ms: number; kind: EndKind } => e.ms !== null);
+	return ends.reduce<{ ms: number; kind: EndKind } | null>(
+		(first, e) => (first === null || e.ms < first.ms ? e : first),
+		null,
+	);
 }
 
 function endMs(expiresAt: string | null | undefined): number | null {
@@ -74,14 +95,23 @@ function shortSpan(ms: number, round: boolean): string {
 export const NO_DURATION_HINT =
 	'Choose when this access ends. To give access with no end date, pick Custom… and then No expiry.';
 
-/** Whether the binding no longer authorizes calls because its end date passed. */
-export function bindingIsExpired(
-	{ expiresAt, expired }: BindingExpiryFields,
+/** Whether the binding no longer authorizes calls because one of its limits was reached. */
+export function bindingIsExpired(binding: BindingExpiryFields, now: number = Date.now()): boolean {
+	if (binding.expired) return true;
+	const end = firstEnd(binding);
+	return end !== null && end.ms <= now;
+}
+
+/** Which limit ended the binding (the server's word when it gave one); null while it holds. */
+export function bindingExpiredReason(
+	binding: BindingExpiryFields,
 	now: number = Date.now(),
-): boolean {
-	if (expired) return true;
-	const end = endMs(expiresAt);
-	return end !== null && end <= now;
+): EndKind | null {
+	if (!bindingIsExpired(binding, now)) return null;
+	if (binding.expiredReason === 'end_date' || binding.expiredReason === 'idle') {
+		return binding.expiredReason;
+	}
+	return firstEnd(binding)?.kind ?? 'end_date';
 }
 
 /** Whether the binding ends within {@link EXPIRES_SOON_MS} and hasn't yet. */
@@ -89,8 +119,15 @@ export function bindingExpiresSoon(
 	binding: BindingExpiryFields,
 	now: number = Date.now(),
 ): boolean {
-	const end = endMs(binding.expiresAt);
-	return end !== null && !bindingIsExpired(binding, now) && end - now <= EXPIRES_SOON_MS;
+	const end = firstEnd(binding);
+	return end !== null && !bindingIsExpired(binding, now) && end.ms - now <= EXPIRES_SOON_MS;
+}
+
+/** "Expired: unused for 14 days" — why an idle-ended binding ended. */
+function idleEndedLabel(binding: BindingExpiryFields): string {
+	return binding.maxIdlePeriod
+		? `Expired: unused for ${idleLabel(binding.maxIdlePeriod)}`
+		: 'Expired: unused too long';
 }
 
 /**
@@ -102,6 +139,12 @@ export function bindingExpiryLabel(
 	binding: BindingExpiryFields,
 	now: number = Date.now(),
 ): string | null {
+	if (bindingExpiredReason(binding, now) === 'idle') return idleEndedLabel(binding);
+	const first = firstEnd(binding);
+	if (first?.kind === 'idle') {
+		const left = span(first.ms - now, true);
+		return left ? `Ends in ${left} unless used` : 'Ends in less than a minute unless used';
+	}
 	const end = endMs(binding.expiresAt);
 	if (end === null) return binding.expired ? 'Expired' : null;
 	if (bindingIsExpired(binding, now)) {
@@ -121,6 +164,9 @@ export function bindingExpiryShortLabel(
 	binding: BindingExpiryFields,
 	now: number = Date.now(),
 ): string | null {
+	if (bindingExpiredReason(binding, now) === 'idle') return 'Ended: unused';
+	const first = firstEnd(binding);
+	if (first?.kind === 'idle') return `Ends in ${shortSpan(first.ms - now, true)} if idle`;
 	const end = endMs(binding.expiresAt);
 	if (end === null) return binding.expired ? 'Ended' : null;
 	if (bindingIsExpired(binding, now)) return `Ended ${shortSpan(now - end, false)} ago`;

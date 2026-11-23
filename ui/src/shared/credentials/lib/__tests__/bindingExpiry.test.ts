@@ -112,3 +112,47 @@ describe('durationChosen / choosesNoExpiry', () => {
 		expect(choosesNoExpiry(bad)).toBe(false);
 	});
 });
+
+describe('idle limits', () => {
+	it('names the idle limit when it comes first, and why an idle binding ended', () => {
+		const idleFirst = {
+			expiresAt: new Date(NOW + 30 * DAY).toISOString(),
+			idleExpiresAt: new Date(NOW + 12 * DAY).toISOString(),
+			maxIdlePeriod: 14 * 86_400,
+		};
+		expect(bindingExpiryLabel(idleFirst, NOW)).toBe('Ends in 12 days unless used');
+		expect(bindingExpiryShortLabel(idleFirst, NOW)).toBe('Ends in 12d if idle');
+
+		const endFirst = { ...idleFirst, expiresAt: new Date(NOW + 3 * DAY).toISOString() };
+		expect(bindingExpiryLabel(endFirst, NOW)).toBe('Expires in 3 days');
+
+		const idleEnded = {
+			idleExpiresAt: new Date(NOW - HOUR).toISOString(),
+			maxIdlePeriod: 14 * 86_400,
+		};
+		expect(bindingIsExpired(idleEnded, NOW)).toBe(true);
+		expect(bindingExpiryLabel(idleEnded, NOW)).toBe('Expired: unused for 14 days');
+		expect(bindingExpiryShortLabel(idleEnded, NOW)).toBe('Ended: unused');
+		// The server's verdict wins: ended by its end date, even if the idle limit also passed.
+		expect(
+			bindingExpiryLabel(
+				{
+					...idleEnded,
+					expiresAt: new Date(NOW - 2 * DAY).toISOString(),
+					expired: true,
+					expiredReason: 'end_date',
+				},
+				NOW,
+			),
+		).toBe('Expired 2 days ago');
+	});
+
+	it('is ending soon within 48 hours of the idle limit', () => {
+		expect(bindingExpiresSoon({ idleExpiresAt: new Date(NOW + DAY).toISOString() }, NOW)).toBe(
+			true,
+		);
+		expect(
+			bindingExpiresSoon({ idleExpiresAt: new Date(NOW + 3 * DAY).toISOString() }, NOW),
+		).toBe(false);
+	});
+});

@@ -632,6 +632,44 @@ describe('BindAgentDialog — how long the access lasts', () => {
 		expect(screen.queryByText(/Unprocessable/)).not.toBeInTheDocument();
 	});
 
+	it('sends an idle limit, and an idle limit alone ends access without a warning', async () => {
+		const user = userEvent.setup();
+		renderDialog();
+		await ready(user);
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), 'custom');
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-unit'), 'never');
+		await user.click(screen.getByText('Also end if unused for'));
+		await user.selectOptions(screen.getByTestId('bind-agent-idle-preset'), '30d');
+		expect(screen.getByTestId('bind-agent-idle-summary')).toHaveTextContent(
+			'Access ends if unused for 30 days. An agent that keeps using it keeps access.',
+		);
+
+		await user.click(screen.getByTestId('bind-agent-confirm'));
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		expect(screen.queryByTestId('no-expiry-warning')).not.toBeInTheDocument();
+		expect(bodies[0].body).toEqual({
+			credential_id: 'cred_big',
+			expires_at: null,
+			max_idle_period: 30 * 86_400,
+		});
+	});
+
+	it('refuses an idle limit under a day', async () => {
+		const user = userEvent.setup();
+		renderDialog();
+		await ready(user);
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), '7d');
+		await user.click(screen.getByText('Also end if unused for'));
+		await user.selectOptions(screen.getByTestId('bind-agent-idle-preset'), 'custom');
+		await user.clear(screen.getByTestId('bind-agent-idle-amount'));
+		await user.type(screen.getByTestId('bind-agent-idle-amount'), '12');
+		await user.selectOptions(screen.getByTestId('bind-agent-idle-unit'), 'hours');
+		expect(screen.getByTestId('bind-agent-idle-error')).toHaveTextContent(
+			'Choose between 1 day and 999 days.',
+		);
+		expect(screen.getByTestId('bind-agent-confirm')).toBeDisabled();
+	});
+
 	it('binding with No expiry warns first, and binds nothing until confirmed', async () => {
 		const user = userEvent.setup();
 		renderDialog();

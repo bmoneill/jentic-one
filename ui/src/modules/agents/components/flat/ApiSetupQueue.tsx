@@ -62,6 +62,7 @@ import type { PermissionRule } from '@/shared/credentials/api/vendors-types';
 import {
 	AccessRulesStep,
 	BindingDurationField,
+	IdleLimitField,
 	NoExpiryConfirmDialog,
 	useNoExpiryConfirm,
 	useDeviceAwareConnect,
@@ -76,7 +77,12 @@ import {
 	type ScopeReach,
 } from '@/shared/credentials/lib/accessPresets';
 import { apiScopeReach } from '@/shared/credentials/lib/apiIdentity';
-import { expiresAtIso, type BindingDuration } from '@/shared/credentials/lib/bindingDuration';
+import {
+	expiresAtFromDuration,
+	expiresAtIso,
+	type BindingDuration,
+} from '@/shared/credentials/lib/bindingDuration';
+import { idleLimitError, idleSeconds, type IdleLimit } from '@/shared/credentials/lib/idleLimit';
 import {
 	NO_DURATION_HINT,
 	choosesNoExpiry,
@@ -146,11 +152,18 @@ interface AccessDraft {
 	preset: RulesPreset | null;
 	customRules: PermissionRule[];
 	duration: BindingDuration | null;
+	/** The optional idle limit; null = off. */
+	idle: IdleLimit | null;
 }
 
 /** Custom rules, preselected: the operator says what the agent may call. No
  * duration: the operator must choose one ("No expiry" included, confirmed). */
-const DEFAULT_DRAFT: AccessDraft = { preset: 'custom', customRules: [], duration: null };
+const DEFAULT_DRAFT: AccessDraft = {
+	preset: 'custom',
+	customRules: [],
+	duration: null,
+	idle: null,
+};
 
 const RULES_SAVE_FAILED = "The access rules weren't saved.";
 
@@ -351,6 +364,7 @@ export function ApiSetupQueue({
 						rules: rules ?? undefined,
 						// Worked out as the bind goes out: the duration runs from here.
 						expiresAt: expiresAtIso(draftFor(entry.key).duration),
+						maxIdlePeriod: idleSeconds(draftFor(entry.key).idle),
 					}));
 				} catch (e) {
 					setEntries((current) =>
@@ -970,9 +984,14 @@ function AccessStep({
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
 	const askDuration = !entry.bound;
-	const durationMissing = askDuration && !durationChosen(draft.duration);
+	const durationMissing =
+		askDuration && (!durationChosen(draft.duration) || idleLimitError(draft.idle) !== null);
 	const guardExpiry = (run: () => void): void =>
-		noExpiry.request(askDuration && choosesNoExpiry(draft.duration), run);
+		noExpiry.request(
+			// An idle limit still ends the access, so only neither warns.
+			askDuration && choosesNoExpiry(draft.duration) && idleSeconds(draft.idle) === null,
+			run,
+		);
 	// Focus follows the confirm in and back out, so the keyboard never drops
 	// to the page when the button that opened it unmounts.
 	const laterRef = useRef<HTMLButtonElement>(null);
@@ -1030,6 +1049,15 @@ function AccessStep({
 					label="Access expires after"
 					emptyHint={NO_DURATION_HINT}
 					selectRef={durationRef}
+					testIdPrefix="queue-access"
+				/>
+			)}
+			{askDuration && (
+				<IdleLimitField
+					value={draft.idle}
+					onChange={(idle): void => onDraftChange({ idle })}
+					end={expiresAtFromDuration(draft.duration)}
+					disabled={working}
 					testIdPrefix="queue-access"
 				/>
 			)}

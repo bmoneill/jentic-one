@@ -42,6 +42,7 @@ import { isHttpsVendorUrl, openVendorUrl } from '@/shared/credentials/lib/safe-n
 import {
 	durationFromSeconds,
 	durationLabel,
+	expiresAtFromDuration,
 	expiresAtIso,
 	type BindingDuration,
 } from '@/shared/credentials/lib/bindingDuration';
@@ -51,6 +52,14 @@ import {
 	durationChosen,
 } from '@/shared/credentials/lib/bindingExpiry';
 import { BindingDurationField } from './BindingDurationField';
+import { IdleLimitField } from './IdleLimitField';
+import {
+	idleLabel,
+	idleLimitError,
+	idleLimitFromSeconds,
+	idleSeconds,
+	type IdleLimit,
+} from '@/shared/credentials/lib/idleLimit';
 import { NoExpiryConfirmDialog, useNoExpiryConfirm } from './NoExpiryConfirmDialog';
 import { useSharedAppSurface } from '@/shared/credentials/lib/sharedAppSurface';
 import type {
@@ -136,6 +145,8 @@ export function VendorApproveFlow({
 	// How long the new binding lasts. Seeded once from what the request asked
 	// for; the approver may change it. The end date is worked out on confirm.
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
+	// The optional idle limit, seeded from the request too (null = off).
+	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	const durationSeeded = useRef(false);
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
@@ -161,6 +172,7 @@ export function VendorApproveFlow({
 		if (durationSeeded.current || !session) return;
 		durationSeeded.current = true;
 		if (requestedDuration) setDuration(requestedDuration);
+		setIdle(idleLimitFromSeconds(session.requested_max_idle_period));
 	}, [session, requestedDuration]);
 	const scopes: ReviewScope[] = useMemo(() => session?.scopes ?? [], [session]);
 	const secretKind = session ? secretKindOf(session.resolved_flow) : null;
@@ -356,7 +368,9 @@ export function VendorApproveFlow({
 		expected_agent_id: review?.agent?.agent_id ?? null,
 		digest: review?.digest ?? '',
 		revision_id: review?.revision?.id ?? null,
-		...(review?.agent ? { expires_at: expiresAtIso(duration) ?? null } : {}),
+		...(review?.agent
+			? { expires_at: expiresAtIso(duration) ?? null, max_idle_period: idleSeconds(idle) }
+			: {}),
 	});
 
 	/**
@@ -693,7 +707,7 @@ export function VendorApproveFlow({
 	const bindsAgent = Boolean(session?.agent);
 	const continueDisabled =
 		!canConfirm ||
-		(bindsAgent && !durationChosen(duration)) ||
+		(bindsAgent && (!durationChosen(duration) || idleLimitError(idle) !== null)) ||
 		method.kind === 'shared_app' ||
 		(method.kind === 'primary' &&
 			!secretKind &&
@@ -788,12 +802,21 @@ export function VendorApproveFlow({
 						selectRef={durationRef}
 						testIdPrefix="approve"
 					/>
-					{requestedDuration && (
+					<IdleLimitField
+						value={idle}
+						onChange={(next): void => {
+							setStepError(null);
+							setIdle(next);
+						}}
+						end={expiresAtFromDuration(duration)}
+						testIdPrefix="approve"
+					/>
+					{requestedText(requestedDuration, session.requested_max_idle_period) && (
 						<p
 							className="text-muted-foreground text-xs"
 							data-testid="approve-duration-requested"
 						>
-							The request asked for {durationLabel(requestedDuration)}.
+							{requestedText(requestedDuration, session.requested_max_idle_period)}
 						</p>
 					)}
 				</div>
@@ -824,7 +847,12 @@ export function VendorApproveFlow({
 						type="button"
 						variant="primary"
 						onClick={(): void =>
-							noExpiry.request(bindsAgent && choosesNoExpiry(duration), goToRules)
+							noExpiry.request(
+								bindsAgent &&
+									choosesNoExpiry(duration) &&
+									idleSeconds(idle) === null,
+								goToRules,
+							)
 						}
 						// Scope-less vendors proceed with the vendor's defaults —
 						// only gate on an empty selection when there are scopes
@@ -881,4 +909,15 @@ function reviewScopesToCatalog(scopes: ReviewScope[]): VendorScopeCatalog[] {
 		default: s.default,
 		description: s.description,
 	}));
+}
+
+/** "The request asked for 7 days, ending if unused for 14 days." — or null with no ask. */
+function requestedText(
+	duration: BindingDuration | null,
+	idleSecondsAsked: number | null | undefined,
+): string | null {
+	const idle = idleSecondsAsked ? `ending if unused for ${idleLabel(idleSecondsAsked)}` : null;
+	if (duration)
+		return `The request asked for ${durationLabel(duration)}${idle ? `, ${idle}` : ''}.`;
+	return idle ? `The request asked for access ${idle}.` : null;
 }

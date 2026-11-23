@@ -32,7 +32,13 @@ import {
 	cancelConnectSessionOnUnload,
 } from '@/shared/credentials/api/vendors-client';
 import { isHttpsVendorUrl, openVendorUrl } from '@/shared/credentials/lib/safe-navigation';
-import { expiresAtIso, type BindingDuration } from '@/shared/credentials/lib/bindingDuration';
+import {
+	expiresAtFromDuration,
+	expiresAtIso,
+	type BindingDuration,
+} from '@/shared/credentials/lib/bindingDuration';
+import { idleLimitError, idleSeconds, type IdleLimit } from '@/shared/credentials/lib/idleLimit';
+import { IdleLimitField } from './IdleLimitField';
 import {
 	NO_DURATION_HINT,
 	choosesNoExpiry,
@@ -105,6 +111,7 @@ export function VendorSelfConnectFlow({
 	const [agentId, setAgentId] = useState<string | null>(preselectedAgentId ?? null);
 	// How long the binding lasts, when an agent is picked; nothing preselected.
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
+	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
 
@@ -331,7 +338,12 @@ export function VendorSelfConnectFlow({
 				agent_id: agentId,
 				revision_id: session.revisionId,
 				// Worked out now, as the user confirms: the duration runs from here.
-				...(agentId ? { expires_at: expiresAtIso(duration) ?? null } : {}),
+				...(agentId
+					? {
+							expires_at: expiresAtIso(duration) ?? null,
+							max_idle_period: idleSeconds(idle),
+						}
+					: {}),
 			});
 			// A vendor session's OAuth confirm always answers with a vendor
 			// challenge; the other result kinds belong to approve mode.
@@ -479,6 +491,14 @@ export function VendorSelfConnectFlow({
 					testIdPrefix="self-connect"
 				/>
 			)}
+			{agentId && (
+				<IdleLimitField
+					value={idle}
+					onChange={setIdle}
+					end={expiresAtFromDuration(duration)}
+					testIdPrefix="self-connect"
+				/>
+			)}
 
 			{flowError && <ErrorAlert message={flowError} />}
 
@@ -492,7 +512,9 @@ export function VendorSelfConnectFlow({
 					variant="primary"
 					onClick={(): void =>
 						noExpiry.request(
-							agentId != null && choosesNoExpiry(duration),
+							agentId != null &&
+								choosesNoExpiry(duration) &&
+								idleSeconds(idle) === null,
 							() => void goToRules(),
 						)
 					}
@@ -507,7 +529,8 @@ export function VendorSelfConnectFlow({
 					disabled={
 						(scopes.length > 0 && selectedScopes.size === 0) ||
 						// Binding an agent waits for how long the access lasts.
-						(agentId != null && !durationChosen(duration)) ||
+						(agentId != null &&
+							(!durationChosen(duration) || idleLimitError(idle) !== null)) ||
 						startMutation.isPending
 					}
 					loading={startMutation.isPending}

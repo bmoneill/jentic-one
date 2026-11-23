@@ -34,6 +34,7 @@ import {
 	pollConnectSessionStatus,
 	rejectConnectSession,
 	renewCredentialBinding,
+	type BindingRenewal,
 	startEditConnection,
 	startIntegrationConnect,
 	type VendorOperationsPage,
@@ -396,12 +397,14 @@ export function useBindCredentialToAgents() {
 			agentIds: readonly string[];
 			rules?: readonly PermissionRuleSchema[];
 			expiresAt?: string | null;
+			/** The idle limit in seconds, the same for every binding. */
+			maxIdlePeriod?: number | null;
 		}
 	>({
-		mutationFn: async ({ credentialId, agentIds, rules, expiresAt }) => {
+		mutationFn: async ({ credentialId, agentIds, rules, expiresAt, maxIdlePeriod }) => {
 			const rulesFailed: string[] = [];
 			for (const aid of agentIds) {
-				await bindCredentialToAgentBlocked(aid, credentialId, expiresAt);
+				await bindCredentialToAgentBlocked(aid, credentialId, expiresAt, maxIdlePeriod);
 				if (!rules) continue;
 				try {
 					await replaceBindingPermissions(aid, credentialId, [...rules]);
@@ -417,19 +420,16 @@ export function useBindCredentialToAgents() {
 }
 
 /**
- * Renew one binding (`PATCH /agents/{id}/credentials/{cid}`): a new end date,
- * or `null` to clear it. Every surface showing the binding refetches before the
- * mutation settles, so its status never reads "Expired" after a renewal.
+ * Renew one binding (`PATCH /agents/{id}/credentials/{cid}`): restart its idle
+ * clock and change the limits given (see {@link BindingRenewal}). Every surface
+ * showing the binding refetches before the mutation settles, so its status
+ * never reads "Expired" after a renewal.
  */
 export function useRenewCredentialBinding() {
 	const client = useQueryClient();
-	return useMutation<
-		void,
-		Error,
-		{ agentId: string; credentialId: string; expiresAt: string | null }
-	>({
-		mutationFn: ({ agentId, credentialId, expiresAt }) =>
-			renewCredentialBinding(agentId, credentialId, expiresAt),
+	return useMutation<void, Error, { agentId: string; credentialId: string } & BindingRenewal>({
+		mutationFn: ({ agentId, credentialId, ...renewal }) =>
+			renewCredentialBinding(agentId, credentialId, renewal),
 		onSettled: (_res, _err, { agentId, credentialId }) =>
 			invalidateBindingSurfaces(client, credentialId, [agentId]),
 	});

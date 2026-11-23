@@ -49,6 +49,8 @@ export {
 } from '@/shared/credentials/components/NoExpiryConfirmDialog';
 export type { NoExpiryConfirmDialogProps } from '@/shared/credentials/components/NoExpiryConfirmDialog';
 export { RenewBindingControl } from '@/shared/credentials/components/RenewBindingControl';
+export { IdleLimitField } from '@/shared/credentials/components/IdleLimitField';
+export type { IdleLimitFieldProps } from '@/shared/credentials/components/IdleLimitField';
 export type { RenewBindingControlProps } from '@/shared/credentials/components/RenewBindingControl';
 export { RuleListEditor } from '@/shared/credentials/components/RuleListEditor';
 export {

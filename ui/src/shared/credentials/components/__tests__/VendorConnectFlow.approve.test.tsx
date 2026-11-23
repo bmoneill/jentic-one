@@ -195,6 +195,30 @@ describe('VendorConnectFlow approve — how long the access lasts', () => {
 		expect(end).toBeLessThanOrEqual(Date.now() + DAY);
 	});
 
+	it("preselects a requested idle limit and sends the approver's choice", async () => {
+		const seeded = seedManualSession({
+			requested_expires_in: 30 * 86_400,
+			requested_max_idle_period: 14 * 86_400,
+		});
+		renderApprove(seeded.session_id);
+		const user = userEvent.setup();
+
+		expect(await screen.findByTestId('approve-duration-requested')).toHaveTextContent(
+			'The request asked for 30 days, ending if unused for 14 days.',
+		);
+		const idle = screen.getByTestId('approve-idle-preset') as HTMLSelectElement;
+		expect(idle.value).toBe('14d');
+		await user.selectOptions(idle, '7d');
+		await continueFromReview(user);
+		await user.click(screen.getByRole('button', { name: /^continue$/i }));
+		await user.type(await screen.findByLabelText(/^API key/), 'sk_live_123');
+		await user.click(screen.getByRole('button', { name: 'Connect' }));
+
+		expect(await screen.findByText('Connected to acme-com')).toBeInTheDocument();
+		const body = getMockConnectSessions()[0].confirmBodies[0] as { max_idle_period?: number };
+		expect(body.max_idle_period).toBe(7 * 86_400);
+	});
+
 	it('waits for a choice when nothing was asked, and asks before No expiry', async () => {
 		const seeded = seedManualSession();
 		renderApprove(seeded.session_id);
@@ -283,6 +307,7 @@ describe('VendorConnectFlow approve — manual_* sessions', () => {
 			revision_id: expect.stringMatching(/^csr_/),
 			// The end date chosen on the review, worked out on confirm.
 			expires_at: expect.any(String),
+			max_idle_period: null,
 		});
 		// Not persisted client-side anywhere the browser keeps across loads.
 		const persisted =
@@ -630,6 +655,7 @@ describe('VendorConnectFlow approve — awaiting_app', () => {
 			revision_id: expect.stringMatching(/^csr_/),
 			// The end date chosen on the review, worked out on confirm.
 			expires_at: expect.any(String),
+			max_idle_period: null,
 		});
 	});
 
@@ -720,6 +746,7 @@ describe('VendorConnectFlow approve — awaiting_app', () => {
 			revision_id: expect.stringMatching(/^csr_/),
 			// The end date chosen on the review, worked out on confirm.
 			expires_at: expect.any(String),
+			max_idle_period: null,
 		});
 	});
 

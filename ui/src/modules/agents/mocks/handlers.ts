@@ -176,6 +176,10 @@ interface CredentialBindingRow {
 	bound_at: string;
 	/** When the binding stops authorizing calls; null = never. */
 	expires_at?: string | null;
+	/** Idle limit in seconds; null = none. */
+	max_idle_period?: number | null;
+	/** When it was granted or last renewed (restarts the idle clock). */
+	renewed_at?: string | null;
 	/** Last call through the credential; null = never used. */
 	last_used_at: string | null;
 	/** Per-API last use; derived from `last_used_at` and `serves` when absent. */
@@ -324,11 +328,36 @@ function bindingJson(row: CredentialBindingRow) {
 function bindingExpiryJson(row: CredentialBindingRow): {
 	expires_at: string | null;
 	expired: boolean;
+	expired_reason: 'end_date' | 'idle' | null;
+	max_idle_period: number | null;
+	idle_expires_at: string | null;
+	renewed_at: string | null;
 } {
 	const expiresAt = row.expires_at ?? null;
+	const limit = row.max_idle_period ?? null;
+	// The idle clock: the later of the last use and the last grant or renewal.
+	const start = Math.max(
+		...[row.last_used_at, row.renewed_at ?? row.bound_at]
+			.filter((t): t is string => Boolean(t))
+			.map((t) => Date.parse(t)),
+	);
+	const idleEnd = limit != null && Number.isFinite(start) ? start + limit * 1000 : null;
+	const now = Date.now();
+	const endedByDate = expiresAt != null && Date.parse(expiresAt) <= now;
+	const endedByIdle = idleEnd != null && idleEnd <= now;
 	return {
 		expires_at: expiresAt,
-		expired: expiresAt != null && Date.parse(expiresAt) <= Date.now(),
+		expired: endedByDate || endedByIdle,
+		expired_reason: endedByIdle
+			? endedByDate && Date.parse(expiresAt!) < idleEnd!
+				? 'end_date'
+				: 'idle'
+			: endedByDate
+				? 'end_date'
+				: null,
+		max_idle_period: limit,
+		idle_expires_at: idleEnd != null ? new Date(idleEnd).toISOString() : null,
+		renewed_at: row.renewed_at ?? null,
 	};
 }
 
@@ -2007,6 +2036,7 @@ export const agentsHandlers = [
 		const body = (await request.json().catch(() => ({}))) as {
 			credential_id?: string;
 			expires_at?: string | null;
+			max_idle_period?: number | null;
 		};
 		const pastExpiry = pastExpiryError(body.expires_at);
 		if (pastExpiry) return pastExpiry;
@@ -2036,6 +2066,8 @@ export const agentsHandlers = [
 			credential_id: body.credential_id,
 			bound_at: now(),
 			expires_at: body.expires_at ?? null,
+			max_idle_period: body.max_idle_period ?? null,
+			renewed_at: now(),
 			name: credential?.name ?? null,
 			serves: credential
 				? [
@@ -2073,16 +2105,19 @@ export const agentsHandlers = [
 			(b) => b.agent_id === params.id && b.credential_id === params.cid,
 		);
 		if (!row) return new HttpResponse(null, { status: 404 });
-		const body = (await request.json().catch(() => ({}))) as { expires_at?: string | null };
-		if (!('expires_at' in body)) {
-			return HttpResponse.json(
-				{ detail: [{ loc: ['body', 'expires_at'], msg: 'Field required' }] },
-				{ status: 422 },
-			);
+		// A field left out stays as it is; null clears it. Every renewal restarts
+		// the idle clock, so an empty body is "still needed".
+		const body = (await request.json().catch(() => ({}))) as {
+			expires_at?: string | null;
+			max_idle_period?: number | null;
+		};
+		if ('expires_at' in body) {
+			const pastExpiry = pastExpiryError(body.expires_at);
+			if (pastExpiry) return pastExpiry;
+			row.expires_at = body.expires_at ?? null;
 		}
-		const pastExpiry = pastExpiryError(body.expires_at);
-		if (pastExpiry) return pastExpiry;
-		row.expires_at = body.expires_at ?? null;
+		if ('max_idle_period' in body) row.max_idle_period = body.max_idle_period ?? null;
+		row.renewed_at = now();
 		return HttpResponse.json(bindingJson(row));
 	}),
 	http.post('/agents/:id/credentials/:cid\\:resume', ({ params }) => {

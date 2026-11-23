@@ -58,7 +58,12 @@ import {
 	CreateCredentialFlow,
 	RenewBindingControl,
 } from '@/shared/credentials/components';
-import { bindingExpiresSoon, bindingExpiryLabel } from '@/shared/credentials/lib/bindingExpiry';
+import {
+	bindingExpiredReason,
+	bindingExpiresSoon,
+	bindingExpiryLabel,
+} from '@/shared/credentials/lib/bindingExpiry';
+import { idleLabel } from '@/shared/credentials/lib/idleLimit';
 import { credentialEditableBy } from '@/shared/credentials/lib/credentialAuthority';
 import {
 	summarizeBindingRules,
@@ -625,6 +630,8 @@ export function ApiAccessSidebar({
 										credentialId={credentialId}
 										expiresAt={shown.expiresAt}
 										expired={shown.expired ?? false}
+										maxIdlePeriod={shown.maxIdlePeriod ?? null}
+										expiredReason={shown.expiredReason ?? null}
 										testIdPrefix="sidebar-renew"
 									/>
 								)}
@@ -850,14 +857,24 @@ export function ApiAccessSidebar({
 /** The sheet's line about when this access ends. */
 function expiryStatusText(tile: ApiTileModel): string {
 	const label = bindingExpiryLabel(tile);
-	if (!tile.expiresAt || !label) {
+	const idle = tile.maxIdlePeriod ? idleLabel(tile.maxIdlePeriod) : null;
+	if (!label) {
 		return 'No expiry — this access lasts until someone removes it. Setting an end date is recommended.';
 	}
-	const when = formatTimestamp(tile.expiresAt);
-	if (tile.expired) {
-		return `${label} (${when}). Calls through this credential are refused until it is renewed${
-			tile.suspended ? ' and resumed' : ''
-		}.`;
+	const resume = tile.suspended ? ' and resumed' : '';
+	if (bindingExpiredReason(tile) === 'idle') {
+		return `${label}. Calls through this credential are refused until it is renewed${resume}; "Still needed" restores it.`;
 	}
-	return `${label} (${when}). After that, calls through this credential are refused until it is renewed.`;
+	const end = tile.expiresAt ? ` (${formatTimestamp(tile.expiresAt)})` : '';
+	if (tile.expired) {
+		return `${label}${end}. Calls through this credential are refused until it is renewed${resume}.`;
+	}
+	if (label.endsWith('unless used')) {
+		// The idle limit comes first: each call moves it later.
+		return tile.expiresAt
+			? `${label}; its end date is ${formatTimestamp(tile.expiresAt)}.`
+			: `${label}. It has no end date: an agent that keeps using it keeps access.`;
+	}
+	const idleNote = idle ? ` It also ends if unused for ${idle}.` : '';
+	return `${label}${end}. After that, calls through this credential are refused until it is renewed.${idleNote}`;
 }

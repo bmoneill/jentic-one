@@ -67,7 +67,10 @@ export function BoundAgentsSection({
 	onNavigateAway?: () => void;
 }) {
 	const agents = useCredentialAgents(credentialId, { enabled: open });
-	const rows = agents.data?.data ?? [];
+	const allRows = agents.data?.data ?? [];
+	// Finding unused access: the longest-unused (never used first) on top.
+	const [unusedFirst, setUnusedFirst] = useState(false);
+	const rows = unusedFirst ? [...allRows].sort(byLongestUnused) : allRows;
 	const viewer = useOptionalCurrentUser();
 	const yoursOnly =
 		createdBy !== undefined && !credentialEditableBy({ created_by: createdBy }, viewer);
@@ -92,10 +95,23 @@ export function BoundAgentsSection({
 
 	return (
 		<div className="bg-surface-inset space-y-2 rounded-lg p-3">
-			<p className="text-foreground-name text-sm font-semibold">
-				{yoursOnly ? 'Your bound agents' : 'Bound agents'}
-				{agents.isSuccess ? ` (${rows.length})` : ''}
-			</p>
+			<div className="flex items-center justify-between gap-2">
+				<p className="text-foreground-name text-sm font-semibold">
+					{yoursOnly ? 'Your bound agents' : 'Bound agents'}
+					{agents.isSuccess ? ` (${rows.length})` : ''}
+				</p>
+				{rows.length > 1 && (
+					<Button
+						size="xs"
+						variant="ghost"
+						aria-pressed={unusedFirst}
+						onClick={(): void => setUnusedFirst((on) => !on)}
+						data-testid="bound-agents-sort-unused"
+					>
+						Longest unused first
+					</Button>
+				)}
+			</div>
 			<p className="text-foreground-sub text-xs">
 				{yoursOnly
 					? "Your agents allowed to call APIs with this credential. Other users' agents aren't listed."
@@ -244,6 +260,8 @@ function BoundAgentRow({
 					credentialId={credentialId}
 					expiresAt={row.expires_at}
 					expired={expired}
+					maxIdlePeriod={row.max_idle_period ?? null}
+					expiredReason={row.expired_reason ?? null}
 					onRenewed={onToggleRenew}
 					testIdPrefix="bound-agent-renew-control"
 				/>
@@ -254,7 +272,13 @@ function BoundAgentRow({
 
 /** A roster row's end date, in the shape the expiry helpers read. */
 function expiryFields(row: CredentialAgentResponse): BindingExpiryFields {
-	return { expiresAt: row.expires_at ?? null, expired: row.expired ?? false };
+	return {
+		expiresAt: row.expires_at ?? null,
+		expired: row.expired ?? false,
+		expiredReason: row.expired_reason ?? null,
+		maxIdlePeriod: row.max_idle_period ?? null,
+		idleExpiresAt: row.idle_expires_at ?? null,
+	};
 }
 
 /** "used 3d ago" / "used just now" / "never used" for a bound agent's last call. */
@@ -262,4 +286,11 @@ function lastUsedText(lastUsedAt: string | null): string {
 	if (lastUsedAt === null) return 'never used';
 	const age = timeAgo(lastUsedAt);
 	return age === 'now' ? 'used just now' : `used ${age} ago`;
+}
+
+/** Never used first, then the oldest last use first. */
+function byLongestUnused(a: CredentialAgentResponse, b: CredentialAgentResponse): number {
+	const at = (row: CredentialAgentResponse): number =>
+		row.last_used_at ? Date.parse(row.last_used_at) : Number.NEGATIVE_INFINITY;
+	return at(a) - at(b);
 }

@@ -53,6 +53,11 @@ export interface ApiTileModel {
 	expiresAt?: string | null;
 	/** The binding's end date has passed — refused until renewed. */
 	expired?: boolean;
+	/** Which limit ended it (`end_date`, `idle`); null while it holds. */
+	expiredReason?: string | null;
+	/** Idle limit in seconds, and when it ends the binding if unused. */
+	maxIdlePeriod?: number | null;
+	idleExpiresAt?: string | null;
 	/** OAuth sign-in not completed. Drives the dashed treatment. */
 	awaitingConsent: boolean;
 	/** The registry has an upstream spec update this API hasn't adopted. */
@@ -232,6 +237,9 @@ export function composeApiTiles(
 			suspendedReason: binding.suspendedReason,
 			expiresAt: binding.expiresAt ?? null,
 			expired: bindingIsExpired(binding),
+			expiredReason: binding.expiredReason ?? null,
+			maxIdlePeriod: binding.maxIdlePeriod ?? null,
+			idleExpiresAt: binding.idleExpiresAt ?? null,
 			awaitingConsent: credentialAwaitsConsent(credential),
 			authLabel: credential ? (AUTH_TILE_LABEL[credential.type] ?? null) : null,
 		};

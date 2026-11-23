@@ -150,6 +150,7 @@ export async function bindCredentialToAgentBlocked(
 	agentId: string,
 	credentialId: string,
 	expiresAt?: string | null,
+	maxIdlePeriod?: number | null,
 ): Promise<void> {
 	try {
 		await AgentsService.bindAgentCredential({
@@ -157,6 +158,7 @@ export async function bindCredentialToAgentBlocked(
 			requestBody: {
 				credential_id: credentialId,
 				...(expiresAt !== undefined ? { expires_at: expiresAt } : {}),
+				...(maxIdlePeriod != null ? { max_idle_period: maxIdlePeriod } : {}),
 			},
 		});
 	} catch (err) {
@@ -166,22 +168,35 @@ export async function bindCredentialToAgentBlocked(
 	}
 }
 
+/** What a renewal changes: a field left out stays as it is; `null` clears that limit. */
+export interface BindingRenewal {
+	expiresAt?: string | null;
+	/** The idle limit in seconds. */
+	maxIdlePeriod?: number | null;
+}
+
 /**
- * Renew a binding (`PATCH /agents/{id}/credentials/{cid}`): set or move when
- * it stops authorizing calls, or clear the end date with `null`. Renewing
- * restores an expired binding; it never resumes a suspended one. The caller
- * must own the credential (or hold ``org:admin``), as for ``:resume``.
+ * Renew a binding (`PATCH /agents/{id}/credentials/{cid}`): re-certify it,
+ * restarting its idle clock, and set, move or clear its limits (an empty
+ * renewal is "still needed"). Renewing restores an expired binding; it never
+ * resumes a suspended one. The caller must own the credential (or hold
+ * ``org:admin``), as for ``:resume``.
  */
 export async function renewCredentialBinding(
 	agentId: string,
 	credentialId: string,
-	expiresAt: string | null,
+	renewal: BindingRenewal,
 ): Promise<void> {
 	try {
 		await AgentsService.renewAgentCredentialBinding({
 			agentId,
 			credentialId,
-			requestBody: { expires_at: expiresAt },
+			requestBody: {
+				...(renewal.expiresAt !== undefined ? { expires_at: renewal.expiresAt } : {}),
+				...(renewal.maxIdlePeriod !== undefined
+					? { max_idle_period: renewal.maxIdlePeriod }
+					: {}),
+			},
 		});
 	} catch (err) {
 		// The server's own words (a credential the viewer may not renew, say), or

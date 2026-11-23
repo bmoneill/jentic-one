@@ -28,6 +28,9 @@ function seedBoundAgents(
 		last_used_at?: string | null;
 		expires_at?: string | null;
 		expired?: boolean;
+		expired_reason?: string | null;
+		max_idle_period?: number | null;
+		idle_expires_at?: string | null;
 	}>,
 ) {
 	worker.use(
@@ -46,6 +49,12 @@ function seedBoundAgents(
 					suspended: r.suspended ?? false,
 					suspended_reason: r.suspended_reason ?? null,
 					...('last_used_at' in r && { last_used_at: r.last_used_at }),
+					...('max_idle_period' in r && {
+						max_idle_period: r.max_idle_period,
+						idle_expires_at: r.idle_expires_at ?? null,
+						expired_reason: r.expired_reason ?? null,
+						expired: r.expired ?? false,
+					}),
 					...('expires_at' in r && {
 						expires_at: r.expires_at,
 						expired: r.expired ?? false,
@@ -548,5 +557,56 @@ describe('BoundAgentsSection — when access ends', () => {
 		).toBeVisible();
 		expect(within(control).getByText(/check this device’s clock/)).toBeVisible();
 		expect(within(control).queryByText(/Unprocessable/)).not.toBeInTheDocument();
+	});
+
+	it('says when an idle binding ended, and "Still needed" restarts its idle clock', async () => {
+		const renewals = watchRenewals();
+		seedBoundAgents('cred_gh_1', [
+			{
+				agent_id: 'agnt_idle',
+				agent_name: 'idle-agent',
+				max_idle_period: 14 * 86_400,
+				idle_expires_at: new Date(Date.now() - 60_000).toISOString(),
+				expired: true,
+				expired_reason: 'idle',
+			},
+		]);
+		const user = userEvent.setup();
+		renderSheet('cred_gh_1');
+
+		const row = await screen.findByTestId('bound-agent-row');
+		expect(within(row).getByTestId('bound-agent-expired')).toBeVisible();
+		expect(within(row).getByTestId('bound-agent-expiry')).toHaveTextContent(
+			'Expired: unused for 14 days',
+		);
+		await user.click(within(row).getByRole('button', { name: /^Renew for \W?idle-agent\W?$/ }));
+		// The idle row starts on the binding's own limit.
+		expect(
+			(screen.getByTestId('bound-agent-renew-control-idle-preset') as HTMLSelectElement)
+				.value,
+		).toBe('14d');
+		await user.click(screen.getByTestId('bound-agent-renew-control-still-needed'));
+		await vi.waitFor(() => expect(renewals).toEqual([{}]));
+	});
+
+	it('sorts the longest-unused first on request', async () => {
+		seedBoundAgents('cred_gh_1', [
+			{ agent_id: 'agnt_recent', agent_name: 'recent', last_used_at: inDays(-1) },
+			{ agent_id: 'agnt_never', agent_name: 'never', last_used_at: null },
+			{ agent_id: 'agnt_old', agent_name: 'old', last_used_at: inDays(-40) },
+		]);
+		const user = userEvent.setup();
+		renderSheet('cred_gh_1');
+		await screen.findByText('Bound agents (3)');
+		const names = (): string[] =>
+			screen
+				.getAllByTestId('bound-agent-row')
+				.map((r) => r.querySelector('a')?.textContent ?? '');
+		expect(names()).toEqual(['recent', 'never', 'old']);
+
+		const toggle = screen.getByTestId('bound-agents-sort-unused');
+		await user.click(toggle);
+		expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		expect(names()).toEqual(['never', 'old', 'recent']);
 	});
 });

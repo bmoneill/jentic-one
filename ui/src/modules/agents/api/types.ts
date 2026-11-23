@@ -150,6 +150,14 @@ export interface CredentialBindingEntity {
 	expiresAt?: string | null;
 	/** `expiresAt` had passed when the server answered. */
 	expired?: boolean;
+	/** Which limit ended it (`end_date`, `idle`), per the server; null while it holds. */
+	expiredReason?: string | null;
+	/** Idle limit in seconds; null without one. */
+	maxIdlePeriod?: number | null;
+	/** When the idle limit ends it if unused; null without one. */
+	idleExpiresAt?: string | null;
+	/** When it was granted or last renewed (restarts the idle clock). */
+	renewedAt?: string | null;
 	/** When the agent last made a call through this credential, whatever its
 	 * outcome; null when it never has. Absent when the server doesn't report it,
 	 * so the UI claims nothing either way. */
