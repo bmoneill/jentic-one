@@ -2157,7 +2157,7 @@ type ApiInfoResponse struct {
 
 // ApiKeyConfirmSessionRequest Confirm a “manual_api_key“ session with the API key to store.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","key":"example-secret","kind":"api_key","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","key":"example-secret","kind":"api_key","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
 type ApiKeyConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -2173,6 +2173,11 @@ type ApiKeyConfirmSessionRequest struct {
 	//
 	// Examples: agnt_6968b3984d1c238dbe7e2e29
 	ExpectedAgentId *string `json:"expected_agent_id,omitempty"`
+
+	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// Key API key to store; write-only.
 	//
@@ -3161,7 +3166,7 @@ type BasicAuthUpdateRequestType string
 
 // BasicConfirmSessionRequest Confirm a “manual_basic“ session with the username and password to store.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","kind":"basic","password":"example-secret","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","username":"svc-reporting"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"basic","password":"example-secret","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","username":"svc-reporting"}
 type BasicConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -3177,6 +3182,11 @@ type BasicConfirmSessionRequest struct {
 	//
 	// Examples: agnt_6968b3984d1c238dbe7e2e29
 	ExpectedAgentId *string `json:"expected_agent_id,omitempty"`
+
+	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// Kind Confirm variant; always `basic`.
 	//
@@ -3211,7 +3221,7 @@ type BasicConfirmSessionRequestKind string
 
 // BearerConfirmSessionRequest Confirm a “manual_bearer“ session with the bearer token to store.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","kind":"bearer","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","token":"example-secret"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"bearer","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","token":"example-secret"}
 type BearerConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -3227,6 +3237,11 @@ type BearerConfirmSessionRequest struct {
 	//
 	// Examples: agnt_6968b3984d1c238dbe7e2e29
 	ExpectedAgentId *string `json:"expected_agent_id,omitempty"`
+
+	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// Kind Confirm variant; always `bearer`.
 	//
@@ -5144,7 +5159,7 @@ type ExecutionStatus string
 // When its OAuth grant lacks scopes the session asks for, the response is
 // the vendor challenge for them and the bind lands with the grant.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","credential_id":"cred_6968b39855d91a3561684b32","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","kind":"existing_credential","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","credential_id":"cred_6968b39855d91a3561684b32","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"existing_credential","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
 type ExistingCredentialConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -5165,6 +5180,11 @@ type ExistingCredentialConfirmSessionRequest struct {
 	//
 	// Examples: agnt_6968b3984d1c238dbe7e2e29
 	ExpectedAgentId *string `json:"expected_agent_id,omitempty"`
+
+	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// Kind Confirm variant; always `existing_credential`.
 	//
@@ -5712,7 +5732,7 @@ type InstanceIdentityResponseBackend string
 
 // IntegrationsConnectRequest Start connecting a credential for a vendor or a registry API.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","api":{"name":"stripe","vendor":"stripe.com","version":"2024-04-10"},"auth_type":"oauth2","name":"GitHub (work)","oauth_app_registration_id":"oar_6968b39821e5f89a6975f501","preferred_flow":"authorization_code","reason":"Needs read access to triage issues in the platform repo.","requested_permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"requested_scopes":["repo","read:user"],"vendor":"github"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","api":{"name":"stripe","vendor":"stripe.com","version":"2024-04-10"},"auth_type":"oauth2","name":"GitHub (work)","oauth_app_registration_id":"oar_6968b39821e5f89a6975f501","preferred_flow":"authorization_code","reason":"Needs read access to triage issues in the platform repo.","requested_expires_in":604800,"requested_permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"requested_scopes":["repo","read:user"],"vendor":"github"}
 type IntegrationsConnectRequest struct {
 	// AgentId ID of the agent to bind the credential to on confirm; it must be an active agent the caller owns and may approve for (`agents:write`), or any agent for `org:admin`. Agent callers must omit it, and when omitted by a user the credential connects unbound.
 	//
@@ -5748,6 +5768,11 @@ type IntegrationsConnectRequest struct {
 	//
 	// Examples: Needs read access to triage issues in the platform repo.
 	Reason *string `json:"reason,omitempty"`
+
+	// RequestedExpiresIn How long the requested access should last, in seconds, counted from approval (at most 999 days). Shown preselected on the review page; the approver decides the binding's actual end date. Omit to ask for nothing in particular.
+	//
+	// Examples: 604800
+	RequestedExpiresIn *int `json:"requested_expires_in,omitempty"`
 
 	// RequestedPermissionRules Permission rules proposed for the agent, shown pre-filled on the review page; nothing is bound until confirm.
 	//
@@ -7170,7 +7195,7 @@ type OAuthClientUpdateRequest struct {
 //
 // The default variant — a body without “kind“ is this one.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","confirmed_scopes":["repo","read:user"],"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","kind":"oauth","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","confirmed_scopes":["repo","read:user"],"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"oauth","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
 type OAuthConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -7191,6 +7216,11 @@ type OAuthConfirmSessionRequest struct {
 	//
 	// Examples: agnt_6968b3984d1c238dbe7e2e29
 	ExpectedAgentId *string `json:"expected_agent_id,omitempty"`
+
+	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// Kind Confirm variant; `oauth` (the default when omitted).
 	//
@@ -7911,7 +7941,7 @@ type OverlayUpdateRequest struct {
 // the spec may be agent-submitted and the token endpoint receives the
 // client secret.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","authorize_url":"https://github.com/login/oauth/authorize","client_id":"Iv1.a1b2c3d4","client_secret":"example-secret","confirmed_scopes":["repo","read:user"],"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","kind":"own_oauth_client","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","token_url":"https://github.com/login/oauth/access_token"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","authorize_url":"https://github.com/login/oauth/authorize","client_id":"Iv1.a1b2c3d4","client_secret":"example-secret","confirmed_scopes":["repo","read:user"],"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"own_oauth_client","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","token_url":"https://github.com/login/oauth/access_token"}
 type OwnOAuthClientConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -7947,6 +7977,11 @@ type OwnOAuthClientConfirmSessionRequest struct {
 	//
 	// Examples: agnt_6968b3984d1c238dbe7e2e29
 	ExpectedAgentId *string `json:"expected_agent_id,omitempty"`
+
+	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
 	// Kind Confirm variant; always `own_oauth_client`.
 	//
@@ -8697,7 +8732,7 @@ type ReviewScopeResponse struct {
 // ReviewScopeResponseClassification Examples: write
 type ReviewScopeResponseClassification string
 
-// ReviewSessionResponse Examples: {"agent":{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","name":"Issue triage bot","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"},"api_reference":{"name":"stripe","vendor":"stripe.com","version":"2024-04-10"},"can_confirm":true,"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","edit":{"binding":{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","credential_id":"cred_6968b39855d91a3561684b32"},"conflicts":[{"kind":"missing_rule","rule_id":"apr_1"}],"current":{"granted_scopes":["gmail.readonly"],"rule_set":{"created_by":"usr_6968b3987ee4c3ec0b4ee3b9","curated":false,"id":"prs_6968b3987c22b63e87e79f05","name":"Stripe read-only","rules":[{"added_by":"agnt_6968b3984d1c238dbe7e2e29","effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"path":"/v1/charges"}]},"rules":[{"added_by":"agnt_6968b3984d1c238dbe7e2e29","effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"path":"/v1/charges"}],"suspended":false},"needs_vendor_consent":true,"other_bound_agents":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29"}],"other_bound_agents_truncated":false,"result":{"rules":[{"added_by":"agnt_6968b3984d1c238dbe7e2e29","effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"path":"/v1/charges"}],"scopes":["gmail.readonly","gmail.send"],"suspended":false,"target":"binding"},"revision":{"id":"csr_6968b3983b8b91c75627bee6","number":2},"widens_access":true},"existing_credentials":[{"can_bind":true,"credential_id":"cred_6968b39855d91a3561684b32","granted_scopes":["repo"],"missing_scopes":["read:user"],"name":"GitHub (work)","needs_vendor_consent":true,"other_bound_agents":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29"}],"other_bound_agents_truncated":false,"type":"oauth2"}],"last_rejected_at":"2026-01-10T16:45:00Z","pinned_hosts":["api.github.com"],"provenance":{"catalog_api_id":"stripe.com","origin":"catalog","revision_id":"3f2b8c1e-7d4a-4e9b-a6c5-1d2e3f4a5b6c","source_url":"https://raw.githubusercontent.com/stripe/openapi/master/spec3.json","submitted_by":"usr_6968b3987ee4c3ec0b4ee3b9"},"reason":"Needs read access to triage issues in the platform repo.","requested_by_actor_id":"agnt_6968b3984d1c238dbe7e2e29","requested_permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"requested_scopes":["repo","read:user"],"resolved_flow":"authorization_code","revision":{"id":"csr_6968b3983b8b91c75627bee6","number":2},"scheme":{"authorization_url":"https://github.com/login/oauth/authorize","field_name":"Authorization","location":"header","token_url":"https://github.com/login/oauth/access_token","type":"oauth2"},"scopes":[{"classification":"write","default":false,"description":"Full control of private repositories","name":"repo","requested":true}],"session_id":"cs_6968b3983b8b91c75627bee5","stale":false,"state":"created","target_kind":"vendor","vendor_display_name":"GitHub","vendor_key":"github"}
+// ReviewSessionResponse Examples: {"agent":{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","name":"Issue triage bot","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"},"api_reference":{"name":"stripe","vendor":"stripe.com","version":"2024-04-10"},"can_confirm":true,"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","edit":{"binding":{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","credential_id":"cred_6968b39855d91a3561684b32"},"conflicts":[{"kind":"missing_rule","rule_id":"apr_1"}],"current":{"granted_scopes":["gmail.readonly"],"rule_set":{"created_by":"usr_6968b3987ee4c3ec0b4ee3b9","curated":false,"id":"prs_6968b3987c22b63e87e79f05","name":"Stripe read-only","rules":[{"added_by":"agnt_6968b3984d1c238dbe7e2e29","effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"path":"/v1/charges"}]},"rules":[{"added_by":"agnt_6968b3984d1c238dbe7e2e29","effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"path":"/v1/charges"}],"suspended":false},"needs_vendor_consent":true,"other_bound_agents":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29"}],"other_bound_agents_truncated":false,"result":{"rules":[{"added_by":"agnt_6968b3984d1c238dbe7e2e29","effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"path":"/v1/charges"}],"scopes":["gmail.readonly","gmail.send"],"suspended":false,"target":"binding"},"revision":{"id":"csr_6968b3983b8b91c75627bee6","number":2},"widens_access":true},"existing_credentials":[{"can_bind":true,"credential_id":"cred_6968b39855d91a3561684b32","granted_scopes":["repo"],"missing_scopes":["read:user"],"name":"GitHub (work)","needs_vendor_consent":true,"other_bound_agents":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29"}],"other_bound_agents_truncated":false,"type":"oauth2"}],"last_rejected_at":"2026-01-10T16:45:00Z","pinned_hosts":["api.github.com"],"provenance":{"catalog_api_id":"stripe.com","origin":"catalog","revision_id":"3f2b8c1e-7d4a-4e9b-a6c5-1d2e3f4a5b6c","source_url":"https://raw.githubusercontent.com/stripe/openapi/master/spec3.json","submitted_by":"usr_6968b3987ee4c3ec0b4ee3b9"},"reason":"Needs read access to triage issues in the platform repo.","requested_by_actor_id":"agnt_6968b3984d1c238dbe7e2e29","requested_expires_in":604800,"requested_permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"requested_scopes":["repo","read:user"],"resolved_flow":"authorization_code","revision":{"id":"csr_6968b3983b8b91c75627bee6","number":2},"scheme":{"authorization_url":"https://github.com/login/oauth/authorize","field_name":"Authorization","location":"header","token_url":"https://github.com/login/oauth/access_token","type":"oauth2"},"scopes":[{"classification":"write","default":false,"description":"Full control of private repositories","name":"repo","requested":true}],"session_id":"cs_6968b3983b8b91c75627bee5","stale":false,"state":"created","target_kind":"vendor","vendor_display_name":"GitHub","vendor_key":"github"}
 type ReviewSessionResponse struct {
 	// Agent Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","name":"Issue triage bot","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"}
 	Agent *ReviewAgentResponse `json:"agent,omitempty"`
@@ -8743,6 +8778,11 @@ type ReviewSessionResponse struct {
 
 	// RequestedByActorId Examples: agnt_6968b3984d1c238dbe7e2e29
 	RequestedByActorId string `json:"requested_by_actor_id"`
+
+	// RequestedExpiresIn How long the requester asked the access to last, in seconds from approval; null when nothing was asked. The approver chooses the actual end date on confirm.
+	//
+	// Examples: 604800
+	RequestedExpiresIn *int `json:"requested_expires_in,omitempty"`
 
 	// RequestedPermissionRules Examples: [{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}]
 	RequestedPermissionRules *[]PermissionRuleSchema `json:"requested_permission_rules,omitempty"`

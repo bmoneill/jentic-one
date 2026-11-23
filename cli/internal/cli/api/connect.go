@@ -73,6 +73,7 @@ func newConnectCmd(a *app) *cobra.Command {
 	var apiRef string
 	var authType string
 	var rulesJSON string
+	var expiresIn string
 	var wait bool
 	var timeout time.Duration
 	cmd := &cobra.Command{
@@ -148,6 +149,18 @@ func newConnectCmd(a *app) *cobra.Command {
 				}
 				rules = decoded
 			}
+			var expiresInSeconds int
+			if expiresIn != "" {
+				seconds, err := parseAccessDuration(expiresIn)
+				if err != nil {
+					return reportCoded(aud, &ux.CodedError{
+						Code:       ux.CodeMissingArgument,
+						Msg:        "--expires-in: " + err.Error(),
+						Actionable: "Pass how long you need the access, e.g. --expires-in 7d, 8h or 30m (at most 999d).",
+					})
+				}
+				expiresInSeconds = seconds
+			}
 			target := connectTargetLabel(vendor, api)
 			rerun := "jentic connect " + vendor
 			if api != nil {
@@ -209,6 +222,9 @@ func newConnectCmd(a *app) *cobra.Command {
 			}
 			if registration != "" {
 				body.OauthAppRegistrationId = &registration
+			}
+			if expiresInSeconds > 0 {
+				body.RequestedExpiresIn = &expiresInSeconds
 			}
 			// Never set body.AgentId: an agent caller IS the agent (the
 			// control plane injects the identity and refuses an override);
@@ -313,6 +329,8 @@ func newConnectCmd(a *app) *cobra.Command {
 		"with --api: the declared scheme name or kind to use (api_key, bearer, basic, oauth2) when the spec declares several")
 	cmd.Flags().StringVar(&rulesJSON, "rules", "",
 		"permission rules you ask for on the binding, as a JSON list (the approver reviews them; a denial's suggested_rules fit as-is)")
+	cmd.Flags().StringVar(&expiresIn, "expires-in", "",
+		"how long you need the access, e.g. 7d, 8h or 30m (the approver decides the actual end date)")
 	cmd.Flags().BoolVar(&wait, "wait", false,
 		"poll the session until it connects or ends (rejected, expired, or cancelled)")
 	cmd.Flags().DurationVar(&timeout, "timeout", connectWaitDefault,

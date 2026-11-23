@@ -40,6 +40,7 @@ var requestConnectionParams = []paramSpec{
 	{name: "reason", kind: paramString},
 	{name: "oauth_app_registration_id", aliases: []string{"registration_id"}, kind: paramString},
 	{name: "requested_permission_rules", aliases: []string{"permission_rules"}, kind: paramJSON},
+	{name: "requested_expires_in", kind: paramString},
 }
 
 var requestConnectionSchema = map[string]any{
@@ -90,6 +91,10 @@ var requestConnectionSchema = map[string]any{
 				"required": []string{"effect"},
 			},
 			"description": "Permission rules you are asking for on the new binding (optional, max 100; \"permission_rules\" is an accepted alias), e.g. [{\"effect\": \"allow\", \"methods\": [\"GET\"], \"path\": \"/repos/.*\"}]. The approver reviews and edits them before anything is granted; an allow rule must constrain methods, path, or operations.",
+		},
+		"requested_expires_in": map[string]any{
+			"type":        "string",
+			"description": "How long you need the access (optional), e.g. \"7d\", \"8h\" or \"30m\" (at most 999d). Shown to the approver, who decides the actual end date; ask for only as long as the task needs.",
 		},
 	},
 }
@@ -231,6 +236,12 @@ func (s *mcpServer) handleRequestConnection(ctx context.Context, req *mcp.CallTo
 			return nil, invalidParams(err)
 		}
 	}
+	var expiresIn int
+	if raw, _ := args["requested_expires_in"].(string); raw != "" {
+		if expiresIn, err = parseAccessDuration(raw); err != nil {
+			return nil, invalidParams(fmt.Errorf("requested_expires_in: %w", err))
+		}
+	}
 	client, err := s.app.controlClient(cctx)
 	if err != nil {
 		s.logger.Warn("request_connection failed", "target", target, "error", redactedErr(err))
@@ -254,6 +265,9 @@ func (s *mcpServer) handleRequestConnection(ctx context.Context, req *mcp.CallTo
 	}
 	if len(rules) > 0 {
 		body.RequestedPermissionRules = &rules
+	}
+	if expiresIn > 0 {
+		body.RequestedExpiresIn = &expiresIn
 	}
 	// Never set body.AgentId: the caller IS the agent — the control plane
 	// injects the caller's identity, and a supplied agent_id is refused (403).

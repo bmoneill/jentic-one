@@ -1707,6 +1707,11 @@
               "usage": "Context to act on (overrides the active context; $JENTIC_CONTEXT)"
             },
             {
+              "name": "expires-in",
+              "type": "string",
+              "usage": "how long you need the access, e.g. 7d, 8h or 30m (the approver decides the actual end date)"
+            },
+            {
               "name": "mode",
               "type": "string",
               "usage": "Interaction mode: human|agent ($JENTIC_MODE)"

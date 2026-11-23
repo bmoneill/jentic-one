@@ -288,6 +288,10 @@
             "description": "Why you need this connection (optional, max 1024 chars). Shown to the approver — a clear one-liner gets you approved faster.",
             "type": "string"
           },
+          "requested_expires_in": {
+            "description": "How long you need the access (optional), e.g. \"7d\", \"8h\" or \"30m\" (at most 999d). Shown to the approver, who decides the actual end date; ask for only as long as the task needs.",
+            "type": "string"
+          },
           "requested_permission_rules": {
             "description": "Permission rules you are asking for on the new binding (optional, max 100; \"permission_rules\" is an accepted alias), e.g. [{\"effect\": \"allow\", \"methods\": [\"GET\"], \"path\": \"/repos/.*\"}]. The approver reviews and edits them before anything is granted; an allow rule must constrain methods, path, or operations.",
             "items": {

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import (
+    AfterValidator,
     BaseModel,
     ConfigDict,
     Discriminator,
@@ -18,6 +19,31 @@ from pydantic import (
 from jentic_one.control.web.schemas.permission_rules import PermissionRuleSchema
 from jentic_one.shared.web import openapi_examples as ex
 from jentic_one.shared.web.sensitive import SENSITIVE
+
+#: Longest duration a connect request may ask for (999 days, the console's
+#: largest custom amount).
+MAX_REQUESTED_EXPIRES_IN_S = 999 * 86_400
+
+
+def _future_expiry(value: datetime | None) -> datetime | None:
+    """An approver's end date must still be ahead when the confirm lands."""
+    if value is None:
+        return None
+    aware = value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+    if aware <= datetime.now(UTC):
+        raise ValueError("expires_at must be in the future")
+    return aware
+
+
+#: The binding's end date chosen on confirm; null or absent binds with none.
+ConfirmExpiresAt = Annotated[datetime | None, AfterValidator(_future_expiry)]
+
+_CONFIRM_EXPIRES_AT_DESCRIPTION = (
+    "When the new binding stops authorizing calls (RFC 3339, in the future), as the "
+    "approver chose it; worked out when the approver confirms. Null or absent binds with no "
+    "expiry. Ignored when the agent is already bound to the credential: that binding keeps "
+    "its own end date."
+)
 
 # ---------------------------------------------------------------------------
 # Vendor discovery
@@ -257,6 +283,17 @@ class IntegrationsConnectRequest(BaseModel):
         max_length=1024,
         examples=["Needs read access to triage issues in the platform repo."],
         description="Free-text reason for the request, shown to the approver.",
+    )
+    requested_expires_in: int | None = Field(
+        default=None,
+        ge=1,
+        le=MAX_REQUESTED_EXPIRES_IN_S,
+        examples=[604_800],
+        description=(
+            "How long the requested access should last, in seconds, counted from approval "
+            "(at most 999 days). Shown preselected on the review page; the approver decides "
+            "the binding's actual end date. Omit to ask for nothing in particular."
+        ),
     )
     # As-requested permission rules — typically the initiating agent's ask,
     # rendered on the review page as pre-filled rows the human owner can
@@ -975,6 +1012,14 @@ class ReviewSessionResponse(BaseModel):
     api_reference: SessionApiReferenceResponse
     target_kind: Literal["vendor", "api"] = Field(default="vendor", examples=["vendor"])
     requested_scopes: list[str] = Field(default_factory=list, examples=[["repo", "read:user"]])
+    requested_expires_in: int | None = Field(
+        default=None,
+        examples=[604_800],
+        description=(
+            "How long the requester asked the access to last, in seconds from approval; null "
+            "when nothing was asked. The approver chooses the actual end date on confirm."
+        ),
+    )
     provenance: ReviewProvenanceResponse | None = None
     agent: ReviewAgentResponse | None = None
     scheme: ReviewSchemeResponse | None = None
@@ -1150,6 +1195,11 @@ class OAuthConfirmSessionRequest(BaseModel):
             "revision_required, a newer one 409 revision_changed."
         ),
     )
+    expires_at: ConfirmExpiresAt = Field(
+        default=None,
+        examples=["2026-12-31T23:59:00Z"],
+        description=_CONFIRM_EXPIRES_AT_DESCRIPTION,
+    )
 
 
 class _ReviewedConfirm(BaseModel):
@@ -1187,6 +1237,11 @@ class _ReviewedConfirm(BaseModel):
             "The revision the approver reviewed (`revision.id`); required. Missing is 422 "
             "revision_required, a newer one 409 revision_changed."
         ),
+    )
+    expires_at: ConfirmExpiresAt = Field(
+        default=None,
+        examples=["2026-12-31T23:59:00Z"],
+        description=_CONFIRM_EXPIRES_AT_DESCRIPTION,
     )
 
 

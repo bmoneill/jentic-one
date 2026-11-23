@@ -1166,6 +1166,7 @@ components:
       - agent_id: agnt_6968b3984d1c238dbe7e2e29
         digest: 2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
         expected_agent_id: agnt_6968b3984d1c238dbe7e2e29
+        expires_at: '2026-12-31T23:59:00Z'
         key: example-secret
         kind: api_key
         permission_rules: &id018
@@ -1195,6 +1196,14 @@ components:
           description: Agent ID from the review the approver saw; a mismatch is 409 review_stale.
           examples:
           - agnt_6968b3984d1c238dbe7e2e29
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: 'When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.'
+          examples:
+          - '2026-12-31T23:59:00Z'
+          format: date-time
           type:
           - string
           - 'null'
@@ -2850,6 +2859,7 @@ components:
       - agent_id: agnt_6968b3984d1c238dbe7e2e29
         digest: 2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
         expected_agent_id: agnt_6968b3984d1c238dbe7e2e29
+        expires_at: '2026-12-31T23:59:00Z'
         kind: basic
         password: example-secret
         permission_rules: &id041
@@ -2880,6 +2890,14 @@ components:
           description: Agent ID from the review the approver saw; a mismatch is 409 review_stale.
           examples:
           - agnt_6968b3984d1c238dbe7e2e29
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: 'When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.'
+          examples:
+          - '2026-12-31T23:59:00Z'
+          format: date-time
           type:
           - string
           - 'null'
@@ -2936,6 +2954,7 @@ components:
       - agent_id: agnt_6968b3984d1c238dbe7e2e29
         digest: 2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
         expected_agent_id: agnt_6968b3984d1c238dbe7e2e29
+        expires_at: '2026-12-31T23:59:00Z'
         kind: bearer
         permission_rules: &id042
         - comment: Lets the agent draft replies, never send them.
@@ -2965,6 +2984,14 @@ components:
           description: Agent ID from the review the approver saw; a mismatch is 409 review_stale.
           examples:
           - agnt_6968b3984d1c238dbe7e2e29
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: 'When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.'
+          examples:
+          - '2026-12-31T23:59:00Z'
+          format: date-time
           type:
           - string
           - 'null'
@@ -6212,6 +6239,7 @@ components:
         credential_id: cred_6968b39855d91a3561684b32
         digest: 2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
         expected_agent_id: agnt_6968b3984d1c238dbe7e2e29
+        expires_at: '2026-12-31T23:59:00Z'
         kind: existing_credential
         permission_rules: &id102
         - comment: Lets the agent draft replies, never send them.
@@ -6247,6 +6275,14 @@ components:
           description: Agent ID from the review the approver saw; a mismatch is 409 review_stale.
           examples:
           - agnt_6968b3984d1c238dbe7e2e29
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: 'When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.'
+          examples:
+          - '2026-12-31T23:59:00Z'
+          format: date-time
           type:
           - string
           - 'null'
@@ -7115,6 +7151,7 @@ components:
         oauth_app_registration_id: oar_6968b39821e5f89a6975f501
         preferred_flow: authorization_code
         reason: Needs read access to triage issues in the platform repo.
+        requested_expires_in: 604800
         requested_permission_rules: &id113
         - comment: Lets the agent draft replies, never send them.
           effect: allow
@@ -7179,6 +7216,15 @@ components:
           maxLength: 1024
           type:
           - string
+          - 'null'
+        requested_expires_in:
+          description: How long the requested access should last, in seconds, counted from approval (at most 999 days). Shown preselected on the review page; the approver decides the binding's actual end date. Omit to ask for nothing in particular.
+          examples:
+          - 604800
+          maximum: 86313600.0
+          minimum: 1.0
+          type:
+          - integer
           - 'null'
         requested_permission_rules:
           description: Permission rules proposed for the agent, shown pre-filled on the review page; nothing is bound until confirm.
@@ -9478,6 +9524,7 @@ components:
         - read:user
         digest: 2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
         expected_agent_id: agnt_6968b3984d1c238dbe7e2e29
+        expires_at: '2026-12-31T23:59:00Z'
         kind: oauth
         permission_rules: &id153
         - comment: Lets the agent draft replies, never send them.
@@ -9515,6 +9562,14 @@ components:
           description: Agent ID from the review the approver saw; a mismatch is 409 review_stale. Required for an API target.
           examples:
           - agnt_6968b3984d1c238dbe7e2e29
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: 'When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.'
+          examples:
+          - '2026-12-31T23:59:00Z'
+          format: date-time
           type:
           - string
           - 'null'
@@ -10720,6 +10775,7 @@ components:
         - read:user
         digest: 2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
         expected_agent_id: agnt_6968b3984d1c238dbe7e2e29
+        expires_at: '2026-12-31T23:59:00Z'
         kind: own_oauth_client
         permission_rules: &id177
         - comment: Lets the agent draft replies, never send them.
@@ -10781,6 +10837,14 @@ components:
           description: Agent ID from the review the approver saw; a mismatch is 409 review_stale.
           examples:
           - agnt_6968b3984d1c238dbe7e2e29
+          type:
+          - string
+          - 'null'
+        expires_at:
+          description: 'When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.'
+          examples:
+          - '2026-12-31T23:59:00Z'
+          format: date-time
           type:
           - string
           - 'null'
@@ -12041,6 +12105,7 @@ components:
         provenance: *id210
         reason: Needs read access to triage issues in the platform repo.
         requested_by_actor_id: agnt_6968b3984d1c238dbe7e2e29
+        requested_expires_in: 604800
         requested_permission_rules: &id216
         - *id184
         requested_scopes: &id217
@@ -12122,6 +12187,13 @@ components:
           examples:
           - agnt_6968b3984d1c238dbe7e2e29
           type: string
+        requested_expires_in:
+          description: How long the requester asked the access to last, in seconds from approval; null when nothing was asked. The approver chooses the actual end date on confirm.
+          examples:
+          - 604800
+          type:
+          - integer
+          - 'null'
         requested_permission_rules:
           examples:
           - *id216

@@ -26,6 +26,10 @@ export type OAuthConfirmSessionRequest = {
      */
     expected_agent_id?: (string | null);
     /**
+     * When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
+     */
+    expires_at?: (string | null);
+    /**
      * Confirm variant; `oauth` (the default when omitted).
      */
     kind?: string;

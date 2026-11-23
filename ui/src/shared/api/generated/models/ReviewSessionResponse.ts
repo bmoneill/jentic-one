@@ -26,6 +26,10 @@ export type ReviewSessionResponse = {
     provenance?: (ReviewProvenanceResponse | null);
     reason: (string | null);
     requested_by_actor_id: string;
+    /**
+     * How long the requester asked the access to last, in seconds from approval; null when nothing was asked. The approver chooses the actual end date on confirm.
+     */
+    requested_expires_in?: (number | null);
     requested_permission_rules?: Array<PermissionRuleSchema>;
     requested_scopes?: Array<string>;
     resolved_flow: string;

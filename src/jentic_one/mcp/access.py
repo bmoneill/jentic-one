@@ -57,6 +57,7 @@ from jentic_one.control.services.vendors.service import (
 from jentic_one.control.web.errors import check_access_directive
 from jentic_one.control.web.routers.credentials import binding_access_response
 from jentic_one.control.web.schemas.integrations import (
+    MAX_REQUESTED_EXPIRES_IN_S,
     SCOPE_COMMENT_MAX,
     ConnectOptionsResponse,
 )
@@ -76,6 +77,7 @@ from jentic_one.mcp.envelopes import (
     ToolError,
     tool_result,
 )
+from jentic_one.shared.auth.durations import parse_duration_seconds
 from jentic_one.shared.models import ActorType
 
 logger = structlog.get_logger()
@@ -90,6 +92,7 @@ _REQUEST_CONNECTION_PARAMS = [
     ParamSpec("reason", "string"),
     ParamSpec("oauth_app_registration_id", "string", ("registration_id",)),
     ParamSpec("requested_permission_rules", "json", ("permission_rules",)),
+    ParamSpec("requested_expires_in", "string"),
 ]
 
 #: Guidance when the agent already has an open request for the target (Go:
@@ -444,6 +447,21 @@ def _vendor_not_configured_tool_error(exc: VendorNotConfiguredError, *, vendor: 
     )
 
 
+def _requested_expires_in(raw: object) -> int | None:
+    """``requested_expires_in`` as seconds: ``"7d"``, ``"8h"``, ``"30m"`` (Go: same rule)."""
+    if raw is None or raw == "":
+        return None
+    if not isinstance(raw, str):
+        raise invalid_params("requested_expires_in must be a duration such as 7d, 8h or 30m")
+    try:
+        seconds = parse_duration_seconds(raw)
+    except ValueError as exc:
+        raise invalid_params(f"requested_expires_in: {exc}") from None
+    if seconds > MAX_REQUESTED_EXPIRES_IN_S:
+        raise invalid_params("requested_expires_in must be at most 999 days")
+    return seconds
+
+
 async def handle_request_connection(
     env: CallEnv, arguments: dict[str, Any]
 ) -> mcp_types.CallToolResult:
@@ -505,6 +523,7 @@ async def handle_request_connection(
             f"{_REQUEST_CONNECTION_REGISTRATION_MAX} characters, got {len(registration_id)}"
         )
     requested_rules = _requested_permission_rules(args.get("requested_permission_rules"))
+    requested_expires_in = _requested_expires_in(args.get("requested_expires_in"))
     try:
         # The route's any-of gate (credentials:connect | credentials:write);
         # agents hold credentials:connect by default.
@@ -543,6 +562,7 @@ async def handle_request_connection(
             preferred_flow=None,
             reason=reason or None,
             oauth_app_registration_id=registration_id,
+            requested_expires_in=requested_expires_in,
         )
     except (
         ManualFlowsDisabledError,

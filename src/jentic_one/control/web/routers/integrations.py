@@ -229,6 +229,7 @@ async def integrations_connect(
         reason=body.reason,
         credential_name=body.name,
         oauth_app_registration_id=body.oauth_app_registration_id,
+        requested_expires_in=body.requested_expires_in,
     )
 
     return IntegrationsConnectResponse(
@@ -542,6 +543,7 @@ def _review_response(data: ReviewData) -> ReviewSessionResponse:
         ),
         target_kind=data.target_kind,  # type: ignore[arg-type]
         requested_scopes=data.requested_scopes,
+        requested_expires_in=data.requested_expires_in,
         provenance=(
             ReviewProvenanceResponse(
                 origin=data.provenance.origin,
@@ -783,6 +785,7 @@ async def confirm_connect_session(
             digest=body.digest,
             revision_id=body.revision_id,
             browser_binding=binding.claim,
+            expires_at=body.expires_at,
         )
     else:
         result = await svc.confirm_variant(
@@ -828,6 +831,7 @@ def _to_variant(
         digest=body.digest,
         agent_id=body.agent_id,
         revision_id=body.revision_id,
+        expires_at=body.expires_at,
     )
     if isinstance(body, ApiKeyConfirmSessionRequest):
         return SecretConfirm(kind=body.kind, secret=ApiKeySecret(key=body.key), checks=checks)

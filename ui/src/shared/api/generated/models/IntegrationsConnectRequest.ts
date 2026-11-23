@@ -37,6 +37,10 @@ export type IntegrationsConnectRequest = {
      */
     reason?: (string | null);
     /**
+     * How long the requested access should last, in seconds, counted from approval (at most 999 days). Shown preselected on the review page; the approver decides the binding's actual end date. Omit to ask for nothing in particular.
+     */
+    requested_expires_in?: (number | null);
+    /**
      * Permission rules proposed for the agent, shown pre-filled on the review page; nothing is bound until confirm.
      */
     requested_permission_rules?: Array<PermissionRuleSchema>;

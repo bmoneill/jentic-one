@@ -72,13 +72,15 @@ class EffectsRepository:
         credential_id: str,
         rule_set_id: str | None,
         created_by: str,
+        expires_at: datetime | None = None,
     ) -> tuple[str, bool]:
         """Create a direct agent↔credential binding idempotently via raw SQL (admin DB).
 
         Returns ``(binding_id, already_bound)``. An existing binding is left
-        untouched (its ``rule_set_id``/``suspended`` state is authoritative) —
-        the retry/reconcile path must converge without clobbering operator
-        edits made between attempts.
+        untouched (its ``rule_set_id``/``suspended`` state and its policy are
+        authoritative) — the retry/reconcile path must converge without
+        clobbering operator edits made between attempts. ``expires_at`` is the
+        end date the approver chose; it applies only to a new binding.
         """
         await lock_agent_bindings(session, agent_id)
         await lock_credential_bindings(session, credential_id)
@@ -86,8 +88,8 @@ class EffectsRepository:
         result = await session.execute(
             text(
                 "INSERT INTO agent_credential_bindings "
-                "(id, agent_id, credential_id, rule_set_id, created_by) "
-                "VALUES (:id, :agent_id, :credential_id, :rule_set_id, :created_by) "
+                "(id, agent_id, credential_id, rule_set_id, created_by, expires_at) "
+                "VALUES (:id, :agent_id, :credential_id, :rule_set_id, :created_by, :expires_at) "
                 "ON CONFLICT (agent_id, credential_id) DO NOTHING "
                 "RETURNING id"
             ),
@@ -97,6 +99,7 @@ class EffectsRepository:
                 "credential_id": credential_id,
                 "rule_set_id": rule_set_id,
                 "created_by": created_by,
+                "expires_at": expires_at,
             },
         )
         inserted_id = result.scalar_one_or_none()

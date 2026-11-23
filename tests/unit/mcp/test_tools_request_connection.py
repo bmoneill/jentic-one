@@ -160,6 +160,27 @@ async def test_overlong_reason_is_invalid_params() -> None:
     assert _FakeConnectSessionService.calls == []
 
 
+async def test_requested_expires_in_is_parsed_to_seconds() -> None:
+    result = await dispatch_tool_call(
+        _env(["credentials:connect"]),
+        "request_connection",
+        {"vendor": "github", "requested_expires_in": "7d"},
+    )
+    assert not result.is_error, result.content
+    (call,) = _FakeConnectSessionService.calls
+    assert call["requested_expires_in"] == 604_800
+
+
+@pytest.mark.parametrize("value", ["1w", "0d", "1000d"])
+async def test_bad_requested_expires_in_is_invalid_params(value: str) -> None:
+    with pytest.raises(MCPError) as err:
+        await tools_mod.handle_request_connection(
+            _env(["credentials:connect"]), {"vendor": "github", "requested_expires_in": value}
+        )
+    assert "requested_expires_in" in str(err.value)
+    assert _FakeConnectSessionService.calls == []
+
+
 async def test_too_many_scopes_is_invalid_params() -> None:
     """Twin of the Go mount's connectScopesMax cap (100)."""
     scopes = [f"scope{i}" for i in range(101)]
@@ -225,6 +246,7 @@ async def test_success_returns_session_without_poll_token() -> None:
         "preferred_flow": None,
         "reason": "read PRs",
         "oauth_app_registration_id": None,
+        "requested_expires_in": None,
     }
 
 
