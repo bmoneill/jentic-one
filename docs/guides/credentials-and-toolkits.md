@@ -131,10 +131,15 @@ The outcomes:
   (`max_idle_period`, 1 to 999 days): it ends once it goes that long without
   a call, counted from its last use or its last renewal, whichever is later
   (the broker records use about once an hour). Any limit reached ends the
-  binding. Binding responses and `/me` report `expired` with
-  `expired_reason`, naming the limit that ended it (`end_date` or `idle`),
-  and `idle_expires_at` for when an unused binding would end. Renewing
-  (`PATCH`) restarts the idle clock even with an empty body. With
+  binding. A binding can also carry a use count (`max_quota`; 1 is single
+  use): each authorized call takes one use, whatever the upstream answers,
+  and the binding ends when none is left (`quota_remaining` reaches 0). A
+  binding with a count is checked on every call, never from a cache.
+  Binding responses and `/me` report `expired` with `expired_reason`, naming
+  the limit that ended it (`end_date`, `idle` or `uses`), and
+  `idle_expires_at` for when an unused binding would end. Renewing (`PATCH`)
+  restarts the idle clock and restores the use count, even with an empty
+  body. With
   `idle_warning` turned on (off by default; it takes an idle limit of 4 days
   or more), the agent's owner gets one `credential_grant.idle_expiring` event
   in the 48 hours before the idle limit is reached, and

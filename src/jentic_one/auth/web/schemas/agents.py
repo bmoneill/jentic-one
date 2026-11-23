@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from jentic_one.shared.auth.grant_policy import (
     MAX_IDLE_PERIOD_SECONDS,
+    MAX_QUOTA,
     MIN_IDLE_PERIOD_SECONDS,
     GrantEndReason,
 )
@@ -54,6 +55,11 @@ _BINDING_IDLE_WARNING_DESCRIPTION = (
     "Warn the agent's owner before the idle limit is reached: once a day a job raises a"
     " `credential_grant.idle_expiring` event when the binding will go idle within 48"
     " hours (for idle limits of 4 days or more), once per idle period. Off unless set."
+)
+
+_BINDING_QUOTA_DESCRIPTION = (
+    "How many calls the binding allows before it ends (1 is single use); each authorized"
+    " call takes one, whatever the upstream answers, and renewing restores the count."
 )
 
 _BINDING_IDLE_DESCRIPTION = (
@@ -244,8 +250,8 @@ class CredentialBindingResponse(BaseModel):
         default=None,
         description=(
             "Which limit ended the binding while `expired` is true: `end_date`"
-            " (`expires_at` passed) or `idle` (unused for `max_idle_period`)."
-            " Null while the binding holds."
+            " (`expires_at` passed), `idle` (unused for `max_idle_period`) or `uses`"
+            " (no uses left). Null while the binding holds."
         ),
         examples=[None],
     )
@@ -274,6 +280,16 @@ class CredentialBindingResponse(BaseModel):
         default=False,
         description=_BINDING_IDLE_WARNING_DESCRIPTION,
         examples=[False],
+    )
+    max_quota: int | None = Field(
+        default=None,
+        description=_BINDING_QUOTA_DESCRIPTION + " Null for unlimited calls.",
+        examples=[1],
+    )
+    quota_remaining: int | None = Field(
+        default=None,
+        description="How many calls the binding still allows; null without a use count.",
+        examples=[1],
     )
     # Shared permission rule set the binding points at (None = inline rules).
     rule_set_id: str | None = Field(
@@ -520,6 +536,17 @@ class CredentialBindingPatchRequest(BaseModel):
         description=_BINDING_IDLE_WARNING_DESCRIPTION + " Leave it out to keep it as it is.",
         examples=[True],
     )
+    max_quota: int | None = Field(
+        default=None,
+        ge=1,
+        le=MAX_QUOTA,
+        description=(
+            _BINDING_QUOTA_DESCRIPTION
+            + " Send null to remove the count; leave it out to keep it (every renewal"
+            " restores the uses left)."
+        ),
+        examples=[1],
+    )
 
     _check_expires_at = field_validator("expires_at")(_require_future)
 
@@ -549,6 +576,13 @@ class CredentialBindRequest(BaseModel):
         default=False,
         description=_BINDING_IDLE_WARNING_DESCRIPTION,
         examples=[False],
+    )
+    max_quota: int | None = Field(
+        default=None,
+        ge=1,
+        le=MAX_QUOTA,
+        description=_BINDING_QUOTA_DESCRIPTION + " Omit for unlimited calls.",
+        examples=[1],
     )
 
     _check_expires_at = field_validator("expires_at")(_require_future)

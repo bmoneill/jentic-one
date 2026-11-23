@@ -19,7 +19,7 @@ export type BindingAccessResponse = {
      */
     expired?: boolean;
     /**
-     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for its idle limit). Null while the binding holds.
+     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for its idle limit) or `uses` (no uses left). Null while the binding holds.
      */
     expired_reason?: (GrantEndReason | null);
     /**

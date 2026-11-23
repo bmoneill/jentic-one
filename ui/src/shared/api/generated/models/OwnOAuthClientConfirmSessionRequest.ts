@@ -59,6 +59,10 @@ export type OwnOAuthClientConfirmSessionRequest = {
      */
     max_idle_period?: (number | null);
     /**
+     * How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
+     */
+    max_quota?: (number | null);
+    /**
      * Permission rules to bind for the agent (at most 100).
      */
     permission_rules: Array<PermissionRuleSchema>;

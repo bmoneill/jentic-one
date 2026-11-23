@@ -168,17 +168,17 @@ async def test_the_idle_limit_is_requested_and_set_on_confirm(env: Context) -> N
         variant=SecretConfirm(
             kind="api_key",
             secret=ApiKeySecret(key=SecretStr(_SECRET)),
-            checks=replace(base, max_idle_period=7 * 86_400, idle_warning=True),
+            checks=replace(base, max_idle_period=7 * 86_400, idle_warning=True, max_quota=1),
         ),
         identity=OWNER,
     )
 
     credential_id = await _credential_of(env, created.session_id)
     async with env.admin_db.session() as session:
-        limit, renewed, warning = (
+        limit, renewed, warning, count, left = (
             await session.execute(
                 text(
-                    "SELECT max_idle_period, renewed_at, idle_warning"
+                    "SELECT max_idle_period, renewed_at, idle_warning, max_quota, quota_remaining"
                     " FROM agent_credential_bindings WHERE agent_id = :a AND credential_id = :c"
                 ),
                 {"a": AGENT_ID, "c": credential_id},
@@ -187,6 +187,7 @@ async def test_the_idle_limit_is_requested_and_set_on_confirm(env: Context) -> N
     assert limit == 7 * 86_400
     assert renewed is not None
     assert bool(warning) is True
+    assert (count, left) == (1, 1)
 
 
 async def test_http_refuses_an_idle_limit_under_a_day(env: Context) -> None:

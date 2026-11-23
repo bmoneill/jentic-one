@@ -790,6 +790,7 @@ async def confirm_connect_session(
             expires_at=body.expires_at,
             max_idle_period=body.max_idle_period,
             idle_warning=body.idle_warning,
+            max_quota=body.max_quota,
         )
     else:
         result = await svc.confirm_variant(
@@ -838,6 +839,7 @@ def _to_variant(
         expires_at=body.expires_at,
         max_idle_period=body.max_idle_period,
         idle_warning=body.idle_warning,
+        max_quota=body.max_quota,
     )
     if isinstance(body, ApiKeyConfirmSessionRequest):
         return SecretConfirm(kind=body.kind, secret=ApiKeySecret(key=body.key), checks=checks)

@@ -1890,6 +1890,7 @@
             "key": "example-secret",
             "kind": "api_key",
             "max_idle_period": 1209600,
+            "max_quota": 1,
             "permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -2002,6 +2003,22 @@
             "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
             "examples": [
               1209600
+            ]
+          },
+          "max_quota": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.",
+            "examples": [
+              1
             ]
           },
           "permission_rules": {
@@ -4834,6 +4851,7 @@
             "idle_warning": false,
             "kind": "basic",
             "max_idle_period": 1209600,
+            "max_quota": 1,
             "password": "example-secret",
             "permission_rules": [
               {
@@ -4938,6 +4956,22 @@
               1209600
             ]
           },
+          "max_quota": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.",
+            "examples": [
+              1
+            ]
+          },
           "password": {
             "description": "Password to store; write-only.",
             "examples": [
@@ -5020,6 +5054,7 @@
             "idle_warning": false,
             "kind": "bearer",
             "max_idle_period": 1209600,
+            "max_quota": 1,
             "permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -5121,6 +5156,22 @@
             "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
             "examples": [
               1209600
+            ]
+          },
+          "max_quota": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.",
+            "examples": [
+              1
             ]
           },
           "permission_rules": {
@@ -5525,7 +5576,7 @@
                 "type": "null"
               }
             ],
-            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for its idle limit). Null while the binding holds.",
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for its idle limit) or `uses` (no uses left). Null while the binding holds.",
             "examples": [
               null
             ]
@@ -6849,7 +6900,9 @@
                 "idle_warning": false,
                 "last_used_at": "2026-02-03T14:05:00Z",
                 "max_idle_period": 1209600,
+                "max_quota": 1,
                 "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
+                "quota_remaining": 1,
                 "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                 "status": "active",
                 "suspended": false,
@@ -6876,7 +6929,9 @@
                   "idle_warning": false,
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "max_idle_period": 1209600,
+                  "max_quota": 1,
                   "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
+                  "quota_remaining": 1,
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "status": "active",
                   "suspended": false,
@@ -6931,7 +6986,9 @@
             "idle_warning": false,
             "last_used_at": "2026-02-03T14:05:00Z",
             "max_idle_period": 1209600,
+            "max_quota": 1,
             "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
+            "quota_remaining": 1,
             "rule_set_id": "prs_6968b3987c22b63e87e79f05",
             "status": "active",
             "suspended": false,
@@ -6978,7 +7035,7 @@
                 "type": "null"
               }
             ],
-            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.",
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for `max_idle_period`) or `uses` (no uses left). Null while the binding holds.",
             "examples": [
               null
             ]
@@ -7050,6 +7107,20 @@
               1209600
             ]
           },
+          "max_quota": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the binding allows before it ends; null for unlimited.",
+            "examples": [
+              1
+            ]
+          },
           "owner_id": {
             "anyOf": [
               {
@@ -7062,6 +7133,20 @@
             "description": "ID of the user who owns the bound agent; null for an unclaimed self-registration. Changing the binding (suspending, resuming or renewing it) takes the agent's owner or an `org:admin`, on top of the credential's own checks.",
             "examples": [
               "usr_6968b3987ee4c3ec0b4ee3b9"
+            ]
+          },
+          "quota_remaining": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls it still allows; null without a use count.",
+            "examples": [
+              1
             ]
           },
           "rule_set_id": {
@@ -7123,7 +7208,8 @@
             "credential_id": "cred_6968b39855d91a3561684b32",
             "expires_at": "2026-12-31T23:59:00Z",
             "idle_warning": false,
-            "max_idle_period": 1209600
+            "max_idle_period": 1209600,
+            "max_quota": 1
           }
         ],
         "properties": {
@@ -7174,6 +7260,22 @@
             "examples": [
               1209600
             ]
+          },
+          "max_quota": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Omit for unlimited calls.",
+            "examples": [
+              1
+            ]
           }
         },
         "required": [
@@ -7194,7 +7296,9 @@
             "idle_warning": false,
             "last_used_at": "2026-11-20T10:00:00Z",
             "max_idle_period": 1209600,
+            "max_quota": 1,
             "name": "Stripe production key",
+            "quota_remaining": 1,
             "rule_set_id": "prs_6968b3987c22b63e87e79f05",
             "serves": [
               {
@@ -7241,7 +7345,7 @@
                 "type": "null"
               }
             ],
-            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for its idle limit). Null while the binding holds.",
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for its idle limit) or `uses` (no uses left). Null while the binding holds.",
             "examples": [
               null
             ]
@@ -7313,6 +7417,20 @@
               1209600
             ]
           },
+          "max_quota": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the binding allows before it ends; null for unlimited.",
+            "examples": [
+              1
+            ]
+          },
           "name": {
             "anyOf": [
               {
@@ -7325,6 +7443,20 @@
             "description": "Name of the bound credential; null if it no longer exists or cannot be resolved.",
             "examples": [
               "Stripe production key"
+            ]
+          },
+          "quota_remaining": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls it still allows; null without a use count.",
+            "examples": [
+              1
             ]
           },
           "rule_set_id": {
@@ -7425,7 +7557,9 @@
                   }
                 ],
                 "max_idle_period": 1209600,
+                "max_quota": 1,
                 "name": "Stripe production key",
+                "quota_remaining": 1,
                 "renewed_at": "2026-12-31T23:59:00Z",
                 "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                 "serves": [
@@ -7465,7 +7599,9 @@
                     }
                   ],
                   "max_idle_period": 1209600,
+                  "max_quota": 1,
                   "name": "Stripe production key",
+                  "quota_remaining": 1,
                   "renewed_at": "2026-12-31T23:59:00Z",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "serves": [
@@ -7498,7 +7634,8 @@
           {
             "expires_at": "2026-12-31T23:59:00Z",
             "idle_warning": true,
-            "max_idle_period": 1209600
+            "max_idle_period": 1209600,
+            "max_quota": 1
           }
         ],
         "properties": {
@@ -7546,6 +7683,22 @@
             "examples": [
               1209600
             ]
+          },
+          "max_quota": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Send null to remove the count; leave it out to keep it (every renewal restores the uses left).",
+            "examples": [
+              1
+            ]
           }
         },
         "type": "object"
@@ -7572,7 +7725,9 @@
               }
             ],
             "max_idle_period": 1209600,
+            "max_quota": 1,
             "name": "Stripe production key",
+            "quota_remaining": 1,
             "renewed_at": "2026-12-31T23:59:00Z",
             "rule_set_id": "prs_6968b3987c22b63e87e79f05",
             "serves": [
@@ -7626,7 +7781,7 @@
                 "type": "null"
               }
             ],
-            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.",
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for `max_idle_period`) or `uses` (no uses left). Null while the binding holds.",
             "examples": [
               null
             ]
@@ -7722,6 +7877,20 @@
               1209600
             ]
           },
+          "max_quota": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Null for unlimited calls.",
+            "examples": [
+              1
+            ]
+          },
           "name": {
             "anyOf": [
               {
@@ -7734,6 +7903,20 @@
             "description": "Name of the bound credential; null if it cannot be resolved.",
             "examples": [
               "Stripe production key"
+            ]
+          },
+          "quota_remaining": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the binding still allows; null without a use count.",
+            "examples": [
+              1
             ]
           },
           "renewed_at": {
@@ -10026,7 +10209,9 @@
                   }
                 ],
                 "max_idle_period": 1209600,
+                "max_quota": 1,
                 "name": "Stripe production key",
+                "quota_remaining": 1,
                 "renewed_at": "2026-12-31T23:59:00Z",
                 "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                 "serves": [
@@ -10067,7 +10252,9 @@
                     }
                   ],
                   "max_idle_period": 1209600,
+                  "max_quota": 1,
                   "name": "Stripe production key",
+                  "quota_remaining": 1,
                   "renewed_at": "2026-12-31T23:59:00Z",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "serves": [
@@ -10116,7 +10303,9 @@
               }
             ],
             "max_idle_period": 1209600,
+            "max_quota": 1,
             "name": "Stripe production key",
+            "quota_remaining": 1,
             "renewed_at": "2026-12-31T23:59:00Z",
             "rule_set_id": "prs_6968b3987c22b63e87e79f05",
             "serves": [
@@ -10177,7 +10366,7 @@
                 "type": "null"
               }
             ],
-            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.",
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for `max_idle_period`) or `uses` (no uses left). Null while the binding holds.",
             "examples": [
               null
             ]
@@ -10273,6 +10462,20 @@
               1209600
             ]
           },
+          "max_quota": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Null for unlimited calls.",
+            "examples": [
+              1
+            ]
+          },
           "name": {
             "anyOf": [
               {
@@ -10285,6 +10488,20 @@
             "description": "Name of the bound credential; null if it cannot be resolved.",
             "examples": [
               "Stripe production key"
+            ]
+          },
+          "quota_remaining": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the binding still allows; null without a use count.",
+            "examples": [
+              1
             ]
           },
           "renewed_at": {
@@ -11319,6 +11536,7 @@
             "idle_warning": false,
             "kind": "existing_credential",
             "max_idle_period": 1209600,
+            "max_quota": 1,
             "permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -11428,6 +11646,22 @@
             "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
             "examples": [
               1209600
+            ]
+          },
+          "max_quota": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.",
+            "examples": [
+              1
             ]
           },
           "permission_rules": {
@@ -11647,7 +11881,8 @@
         "description": "Which limit ended a grant, as binding responses and denials report it.",
         "enum": [
           "end_date",
-          "idle"
+          "idle",
+          "uses"
         ],
         "type": "string"
       },
@@ -13648,7 +13883,9 @@
                 "idle_warning": false,
                 "last_used_at": "2026-11-20T10:00:00Z",
                 "max_idle_period": 1209600,
+                "max_quota": 1,
                 "name": "Stripe production key",
+                "quota_remaining": 1,
                 "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                 "serves": [
                   {
@@ -13707,7 +13944,9 @@
                   "idle_warning": false,
                   "last_used_at": "2026-11-20T10:00:00Z",
                   "max_idle_period": 1209600,
+                  "max_quota": 1,
                   "name": "Stripe production key",
+                  "quota_remaining": 1,
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "serves": [
                     {
@@ -16824,6 +17063,7 @@
             "idle_warning": false,
             "kind": "oauth",
             "max_idle_period": 1209600,
+            "max_quota": 1,
             "permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -16945,6 +17185,22 @@
             "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
             "examples": [
               1209600
+            ]
+          },
+          "max_quota": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.",
+            "examples": [
+              1
             ]
           },
           "permission_rules": {
@@ -19113,6 +19369,7 @@
             "idle_warning": false,
             "kind": "own_oauth_client",
             "max_idle_period": 1209600,
+            "max_quota": 1,
             "permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -19258,6 +19515,22 @@
             "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
             "examples": [
               1209600
+            ]
+          },
+          "max_quota": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.",
+            "examples": [
+              1
             ]
           },
           "permission_rules": {
@@ -27297,7 +27570,9 @@
                         }
                       ],
                       "max_idle_period": 1209600,
+                      "max_quota": 1,
                       "name": "Stripe production key",
+                      "quota_remaining": 1,
                       "renewed_at": "2026-12-31T23:59:00Z",
                       "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                       "serves": [
@@ -27861,7 +28136,9 @@
                         }
                       ],
                       "max_idle_period": 1209600,
+                      "max_quota": 1,
                       "name": "Stripe production key",
+                      "quota_remaining": 1,
                       "renewed_at": "2026-12-31T23:59:00Z",
                       "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                       "serves": [
@@ -27964,7 +28241,8 @@
                 "credential_id": "cred_6968b39855d91a3561684b32",
                 "expires_at": "2026-12-31T23:59:00Z",
                 "idle_warning": false,
-                "max_idle_period": 1209600
+                "max_idle_period": 1209600,
+                "max_quota": 1
               },
               "schema": {
                 "$ref": "#/components/schemas/CredentialBindRequest"
@@ -27997,7 +28275,9 @@
                     }
                   ],
                   "max_idle_period": 1209600,
+                  "max_quota": 1,
                   "name": "Stripe production key",
+                  "quota_remaining": 1,
                   "renewed_at": "2026-12-31T23:59:00Z",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "serves": [
@@ -28257,7 +28537,8 @@
               "example": {
                 "expires_at": "2026-12-31T23:59:00Z",
                 "idle_warning": true,
-                "max_idle_period": 1209600
+                "max_idle_period": 1209600,
+                "max_quota": 1
               },
               "schema": {
                 "$ref": "#/components/schemas/CredentialBindingPatchRequest"
@@ -28290,7 +28571,9 @@
                     }
                   ],
                   "max_idle_period": 1209600,
+                  "max_quota": 1,
                   "name": "Stripe production key",
+                  "quota_remaining": 1,
                   "renewed_at": "2026-12-31T23:59:00Z",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "serves": [
@@ -28431,7 +28714,9 @@
                     }
                   ],
                   "max_idle_period": 1209600,
+                  "max_quota": 1,
                   "name": "Stripe production key",
+                  "quota_remaining": 1,
                   "renewed_at": "2026-12-31T23:59:00Z",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "serves": [
@@ -35212,7 +35497,9 @@
                       "idle_warning": false,
                       "last_used_at": "2026-02-03T14:05:00Z",
                       "max_idle_period": 1209600,
+                      "max_quota": 1,
                       "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
+                      "quota_remaining": 1,
                       "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                       "status": "active",
                       "suspended": false,

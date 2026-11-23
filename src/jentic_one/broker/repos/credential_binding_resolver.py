@@ -22,6 +22,7 @@ from jentic_one.shared.auth.grant_policy import (
     GRANT_POLICY_COLUMNS,
     GrantEndReason,
     GrantPolicy,
+    counts_uses,
     grant_deadline,
     grant_end_reason,
 )
@@ -187,7 +188,9 @@ class CredentialBindingResolver:
                 expired_reasons[row.credential_id] = reason
                 continue
             rule_sets[row.credential_id] = row.rule_set_id
-            deadline = grant_deadline(policy)
+            # A use count is checked on every call, so its derivation is never
+            # cached: it is valid only until now.
+            deadline = now if counts_uses(policy) else grant_deadline(policy)
             if deadline is not None:
                 expiries[row.credential_id] = deadline
 

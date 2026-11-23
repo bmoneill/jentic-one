@@ -101,3 +101,8 @@ class AgentCredentialBinding(AuditableMixin, AdminBase):
         Boolean, nullable=False, default=False, server_default=text("false")
     )
     idle_warned_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # Use count (NULL = unlimited): the binding ends once ``quota_remaining``
+    # reaches zero. The broker takes one use per authorized call with an
+    # atomic decrement; a renewal restores it to ``max_quota``.
+    max_quota: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    quota_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)

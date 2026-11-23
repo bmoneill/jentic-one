@@ -28,6 +28,7 @@ class AgentCredentialBindingRepository:
         expires_at: datetime | None = None,
         max_idle_period: int | None = None,
         idle_warning: bool = False,
+        max_quota: int | None = None,
     ) -> AgentCredentialBinding:
         await lock_agent_bindings(session, agent_id)
         await lock_credential_bindings(session, credential_id)
@@ -38,6 +39,8 @@ class AgentCredentialBindingRepository:
             expires_at=expires_at,
             max_idle_period=max_idle_period,
             idle_warning=idle_warning,
+            max_quota=max_quota,
+            quota_remaining=max_quota,
             # Granting starts the idle clock.
             renewed_at=datetime.now(UTC),
         )
@@ -110,14 +113,17 @@ class AgentCredentialBindingRepository:
 
         ``policy`` holds only the policy columns the renewal sets (a key with
         ``None`` clears that limit; an absent key leaves it alone). Every
-        renewal sets ``renewed_at = now``. Returns False when no binding exists.
+        renewal sets ``renewed_at = now`` and restores the use count to
+        ``max_quota`` (the new one, when the renewal sets it). Returns False
+        when no binding exists.
         """
+        uses = policy.get("max_quota", AgentCredentialBinding.max_quota)
         stmt = (
             update(AgentCredentialBinding)
             .where(AgentCredentialBinding.agent_id == agent_id)
             .where(AgentCredentialBinding.credential_id == credential_id)
             # A renewal restarts the idle period, so it may warn again.
-            .values(**policy, renewed_at=now, idle_warned_at=None)
+            .values(**policy, renewed_at=now, idle_warned_at=None, quota_remaining=uses)
         )
         result = await session.execute(stmt)
         await session.flush()

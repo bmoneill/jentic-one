@@ -61,6 +61,9 @@ class CredentialBoundAgentRow(NamedTuple):
     idle_used_at: datetime | None = None
     renewed_at: datetime | None = None
     idle_warning: bool = False
+    # Use count (None = unlimited) and the uses left.
+    max_quota: int | None = None
+    quota_remaining: int | None = None
 
     def policy(self) -> GrantPolicy:
         """The binding's policy, against the idle clock's own use stamp."""
@@ -70,6 +73,8 @@ class CredentialBoundAgentRow(NamedTuple):
             last_used_at=self.idle_used_at,
             renewed_at=self.renewed_at,
             bound_at=self.bound_at,
+            max_quota=self.max_quota,
+            quota_remaining=self.quota_remaining,
         )
 
 
@@ -239,7 +244,8 @@ class PrerequisiteRepository:
         stmt = text(
             "SELECT b.id, a.id, a.name, a.status, b.bound_at, b.suspended, b.rule_set_id, "
             "b.suspended_reason, a.owner_id, b.expires_at, "
-            "b.max_idle_period, b.last_used_at, b.renewed_at, b.idle_warning "
+            "b.max_idle_period, b.last_used_at, b.renewed_at, b.idle_warning, "
+            "b.max_quota, b.quota_remaining "
             "FROM agent_credential_bindings b "
             "JOIN agents a ON a.id = b.agent_id "
             f"WHERE {' AND '.join(conditions)} "
@@ -273,6 +279,8 @@ class PrerequisiteRepository:
                 idle_used_at=as_utc(row[11]) if row[11] is not None else None,
                 renewed_at=as_utc(row[12]) if row[12] is not None else None,
                 idle_warning=bool(row[13]),
+                max_quota=row[14],
+                quota_remaining=row[15],
             )
             for row in result.fetchall()
         ]
@@ -366,7 +374,8 @@ class PrerequisiteRepository:
         if visible_to is None:
             stmt = text(
                 "SELECT b.id, b.suspended, b.rule_set_id, a.name, b.expires_at, "
-                "b.max_idle_period, b.last_used_at, b.renewed_at, b.bound_at "
+                "b.max_idle_period, b.last_used_at, b.renewed_at, b.bound_at, "
+                "b.max_quota, b.quota_remaining "
                 "FROM agent_credential_bindings b "
                 "LEFT JOIN agents a ON a.id = b.agent_id "
                 f"WHERE {where}"
@@ -375,7 +384,8 @@ class PrerequisiteRepository:
             params.update(self_id=visible_to.self_id, owner_ids=list(visible_to.owner_ids))
             stmt = text(
                 "SELECT b.id, b.suspended, b.rule_set_id, a.name, b.expires_at, "
-                "b.max_idle_period, b.last_used_at, b.renewed_at, b.bound_at "
+                "b.max_idle_period, b.last_used_at, b.renewed_at, b.bound_at, "
+                "b.max_quota, b.quota_remaining "
                 "FROM agent_credential_bindings b "
                 "JOIN agents a ON a.id = b.agent_id "
                 f"WHERE {where} AND (a.id = :self_id OR a.owner_id IN :owner_ids)"
@@ -396,6 +406,8 @@ class PrerequisiteRepository:
                 last_used_at=row[6],
                 renewed_at=row[7],
                 bound_at=row[8],
+                max_quota=row[9],
+                quota_remaining=row[10],
             ),
         )
 

@@ -80,8 +80,8 @@ class CredentialBindingEntry(BaseModel):
         default=None,
         description=(
             "Which limit ended the binding while `expired` is true: `end_date`"
-            " (`expires_at` passed) or `idle` (unused for its idle limit)."
-            " Null while the binding holds."
+            " (`expires_at` passed), `idle` (unused for its idle limit) or `uses`"
+            " (no uses left). Null while the binding holds."
         ),
         examples=[None],
     )
@@ -105,6 +105,16 @@ class CredentialBindingEntry(BaseModel):
         default=False,
         description="Whether the owner is warned before the idle limit is reached.",
         examples=[False],
+    )
+    max_quota: int | None = Field(
+        default=None,
+        description="How many calls the binding allows before it ends; null for unlimited.",
+        examples=[1],
+    )
+    quota_remaining: int | None = Field(
+        default=None,
+        description="How many calls it still allows; null without a use count.",
+        examples=[1],
     )
     last_used_at: datetime | None = Field(
         default=None,

@@ -92,6 +92,8 @@ async def _bind(
     max_idle_period: int | None = None,
     last_used_at: datetime | None = None,
     renewed_at: datetime | None = None,
+    max_quota: int | None = None,
+    quota_remaining: int | None = None,
 ) -> None:
     async with admin_db.session() as session:
         session.add(
@@ -105,6 +107,8 @@ async def _bind(
                 max_idle_period=max_idle_period,
                 last_used_at=last_used_at,
                 renewed_at=renewed_at,
+                max_quota=max_quota,
+                quota_remaining=quota_remaining,
             )
         )
         await session.commit()
@@ -558,4 +562,55 @@ async def test_idle_ended_binding_is_refused_and_says_why(
     assert result.credentials == ()
     assert result.binding_expired is True
     assert result.expired_reason == "idle"
+    assert result.expired_credential_id == cred_id
+
+
+async def test_a_use_count_is_never_cached(
+    admin_db: DatabaseSession, control_db: DatabaseSession, clean_tables: None
+) -> None:
+    """Every call must reach the counter, so the derivation is valid only until now."""
+    cred_id = await _seed_credential(
+        control_db, name="acme", vendor="acme.com", api_name="pets-api", version="v1"
+    )
+    agent_id = await _seed_agent(admin_db)
+    await _bind(
+        admin_db,
+        agent_id=agent_id,
+        credential_id=cred_id,
+        max_quota=1,
+        quota_remaining=1,
+        expires_at=_NOW + timedelta(days=30),
+    )
+
+    result = await CredentialBindingResolver(admin_db, control_db, clock=_clock).derive_credentials(
+        agent_id=agent_id, vendor="acme.com", name="pets-api", version="v1"
+    )
+
+    assert [bc.credential_id for bc in result.credentials] == [cred_id]
+    assert result.valid_until == _NOW
+
+
+async def test_a_used_up_binding_is_refused_and_says_why(
+    admin_db: DatabaseSession, control_db: DatabaseSession, clean_tables: None
+) -> None:
+    cred_id = await _seed_credential(
+        control_db, name="acme", vendor="acme.com", api_name="pets-api", version="v1"
+    )
+    agent_id = await _seed_agent(admin_db)
+    await _bind(
+        admin_db,
+        agent_id=agent_id,
+        credential_id=cred_id,
+        max_quota=1,
+        quota_remaining=0,
+        last_used_at=_NOW - timedelta(minutes=5),
+    )
+
+    result = await CredentialBindingResolver(admin_db, control_db, clock=_clock).derive_credentials(
+        agent_id=agent_id, vendor="acme.com", name="pets-api", version="v1"
+    )
+
+    assert result.credentials == ()
+    assert result.binding_expired is True
+    assert result.expired_reason == "uses"
     assert result.expired_credential_id == cred_id

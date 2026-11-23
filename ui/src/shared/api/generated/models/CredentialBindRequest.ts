@@ -22,5 +22,9 @@ export type CredentialBindRequest = {
      * Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Omit for no idle limit.
      */
     max_idle_period?: (number | null);
+    /**
+     * How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Omit for unlimited calls.
+     */
+    max_quota?: (number | null);
 };
 

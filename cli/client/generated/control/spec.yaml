@@ -1171,6 +1171,7 @@ components:
         key: example-secret
         kind: api_key
         max_idle_period: 1209600
+        max_quota: 1
         permission_rules: &id018
         - comment: Lets the agent draft replies, never send them.
           effect: allow
@@ -1237,6 +1238,15 @@ components:
           - 1209600
           maximum: 86313600.0
           minimum: 86400.0
+          type:
+          - integer
+          - 'null'
+        max_quota:
+          description: How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
+          examples:
+          - 1
+          maximum: 2147483647.0
+          minimum: 1.0
           type:
           - integer
           - 'null'
@@ -2880,6 +2890,7 @@ components:
         idle_warning: false
         kind: basic
         max_idle_period: 1209600
+        max_quota: 1
         password: example-secret
         permission_rules: &id041
         - comment: Lets the agent draft replies, never send them.
@@ -2941,6 +2952,15 @@ components:
           type:
           - integer
           - 'null'
+        max_quota:
+          description: How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
+          examples:
+          - 1
+          maximum: 2147483647.0
+          minimum: 1.0
+          type:
+          - integer
+          - 'null'
         password:
           description: Password to store; write-only.
           examples:
@@ -2992,6 +3012,7 @@ components:
         idle_warning: false
         kind: bearer
         max_idle_period: 1209600
+        max_quota: 1
         permission_rules: &id042
         - comment: Lets the agent draft replies, never send them.
           effect: allow
@@ -3049,6 +3070,15 @@ components:
           - 1209600
           maximum: 86313600.0
           minimum: 86400.0
+          type:
+          - integer
+          - 'null'
+        max_quota:
+          description: How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
+          examples:
+          - 1
+          maximum: 2147483647.0
+          minimum: 1.0
           type:
           - integer
           - 'null'
@@ -3267,7 +3297,7 @@ components:
           anyOf:
           - $ref: '#/components/schemas/GrantEndReason'
           - type: 'null'
-          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for its idle limit). Null while the binding holds.'
+          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for its idle limit) or `uses` (no uses left). Null while the binding holds.'
           examples:
           - null
         expires_at:
@@ -4088,7 +4118,9 @@ components:
           idle_warning: false
           last_used_at: '2026-02-03T14:05:00Z'
           max_idle_period: 1209600
+          max_quota: 1
           owner_id: usr_6968b3987ee4c3ec0b4ee3b9
+          quota_remaining: 1
           rule_set_id: prs_6968b3987c22b63e87e79f05
           status: active
           suspended: false
@@ -4132,7 +4164,9 @@ components:
         idle_warning: false
         last_used_at: '2026-02-03T14:05:00Z'
         max_idle_period: 1209600
+        max_quota: 1
         owner_id: usr_6968b3987ee4c3ec0b4ee3b9
+        quota_remaining: 1
         rule_set_id: prs_6968b3987c22b63e87e79f05
         status: active
         suspended: false
@@ -4164,7 +4198,7 @@ components:
           anyOf:
           - $ref: '#/components/schemas/GrantEndReason'
           - type: 'null'
-          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.'
+          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for `max_idle_period`) or `uses` (no uses left). Null while the binding holds.'
           examples:
           - null
         expires_at:
@@ -4204,12 +4238,26 @@ components:
           type:
           - integer
           - 'null'
+        max_quota:
+          description: How many calls the binding allows before it ends; null for unlimited.
+          examples:
+          - 1
+          type:
+          - integer
+          - 'null'
         owner_id:
           description: ID of the user who owns the bound agent; null for an unclaimed self-registration. Changing the binding (suspending, resuming or renewing it) takes the agent's owner or an `org:admin`, on top of the credential's own checks.
           examples:
           - usr_6968b3987ee4c3ec0b4ee3b9
           type:
           - string
+          - 'null'
+        quota_remaining:
+          description: How many calls it still allows; null without a use count.
+          examples:
+          - 1
+          type:
+          - integer
           - 'null'
         rule_set_id:
           description: Shared permission rule set this binding points at, if any. While attached, the set's ordered list is the binding's effective policy; null means the binding's inline rules apply.
@@ -4250,6 +4298,7 @@ components:
         expires_at: '2026-12-31T23:59:00Z'
         idle_warning: false
         max_idle_period: 1209600
+        max_quota: 1
       properties:
         credential_id:
           description: ID of the credential to bind to the agent.
@@ -4281,6 +4330,15 @@ components:
           type:
           - integer
           - 'null'
+        max_quota:
+          description: How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Omit for unlimited calls.
+          examples:
+          - 1
+          maximum: 2147483647.0
+          minimum: 1.0
+          type:
+          - integer
+          - 'null'
       required:
       - credential_id
       type: object
@@ -4297,7 +4355,9 @@ components:
         idle_warning: false
         last_used_at: '2026-11-20T10:00:00Z'
         max_idle_period: 1209600
+        max_quota: 1
         name: Stripe production key
+        quota_remaining: 1
         rule_set_id: prs_6968b3987c22b63e87e79f05
         serves: &id062
         - api_name: stripe
@@ -4328,7 +4388,7 @@ components:
           anyOf:
           - $ref: '#/components/schemas/GrantEndReason'
           - type: 'null'
-          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for its idle limit). Null while the binding holds.'
+          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for its idle limit) or `uses` (no uses left). Null while the binding holds.'
           examples:
           - null
         expires_at:
@@ -4368,12 +4428,26 @@ components:
           type:
           - integer
           - 'null'
+        max_quota:
+          description: How many calls the binding allows before it ends; null for unlimited.
+          examples:
+          - 1
+          type:
+          - integer
+          - 'null'
         name:
           description: Name of the bound credential; null if it no longer exists or cannot be resolved.
           examples:
           - Stripe production key
           type:
           - string
+          - 'null'
+        quota_remaining:
+          description: How many calls it still allows; null without a use count.
+          examples:
+          - 1
+          type:
+          - integer
           - 'null'
         rule_set_id:
           description: ID of the shared permission rule set attached; null when inline rules apply.
@@ -4432,7 +4506,9 @@ components:
           last_used_by_api:
           - *id063
           max_idle_period: 1209600
+          max_quota: 1
           name: Stripe production key
+          quota_remaining: 1
           renewed_at: '2026-12-31T23:59:00Z'
           rule_set_id: prs_6968b3987c22b63e87e79f05
           serves:
@@ -4465,6 +4541,7 @@ components:
         expires_at: '2026-12-31T23:59:00Z'
         idle_warning: true
         max_idle_period: 1209600
+        max_quota: 1
       properties:
         expires_at:
           description: When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the end date; leave it out to keep it.
@@ -4490,6 +4567,15 @@ components:
           type:
           - integer
           - 'null'
+        max_quota:
+          description: How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Send null to remove the count; leave it out to keep it (every renewal restores the uses left).
+          examples:
+          - 1
+          maximum: 2147483647.0
+          minimum: 1.0
+          type:
+          - integer
+          - 'null'
       type: object
     CredentialBindingResponse:
       description: Direct agent↔credential binding representation in API responses.
@@ -4508,7 +4594,9 @@ components:
         last_used_by_api: &id065
         - *id063
         max_idle_period: 1209600
+        max_quota: 1
         name: Stripe production key
+        quota_remaining: 1
         renewed_at: '2026-12-31T23:59:00Z'
         rule_set_id: prs_6968b3987c22b63e87e79f05
         serves: &id066
@@ -4544,7 +4632,7 @@ components:
           anyOf:
           - $ref: '#/components/schemas/GrantEndReason'
           - type: 'null'
-          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.'
+          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for `max_idle_period`) or `uses` (no uses left). Null while the binding holds.'
           examples:
           - null
         expires_at:
@@ -4597,12 +4685,26 @@ components:
           type:
           - integer
           - 'null'
+        max_quota:
+          description: How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Null for unlimited calls.
+          examples:
+          - 1
+          type:
+          - integer
+          - 'null'
         name:
           description: Name of the bound credential; null if it cannot be resolved.
           examples:
           - Stripe production key
           type:
           - string
+          - 'null'
+        quota_remaining:
+          description: How many calls the binding still allows; null without a use count.
+          examples:
+          - 1
+          type:
+          - integer
           - 'null'
         renewed_at:
           description: When the binding was granted or last renewed (RFC 3339); the idle clock restarts at the later of this and its last use.
@@ -5902,7 +6004,9 @@ components:
           last_used_by_api:
           - *id063
           max_idle_period: 1209600
+          max_quota: 1
           name: Stripe production key
+          quota_remaining: 1
           renewed_at: '2026-12-31T23:59:00Z'
           rule_set_id: prs_6968b3987c22b63e87e79f05
           serves:
@@ -5939,7 +6043,9 @@ components:
         last_used_by_api: &id093
         - *id063
         max_idle_period: 1209600
+        max_quota: 1
         name: Stripe production key
+        quota_remaining: 1
         renewed_at: '2026-12-31T23:59:00Z'
         rule_set_id: prs_6968b3987c22b63e87e79f05
         serves: &id094
@@ -5980,7 +6086,7 @@ components:
           anyOf:
           - $ref: '#/components/schemas/GrantEndReason'
           - type: 'null'
-          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.'
+          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for `max_idle_period`) or `uses` (no uses left). Null while the binding holds.'
           examples:
           - null
         expires_at:
@@ -6033,12 +6139,26 @@ components:
           type:
           - integer
           - 'null'
+        max_quota:
+          description: How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Null for unlimited calls.
+          examples:
+          - 1
+          type:
+          - integer
+          - 'null'
         name:
           description: Name of the bound credential; null if it cannot be resolved.
           examples:
           - Stripe production key
           type:
           - string
+          - 'null'
+        quota_remaining:
+          description: How many calls the binding still allows; null without a use count.
+          examples:
+          - 1
+          type:
+          - integer
           - 'null'
         renewed_at:
           description: When the binding was granted or last renewed (RFC 3339); the idle clock restarts at the later of this and its last use.
@@ -6626,6 +6746,7 @@ components:
         idle_warning: false
         kind: existing_credential
         max_idle_period: 1209600
+        max_quota: 1
         permission_rules: &id105
         - comment: Lets the agent draft replies, never send them.
           effect: allow
@@ -6689,6 +6810,15 @@ components:
           - 1209600
           maximum: 86313600.0
           minimum: 86400.0
+          type:
+          - integer
+          - 'null'
+        max_quota:
+          description: How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
+          examples:
+          - 1
+          maximum: 2147483647.0
+          minimum: 1.0
           type:
           - integer
           - 'null'
@@ -6838,6 +6968,7 @@ components:
       enum:
       - end_date
       - idle
+      - uses
       type: string
     GroupBy:
       description: |-
@@ -9939,6 +10070,7 @@ components:
         idle_warning: false
         kind: oauth
         max_idle_period: 1209600
+        max_quota: 1
         permission_rules: &id156
         - comment: Lets the agent draft replies, never send them.
           effect: allow
@@ -10005,6 +10137,15 @@ components:
           - 1209600
           maximum: 86313600.0
           minimum: 86400.0
+          type:
+          - integer
+          - 'null'
+        max_quota:
+          description: How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
+          examples:
+          - 1
+          maximum: 2147483647.0
+          minimum: 1.0
           type:
           - integer
           - 'null'
@@ -11207,6 +11348,7 @@ components:
         idle_warning: false
         kind: own_oauth_client
         max_idle_period: 1209600
+        max_quota: 1
         permission_rules: &id180
         - comment: Lets the agent draft replies, never send them.
           effect: allow
@@ -11296,6 +11438,15 @@ components:
           - 1209600
           maximum: 86313600.0
           minimum: 86400.0
+          type:
+          - integer
+          - 'null'
+        max_quota:
+          description: How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
+          examples:
+          - 1
+          maximum: 2147483647.0
+          minimum: 1.0
           type:
           - integer
           - 'null'

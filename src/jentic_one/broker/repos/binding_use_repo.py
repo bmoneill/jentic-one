@@ -4,6 +4,10 @@ The broker may not import the admin ORM, so like the binding resolver this
 runs as raw SQL. ``last_used_at`` restarts a binding's idle clock; it is
 written at most once per interval (an hour by default), so tracking use
 never turns every broker call into a row write.
+
+A binding with a use count (``max_quota``) is different: every call takes a
+use with one atomic decrement, so two concurrent calls can never both take
+the last one.
 """
 
 from __future__ import annotations
@@ -18,6 +22,20 @@ _RECORD_USE = text(
     "UPDATE agent_credential_bindings SET last_used_at = :now, idle_warned_at = NULL "
     "WHERE agent_id = :agent_id AND credential_id = :credential_id "
     "AND (last_used_at IS NULL OR last_used_at <= :stale_before)"
+)
+
+
+_USE_COUNT = text(
+    "SELECT max_quota FROM agent_credential_bindings "
+    "WHERE agent_id = :agent_id AND credential_id = :credential_id"
+)
+
+_TAKE_USE = text(
+    # Taking a use is also a use: it restarts the idle clock without the throttle.
+    "UPDATE agent_credential_bindings "
+    "SET quota_remaining = quota_remaining - 1, last_used_at = :now, idle_warned_at = NULL "
+    "WHERE agent_id = :agent_id AND credential_id = :credential_id "
+    "AND max_quota IS NOT NULL AND quota_remaining > 0"
 )
 
 
@@ -47,4 +65,21 @@ class BindingUseRepository:
                 "stale_before": now - min_interval,
             },
         )
+        return bool(getattr(result, "rowcount", 0))
+
+    @staticmethod
+    async def take_use(
+        session: AsyncSession, *, agent_id: str, credential_id: str, now: datetime
+    ) -> bool:
+        """Take one use from the binding's count; ``False`` when none is left.
+
+        A binding without a use count (or no binding at all) has nothing to
+        take and always allows: whether the binding authorizes the call at all
+        is the resolver's decision.
+        """
+        params = {"agent_id": agent_id, "credential_id": credential_id}
+        row = (await session.execute(_USE_COUNT, params)).first()
+        if row is None or row.max_quota is None:
+            return True
+        result = await session.execute(_TAKE_USE, {**params, "now": now})
         return bool(getattr(result, "rowcount", 0))

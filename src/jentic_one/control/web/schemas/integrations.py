@@ -17,6 +17,7 @@ from pydantic import (
 )
 
 from jentic_one.control.web.schemas.permission_rules import PermissionRuleSchema
+from jentic_one.shared.auth.grant_policy import MAX_QUOTA
 from jentic_one.shared.web import openapi_examples as ex
 from jentic_one.shared.web.sensitive import SENSITIVE
 
@@ -1238,6 +1239,16 @@ class OAuthConfirmSessionRequest(BaseModel):
             "`credential_grant.idle_expiring` event, for idle limits of 4 days or more)."
         ),
     )
+    max_quota: int | None = Field(
+        default=None,
+        ge=1,
+        le=MAX_QUOTA,
+        examples=[1],
+        description=(
+            "How many calls the new binding allows before it ends (1 is single use). Null or"
+            " absent sets no count. Ignored when the agent is already bound to the credential."
+        ),
+    )
 
 
 class _ReviewedConfirm(BaseModel):
@@ -1298,6 +1309,16 @@ class _ReviewedConfirm(BaseModel):
         description=(
             "Warn the agent's owner before the new binding's idle limit is reached (a daily "
             "`credential_grant.idle_expiring` event, for idle limits of 4 days or more)."
+        ),
+    )
+    max_quota: int | None = Field(
+        default=None,
+        ge=1,
+        le=MAX_QUOTA,
+        examples=[1],
+        description=(
+            "How many calls the new binding allows before it ends (1 is single use). Null or"
+            " absent sets no count. Ignored when the agent is already bound to the credential."
         ),
     )
 

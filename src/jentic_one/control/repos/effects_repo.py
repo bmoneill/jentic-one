@@ -75,6 +75,7 @@ class EffectsRepository:
         expires_at: datetime | None = None,
         max_idle_period: int | None = None,
         idle_warning: bool = False,
+        max_quota: int | None = None,
     ) -> tuple[str, bool]:
         """Create a direct agent↔credential binding idempotently via raw SQL (admin DB).
 
@@ -82,8 +83,8 @@ class EffectsRepository:
         untouched (its ``rule_set_id``/``suspended`` state and its policy are
         authoritative) — the retry/reconcile path must converge without
         clobbering operator edits made between attempts. ``expires_at`` is the
-        end date the approver chose and ``max_idle_period`` the idle limit; they
-        apply only to a new binding.
+        end date the approver chose, ``max_idle_period`` the idle limit and
+        ``max_quota`` the use count; they apply only to a new binding.
         """
         await lock_agent_bindings(session, agent_id)
         await lock_credential_bindings(session, credential_id)
@@ -92,9 +93,9 @@ class EffectsRepository:
             text(
                 "INSERT INTO agent_credential_bindings "
                 "(id, agent_id, credential_id, rule_set_id, created_by, expires_at, "
-                "max_idle_period, renewed_at, idle_warning) "
+                "max_idle_period, renewed_at, idle_warning, max_quota, quota_remaining) "
                 "VALUES (:id, :agent_id, :credential_id, :rule_set_id, :created_by, :expires_at, "
-                ":max_idle_period, :renewed_at, :idle_warning) "
+                ":max_idle_period, :renewed_at, :idle_warning, :max_quota, :max_quota) "
                 "ON CONFLICT (agent_id, credential_id) DO NOTHING "
                 "RETURNING id"
             ),
@@ -107,6 +108,7 @@ class EffectsRepository:
                 "expires_at": expires_at,
                 "max_idle_period": max_idle_period,
                 "idle_warning": idle_warning,
+                "max_quota": max_quota,
                 # Granting starts the idle clock.
                 "renewed_at": datetime.now(UTC),
             },

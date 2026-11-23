@@ -21,7 +21,7 @@ export type CredentialBindingEntry = {
      */
     expired?: boolean;
     /**
-     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for its idle limit). Null while the binding holds.
+     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for its idle limit) or `uses` (no uses left). Null while the binding holds.
      */
     expired_reason?: (GrantEndReason | null);
     /**
@@ -45,9 +45,17 @@ export type CredentialBindingEntry = {
      */
     max_idle_period?: (number | null);
     /**
+     * How many calls the binding allows before it ends; null for unlimited.
+     */
+    max_quota?: (number | null);
+    /**
      * Name of the bound credential; null if it no longer exists or cannot be resolved.
      */
     name?: (string | null);
+    /**
+     * How many calls it still allows; null without a use count.
+     */
+    quota_remaining?: (number | null);
     /**
      * ID of the shared permission rule set attached; null when inline rules apply.
      */

@@ -188,6 +188,7 @@ def _suspended_binding_denial(api: APIReference, *, instance: str) -> BrokerErro
 _EXPIRED_DETAIL = {
     "end_date": "The credential binding for this API has expired: its end date passed",
     "idle": "The credential binding for this API has expired: it went unused for its idle limit",
+    "uses": "The credential binding for this API has expired: its uses have run out",
 }
 
 

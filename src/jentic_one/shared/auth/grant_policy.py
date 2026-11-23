@@ -10,7 +10,10 @@ of them is reached:
   last use (``last_used_at``) and the last grant or renewal (``renewed_at``,
   falling back to ``bound_at``), so a grant that is never used ends one idle
   period after it was granted, and a renewal restarts the clock without
-  counting as a use.
+  counting as a use;
+- a use count (``max_quota``): the grant ends once ``quota_remaining`` reaches
+  zero. The broker takes one use per authorized call with an atomic
+  decrement, and a renewal restores the count. Single use is ``max_quota=1``.
 
 This module is the one place that decides it, so the broker, the auth surface
 and the control plane agree on the moment and on the reason they report
@@ -34,7 +37,12 @@ MIN_IDLE_PERIOD_SECONDS = 86_400
 MAX_IDLE_PERIOD_SECONDS = 999 * 86_400
 
 #: SQL column list a raw query selects to build a :class:`GrantPolicy`.
-GRANT_POLICY_COLUMNS = "expires_at, max_idle_period, last_used_at, renewed_at, bound_at"
+GRANT_POLICY_COLUMNS = (
+    "expires_at, max_idle_period, last_used_at, renewed_at, bound_at, max_quota, quota_remaining"
+)
+
+#: The largest use count a grant may carry (the column is a 32-bit integer).
+MAX_QUOTA = 2_147_483_647
 
 
 class Unset(Enum):
@@ -46,7 +54,7 @@ class Unset(Enum):
 UNSET = Unset.TOKEN
 
 #: The binding columns that make up its policy, as audits record them.
-GRANT_POLICY_FIELDS = ("expires_at", "max_idle_period", "idle_warning")
+GRANT_POLICY_FIELDS = ("expires_at", "max_idle_period", "idle_warning", "max_quota")
 
 
 class GrantEndReason(StrEnum):
@@ -56,6 +64,8 @@ class GrantEndReason(StrEnum):
     """``expires_at`` has passed."""
     IDLE = "idle"
     """It went ``max_idle_period`` without a use."""
+    USES = "uses"
+    """No uses remain (``quota_remaining`` reached zero)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +81,8 @@ class GrantPolicy:
     last_used_at: datetime | str | None = None
     renewed_at: datetime | str | None = None
     bound_at: datetime | str | None = None
+    max_quota: int | None = None
+    quota_remaining: int | None = None
 
     @classmethod
     def from_row(cls, row: Any) -> GrantPolicy:
@@ -81,6 +93,8 @@ class GrantPolicy:
             last_used_at=getattr(row, "last_used_at", None),
             renewed_at=getattr(row, "renewed_at", None),
             bound_at=getattr(row, "bound_at", None),
+            max_quota=getattr(row, "max_quota", None),
+            quota_remaining=getattr(row, "quota_remaining", None),
         )
 
 
@@ -106,6 +120,16 @@ def idle_deadline(policy: GrantPolicy) -> datetime | None:
     return start + timedelta(seconds=policy.max_idle_period) if start is not None else None
 
 
+def counts_uses(policy: GrantPolicy) -> bool:
+    """Whether the grant carries a use count (every call must reach the counter)."""
+    return policy.max_quota is not None
+
+
+def uses_exhausted(policy: GrantPolicy) -> bool:
+    """Whether the grant's use count has run out."""
+    return counts_uses(policy) and (policy.quota_remaining or 0) <= 0
+
+
 def grant_deadline(policy: GrantPolicy) -> datetime | None:
     """The earliest moment a time-based limit ends the grant, or ``None``."""
     deadlines = [d for d in (_utc(policy.expires_at), idle_deadline(policy)) if d is not None]
@@ -116,6 +140,8 @@ def grant_end_reason(policy: GrantPolicy, *, now: datetime | None = None) -> Gra
     """Why the grant has ended as of ``now`` (default: the clock), or ``None`` while it holds.
 
     When several limits have been reached, the one reached first is reported.
+    A used-up count is dated by the grant's last recorded use (only roughly
+    known: it is stamped about once an hour).
     """
     now = now or datetime.now(UTC)
     reached = [
@@ -126,6 +152,9 @@ def grant_end_reason(policy: GrantPolicy, *, now: datetime | None = None) -> Gra
         )
         if deadline is not None and deadline <= now
     ]
+    if uses_exhausted(policy):
+        used_up = idle_clock_start(policy) or datetime.min.replace(tzinfo=UTC)
+        reached.append((min(used_up, now), GrantEndReason.USES))
     return min(reached, key=lambda pair: pair[0])[1] if reached else None
 
 

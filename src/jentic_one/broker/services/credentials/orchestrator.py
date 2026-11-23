@@ -24,11 +24,13 @@ from jentic_one.broker.core.directives import (
     api_connect_hint,
     api_connect_parameters,
     connect_parameters,
+    credential_binding_expired_directive,
     credential_server_variable_mismatch_directive,
     suggested_permission_rules,
 )
 from jentic_one.broker.core.errors import (
     AmbiguousCredentialMatchError,
+    CredentialBindingExpiredError,
     CredentialNeedsReconnectError,
     CredentialRefreshTransientError,
     CredentialUndecryptableError,
@@ -229,6 +231,19 @@ class CredentialService:
                 ) from exc
 
             async with self._ctx.admin_db.transaction() as session:
+                # A binding with a use count gives up one use per authorized
+                # call, before any secret leaves the broker. Losing the race
+                # for the last use is refused like any ended binding, and the
+                # access is not audited (this transaction rolls back).
+                if identity.actor_type == ActorType.AGENT and not (
+                    await BindingUseRepository.take_use(
+                        session,
+                        agent_id=identity.sub,
+                        credential_id=resolved.credential_id,
+                        now=datetime.now(UTC),
+                    )
+                ):
+                    raise _uses_exhausted_denial(api)
                 await emit_credential_access(
                     session,
                     actor_id=identity.sub,
@@ -671,3 +686,14 @@ class CredentialService:
                 human_readable_instruction=instruction,
             ),
         )
+
+
+def _uses_exhausted_denial(api: APIReference) -> CredentialBindingExpiredError:
+    """The 403 for a binding whose last use another call took first."""
+    return CredentialBindingExpiredError(
+        "The credential binding for this API has expired: its uses have run out",
+        extra={"expired_reason": "uses"},
+        directive=credential_binding_expired_directive(
+            vendor=api.vendor, name=api.name, version=api.version
+        ),
+    )

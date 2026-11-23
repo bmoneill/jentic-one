@@ -7,7 +7,12 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jentic_one.shared.auth.agent_expiry import binding_expired
-from jentic_one.shared.auth.grant_policy import GRANT_POLICY_COLUMNS, GrantPolicy, grant_deadline
+from jentic_one.shared.auth.grant_policy import (
+    GRANT_POLICY_COLUMNS,
+    GrantPolicy,
+    grant_deadline,
+    uses_exhausted,
+)
 from jentic_one.shared.db import DatabaseSession
 from jentic_one.shared.db.errors import DatabaseConsistencyError
 from jentic_one.shared.db.locks import lock_agent_bindings, lock_credential_bindings
@@ -56,7 +61,10 @@ async def guard_binding_write(
     policies = [
         row
         for row in rows
-        if row.suspended or row.expires_at is not None or row.max_idle_period is not None
+        if row.suspended
+        or row.expires_at is not None
+        or row.max_idle_period is not None
+        or row.max_quota is not None
     ]
     deadline = None
     if policies:
@@ -92,7 +100,10 @@ async def guard_binding_write(
             ),
             default=None,
         )
-        if binding_expired(deadline):
+        # A used-up count has no deadline: it has simply ended.
+        if binding_expired(deadline) or any(
+            uses_exhausted(GrantPolicy.from_row(row)) for row in overlaps
+        ):
             raise expired_error(agent_id)
     yield
     if binding_expired(deadline):

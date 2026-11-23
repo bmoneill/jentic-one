@@ -945,6 +945,50 @@ async def test_bindings_ending_soon_lists_warned_bindings_near_their_idle_limit(
     assert admin_client.get(ending_soon).json()["data"] == []
 
 
+async def test_single_use_is_set_on_bind_and_restored_on_renewal(
+    admin_client: TestClient,
+    web_context: Context,
+    binding_agent_id: str,
+    control_credential_id: str,
+) -> None:
+    url = f"/agents/{binding_agent_id}/credentials"
+    resp = admin_client.post(url, json={"credential_id": control_credential_id, "max_quota": 1})
+    assert resp.status_code == 201
+    assert (resp.json()["max_quota"], resp.json()["quota_remaining"]) == (1, 1)
+    assert resp.json()["expired"] is False
+
+    # The use is taken: the binding ends, and says why.
+    async def use_up() -> None:
+        async with web_context.admin_db.transaction() as session:
+            await session.execute(
+                update(AgentCredentialBinding)
+                .where(AgentCredentialBinding.agent_id == binding_agent_id)
+                .values(quota_remaining=0)
+            )
+
+    await use_up()
+    row = _binding_row(admin_client, binding_agent_id, control_credential_id)
+    assert (row["expired"], row["expired_reason"], row["quota_remaining"]) == (True, "uses", 0)
+
+    # "Still needed" restores the count.
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={})
+    assert (resp.json()["quota_remaining"], resp.json()["expired"]) == (1, False)
+    # A new count replaces it; null removes it.
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={"max_quota": 5})
+    assert (resp.json()["max_quota"], resp.json()["quota_remaining"]) == (5, 5)
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={"max_quota": None})
+    assert (resp.json()["max_quota"], resp.json()["quota_remaining"]) == (None, None)
+
+
+@pytest.mark.parametrize("count", [0, -1, 1.5])
+def test_a_use_count_must_be_a_positive_whole_number(
+    admin_client: TestClient, binding_agent_id: str, control_credential_id: str, count: float
+) -> None:
+    url = f"/agents/{binding_agent_id}/credentials"
+    resp = admin_client.post(url, json={"credential_id": control_credential_id, "max_quota": count})
+    assert resp.status_code == 422
+
+
 def test_renew_does_not_resume_a_suspended_binding(
     admin_client: TestClient, binding_agent_id: str, control_credential_id: str
 ) -> None:

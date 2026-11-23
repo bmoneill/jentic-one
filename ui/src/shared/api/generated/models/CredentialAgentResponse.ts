@@ -24,7 +24,7 @@ export type CredentialAgentResponse = {
      */
     expired?: boolean;
     /**
-     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.
+     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for `max_idle_period`) or `uses` (no uses left). Null while the binding holds.
      */
     expired_reason?: (GrantEndReason | null);
     /**
@@ -48,9 +48,17 @@ export type CredentialAgentResponse = {
      */
     max_idle_period?: (number | null);
     /**
+     * How many calls the binding allows before it ends; null for unlimited.
+     */
+    max_quota?: (number | null);
+    /**
      * ID of the user who owns the bound agent; null for an unclaimed self-registration. Changing the binding (suspending, resuming or renewing it) takes the agent's owner or an `org:admin`, on top of the credential's own checks.
      */
     owner_id?: (string | null);
+    /**
+     * How many calls it still allows; null without a use count.
+     */
+    quota_remaining?: (number | null);
     /**
      * Shared permission rule set this binding points at, if any. While attached, the set's ordered list is the binding's effective policy; null means the binding's inline rules apply.
      */

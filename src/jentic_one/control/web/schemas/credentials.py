@@ -1062,8 +1062,8 @@ class CredentialAgentResponse(BaseModel):
         examples=[None],
         description=(
             "Which limit ended the binding while `expired` is true: `end_date`"
-            " (`expires_at` passed) or `idle` (unused for `max_idle_period`)."
-            " Null while the binding holds."
+            " (`expires_at` passed), `idle` (unused for `max_idle_period`) or `uses`"
+            " (no uses left). Null while the binding holds."
         ),
     )
     max_idle_period: int | None = Field(
@@ -1086,6 +1086,16 @@ class CredentialAgentResponse(BaseModel):
         default=False,
         examples=[False],
         description="Whether the agent's owner is warned before the idle limit is reached.",
+    )
+    max_quota: int | None = Field(
+        default=None,
+        examples=[1],
+        description="How many calls the binding allows before it ends; null for unlimited.",
+    )
+    quota_remaining: int | None = Field(
+        default=None,
+        examples=[1],
+        description="How many calls it still allows; null without a use count.",
     )
     last_used_at: datetime | None = Field(
         default=None,

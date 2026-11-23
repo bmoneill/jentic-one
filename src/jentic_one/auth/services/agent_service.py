@@ -981,6 +981,7 @@ class AgentService:
         expires_at: datetime | None = None,
         max_idle_period: int | None = None,
         idle_warning: bool = False,
+        max_quota: int | None = None,
     ) -> CredentialBindingView:
         """Create a direct agent↔credential binding.
 
@@ -1018,6 +1019,7 @@ class AgentService:
                     expires_at=expires_at,
                     max_idle_period=max_idle_period,
                     idle_warning=idle_warning,
+                    max_quota=max_quota,
                 )
             except IntegrityError:
                 raise CredentialBindingConflictError(agent_id, credential_id) from None
@@ -1227,12 +1229,14 @@ class AgentService:
         expires_at: datetime | Unset | None = UNSET,
         max_idle_period: int | Unset | None = UNSET,
         idle_warning: bool | Unset = UNSET,
+        max_quota: int | Unset | None = UNSET,
     ) -> CredentialBindingView:
         """Re-certify a binding: set, move or clear its limits, and restart its idle clock.
 
         Each limit passed is set (``None`` clears it); a limit left out stays
-        as it is. Every renewal restarts the idle clock (``renewed_at``), so
-        renewing with no change is the "still needed" re-certification.
+        as it is. Every renewal restarts the idle clock (``renewed_at``) and
+        restores the use count, so renewing with no change is the "still
+        needed" re-certification.
 
         Renewing re-grants the credential, so it takes exactly the checks of
         :meth:`resume_credential`: the agent check, the credential-ownership
@@ -1247,6 +1251,8 @@ class AgentService:
             policy["max_idle_period"] = max_idle_period
         if not isinstance(idle_warning, Unset):
             policy["idle_warning"] = idle_warning
+        if not isinstance(max_quota, Unset):
+            policy["max_quota"] = max_quota
         if identity.actor_type != ActorType.USER:
             raise CredentialNotVisibleError(credential_id)
         agent = await self._load_binding_agent(agent_id, identity=identity)

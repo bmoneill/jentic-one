@@ -8,4 +8,5 @@
 export enum GrantEndReason {
     END_DATE = 'end_date',
     IDLE = 'idle',
+    USES = 'uses',
 }

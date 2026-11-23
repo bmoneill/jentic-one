@@ -36,6 +36,10 @@ export type BasicConfirmSessionRequest = {
      */
     max_idle_period?: (number | null);
     /**
+     * How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
+     */
+    max_quota?: (number | null);
+    /**
      * Password to store; write-only.
      */
     password: string;

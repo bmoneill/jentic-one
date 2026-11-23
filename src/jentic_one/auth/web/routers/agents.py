@@ -483,6 +483,8 @@ def _credential_binding_response(view: CredentialBindingView) -> CredentialBindi
         idle_expires_at=view.idle_expires_at,
         renewed_at=view.renewed_at,
         idle_warning=view.idle_warning,
+        max_quota=view.max_quota,
+        quota_remaining=view.quota_remaining,
         rule_set_id=view.rule_set_id,
         serves=view.serves,
         last_used_at=view.last_used_at,
@@ -576,6 +578,7 @@ async def bind_credential(
         expires_at=body.expires_at,
         max_idle_period=body.max_idle_period,
         idle_warning=body.idle_warning,
+        max_quota=body.max_quota,
         identity=identity,
     )
     return _credential_binding_response(binding)
@@ -626,6 +629,7 @@ async def renew_credential_binding(
             body.max_idle_period if "max_idle_period" in body.model_fields_set else UNSET
         ),
         idle_warning=body.idle_warning if body.idle_warning is not None else UNSET,
+        max_quota=body.max_quota if "max_quota" in body.model_fields_set else UNSET,
         identity=identity,
     )
     return _credential_binding_response(binding)

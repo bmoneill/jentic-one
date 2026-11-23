@@ -90,6 +90,9 @@ class CredentialBindingView(BaseModel):
     renewed_at: datetime | None = None
     # Opt-in warning to the owner before the idle limit is reached.
     idle_warning: bool = False
+    # Use count (None = unlimited) and the uses left; a renewal restores it.
+    max_quota: int | None = None
+    quota_remaining: int | None = None
     # The binding's own ``last_used_at`` column, read from the row: the idle
     # clock's use stamp. ``last_used_at`` below is the display value.
     idle_clock_used_at: datetime | None = Field(
@@ -117,6 +120,8 @@ class CredentialBindingView(BaseModel):
             last_used_at=self.idle_clock_used_at,
             renewed_at=self.renewed_at,
             bound_at=self.bound_at,
+            max_quota=self.max_quota,
+            quota_remaining=self.quota_remaining,
         )
 
     @property

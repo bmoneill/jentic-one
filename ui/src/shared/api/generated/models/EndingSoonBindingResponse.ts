@@ -30,7 +30,7 @@ export type EndingSoonBindingResponse = {
      */
     expired?: boolean;
     /**
-     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.
+     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed), `idle` (unused for `max_idle_period`) or `uses` (no uses left). Null while the binding holds.
      */
     expired_reason?: (GrantEndReason | null);
     /**
@@ -62,9 +62,17 @@ export type EndingSoonBindingResponse = {
      */
     max_idle_period?: (number | null);
     /**
+     * How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Null for unlimited calls.
+     */
+    max_quota?: (number | null);
+    /**
      * Name of the bound credential; null if it cannot be resolved.
      */
     name?: (string | null);
+    /**
+     * How many calls the binding still allows; null without a use count.
+     */
+    quota_remaining?: (number | null);
     /**
      * When the binding was granted or last renewed (RFC 3339); the idle clock restarts at the later of this and its last use.
      */
