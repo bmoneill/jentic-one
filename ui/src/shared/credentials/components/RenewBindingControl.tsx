@@ -5,9 +5,10 @@
  * moment of saving. "No expiry" (in Custom…) clears the end date, behind the
  * "No expiry" warning (unless an idle limit still ends it). The idle row
  * below it starts on the binding's current idle limit and is sent when it
- * changes. A binding with an idle limit also offers "Still needed": a renewal
- * that changes nothing but restarts its idle clock. Renewing restores an
- * expired binding; it never resumes a suspended one.
+ * changes, and so does "End after one use" below that. A binding with an idle
+ * limit or a use count also offers "Still needed": a renewal that changes
+ * nothing but restarts its idle clock and restores its uses. Renewing
+ * restores an expired binding; it never resumes a suspended one.
  *
  * Shown only to a viewer who may renew: `agents:write` and the credential's
  * owner, or an `org:admin` (the same checks as resuming a binding). The host
@@ -31,6 +32,7 @@ import {
 	type IdleLimit,
 } from '@/shared/credentials/lib/idleLimit';
 import { IdleLimitField } from '@/shared/credentials/components/IdleLimitField';
+import { SingleUseField } from '@/shared/credentials/components/SingleUseField';
 import { choosesNoExpiry, durationChosen } from '@/shared/credentials/lib/bindingExpiry';
 import {
 	BindingDurationField,
@@ -52,6 +54,8 @@ export interface RenewBindingControlProps {
 	maxIdlePeriod?: number | null;
 	/** Whether its owner is warned before that idle limit is reached. */
 	idleWarning?: boolean;
+	/** Its use count (1 is single use); null without one. Renewing restores the uses left. */
+	maxQuota?: number | null;
 	/** Which limit ended it (`end_date`, `idle`), when it has ended. */
 	expiredReason?: string | null;
 	/** Fit into a list row: no visible label. */
@@ -76,6 +80,7 @@ export function RenewBindingControl({
 	expired,
 	maxIdlePeriod = null,
 	idleWarning: warnedBefore = false,
+	maxQuota = null,
 	expiredReason = null,
 	compact = false,
 	onRenewed,
@@ -95,17 +100,21 @@ export function RenewBindingControl({
 	const warnChanged = warnNow !== warnedBefore;
 	// The idle row (the limit or its warning) differs from the binding's.
 	const idleChanged = limitChanged || warnChanged;
+	const [uses, setUses] = useState<number | null>(maxQuota);
+	const usesChanged = uses !== maxQuota;
+	// Any limit other than the end date changed.
+	const limitsChanged = idleChanged || usesChanged;
 	const idleInvalid = idleLimitError(idle) !== null;
 	const clearing = choosesNoExpiry(duration);
 	// Clearing an end date the binding doesn't have changes nothing.
-	const nothingToClear = clearing && !expiresAt && !idleChanged;
+	const nothingToClear = clearing && !expiresAt && !limitsChanged;
 	const blocked =
 		renew.isPending ||
 		idleInvalid ||
-		(!durationChosen(duration) && !idleChanged) ||
+		(!durationChosen(duration) && !limitsChanged) ||
 		nothingToClear;
-	// With no end date and no idle limit left, the access never ends: warn first.
-	const leavesOpenEnded = clearing && idleNow === null;
+	// With no end date, idle limit or use count left, the access never ends: warn first.
+	const leavesOpenEnded = clearing && idleNow === null && uses === null;
 
 	const done = (title: string, description: string): void => {
 		toast({ title, description, variant: 'success' });
@@ -123,6 +132,7 @@ export function RenewBindingControl({
 				...(at !== undefined ? { expiresAt: at } : {}),
 				...(limitChanged ? { maxIdlePeriod: idleNow } : {}),
 				...(warnChanged ? { idleWarning: warnNow } : {}),
+				...(usesChanged ? { maxQuota: uses } : {}),
 			},
 			{
 				onSuccess: () => {
@@ -140,7 +150,7 @@ export function RenewBindingControl({
 						);
 					} else {
 						done(
-							'Idle limit saved',
+							usesChanged ? 'Access limits saved' : 'Idle limit saved',
 							`${isolateText(agentName)}'s access was re-certified.`,
 						);
 					}
@@ -149,7 +159,8 @@ export function RenewBindingControl({
 		);
 	};
 
-	// Re-certify without changing anything: restarts the idle clock.
+	// Re-certify without changing anything: restarts the idle clock and
+	// restores the uses.
 	const stillNeeded = (): void => {
 		renew.mutate(
 			{ agentId, credentialId },
@@ -157,18 +168,22 @@ export function RenewBindingControl({
 				onSuccess: () =>
 					done(
 						'Access re-certified',
-						`${isolateText(agentName)}'s idle limit starts again from now.`,
+						maxQuota != null
+							? `${isolateText(agentName)} can use this access again.`
+							: `${isolateText(agentName)}'s idle limit starts again from now.`,
 					),
 			},
 		);
 	};
 	const endDatePassed = expiredReason === 'end_date' || (expired && expiredReason == null);
-	const offerStillNeeded = maxIdlePeriod != null && !endDatePassed;
+	const offerStillNeeded = (maxIdlePeriod != null || maxQuota != null) && !endDatePassed;
 
 	const label = expired ? 'Renew for' : expiresAt ? 'Change expiry to' : 'Set an expiry';
 	const action =
-		!durationChosen(duration) && idleChanged
-			? 'Save idle limit'
+		!durationChosen(duration) && limitsChanged
+			? usesChanged
+				? 'Save limits'
+				: 'Save idle limit'
 			: clearing
 				? 'Remove expiry'
 				: expired
@@ -211,6 +226,20 @@ export function RenewBindingControl({
 				disabled={renew.isPending}
 				testIdPrefix={testIdPrefix}
 			/>
+			<SingleUseField
+				value={uses}
+				onChange={setUses}
+				end={
+					durationChosen(duration)
+						? expiresAtFromDuration(duration)
+						: expiresAt
+							? new Date(expiresAt)
+							: 'never'
+				}
+				idleSeconds={idleNow}
+				disabled={renew.isPending}
+				testIdPrefix={testIdPrefix}
+			/>
 			<div className="flex flex-wrap items-center gap-2">
 				<Button
 					size="sm"
@@ -231,7 +260,11 @@ export function RenewBindingControl({
 						disabled={renew.isPending}
 						onClick={stillNeeded}
 						data-testid={`${testIdPrefix}-still-needed`}
-						aria-label={`Still needed: restart the idle limit for ${isolateText(agentName)}`}
+						aria-label={
+							maxQuota != null
+								? `Still needed: restore the uses for ${isolateText(agentName)}`
+								: `Still needed: restart the idle limit for ${isolateText(agentName)}`
+						}
 					>
 						Still needed
 					</Button>

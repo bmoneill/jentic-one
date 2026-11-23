@@ -127,3 +127,22 @@ export function describePolicy(end: Date | 'never' | null, idle: number | null):
 		return `Access ends around ${endText}, or sooner if unused for ${idleLabel(idle)}.`;
 	return `Access ends if unused for ${idleLabel(idle)}. An agent that keeps using it keeps access.`;
 }
+
+/**
+ * How a use count combines with the other limits, if saved now: "Access ends
+ * after one use, or around 15 Dec if not used by then." Any limit reached
+ * ends the access.
+ */
+export function describeSingleUse(
+	count: number,
+	end: Date | 'never' | null,
+	idle: number | null,
+): string {
+	const uses = count === 1 ? 'one use' : `${count} uses`;
+	const endText = end instanceof Date ? END_FORMAT.format(end) : null;
+	if (endText && idle !== null)
+		return `Access ends after ${uses}, around ${endText}, or sooner if unused for ${idleLabel(idle)}.`;
+	if (endText) return `Access ends after ${uses}, or around ${endText} if not used by then.`;
+	if (idle !== null) return `Access ends after ${uses}, or if unused for ${idleLabel(idle)}.`;
+	return `Access ends after ${uses}.`;
+}

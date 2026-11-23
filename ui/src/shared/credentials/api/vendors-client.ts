@@ -150,10 +150,9 @@ export function startEditConnection(body: EditConnectionBody): Promise<EditConne
 export async function bindCredentialToAgentBlocked(
 	agentId: string,
 	credentialId: string,
-	expiresAt?: string | null,
-	maxIdlePeriod?: number | null,
-	idleWarning = false,
+	policy: BindingPolicy = {},
 ): Promise<void> {
+	const { expiresAt, maxIdlePeriod, idleWarning, maxQuota } = policy;
 	try {
 		await AgentsService.bindAgentCredential({
 			agentId,
@@ -162,6 +161,7 @@ export async function bindCredentialToAgentBlocked(
 				...(expiresAt !== undefined ? { expires_at: expiresAt } : {}),
 				...(maxIdlePeriod != null ? { max_idle_period: maxIdlePeriod } : {}),
 				...(idleWarning ? { idle_warning: true } : {}),
+				...(maxQuota != null ? { max_quota: maxQuota } : {}),
 			},
 		});
 	} catch (err) {
@@ -171,6 +171,18 @@ export async function bindCredentialToAgentBlocked(
 	}
 }
 
+/** A new binding's policy; a field left out sets no such limit. */
+export interface BindingPolicy {
+	/** RFC 3339, in the future; `null` is a confirmed "No expiry". */
+	expiresAt?: string | null;
+	/** The idle limit in seconds. */
+	maxIdlePeriod?: number | null;
+	/** Warn the owner before the idle limit is reached. */
+	idleWarning?: boolean;
+	/** How many calls it allows (1 is single use). */
+	maxQuota?: number | null;
+}
+
 /** What a renewal changes: a field left out stays as it is; `null` clears that limit. */
 export interface BindingRenewal {
 	expiresAt?: string | null;
@@ -178,6 +190,8 @@ export interface BindingRenewal {
 	maxIdlePeriod?: number | null;
 	/** Whether the owner is warned before the idle limit is reached. */
 	idleWarning?: boolean;
+	/** The use count (1 is single use); `null` removes it. Every renewal restores the uses left. */
+	maxQuota?: number | null;
 }
 
 /**
@@ -202,6 +216,7 @@ export async function renewCredentialBinding(
 					? { max_idle_period: renewal.maxIdlePeriod }
 					: {}),
 				...(renewal.idleWarning !== undefined ? { idle_warning: renewal.idleWarning } : {}),
+				...(renewal.maxQuota !== undefined ? { max_quota: renewal.maxQuota } : {}),
 			},
 		});
 	} catch (err) {

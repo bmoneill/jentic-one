@@ -63,6 +63,7 @@ import {
 	AccessRulesStep,
 	BindingDurationField,
 	IdleLimitField,
+	SingleUseField,
 	NoExpiryConfirmDialog,
 	useNoExpiryConfirm,
 	useDeviceAwareConnect,
@@ -159,6 +160,8 @@ interface AccessDraft {
 	duration: BindingDuration | null;
 	/** The optional idle limit; null = off. */
 	idle: IdleLimit | null;
+	/** The optional use count (1 = "End after one use"); null = off. */
+	uses: number | null;
 }
 
 /** Custom rules, preselected: the operator says what the agent may call. No
@@ -168,6 +171,7 @@ const DEFAULT_DRAFT: AccessDraft = {
 	customRules: [],
 	duration: null,
 	idle: null,
+	uses: null,
 };
 
 const RULES_SAVE_FAILED = "The access rules weren't saved.";
@@ -371,6 +375,7 @@ export function ApiSetupQueue({
 						expiresAt: expiresAtIso(draftFor(entry.key).duration),
 						maxIdlePeriod: idleSeconds(draftFor(entry.key).idle),
 						idleWarning: idleWarning(draftFor(entry.key).idle),
+						maxQuota: draftFor(entry.key).uses,
 					}));
 				} catch (e) {
 					setEntries((current) =>
@@ -994,8 +999,11 @@ function AccessStep({
 		askDuration && (!durationChosen(draft.duration) || idleLimitError(draft.idle) !== null);
 	const guardExpiry = (run: () => void): void =>
 		noExpiry.request(
-			// An idle limit still ends the access, so only neither warns.
-			askDuration && choosesNoExpiry(draft.duration) && idleSeconds(draft.idle) === null,
+			// An idle limit or a use count still ends the access, so only none warns.
+			askDuration &&
+				choosesNoExpiry(draft.duration) &&
+				idleSeconds(draft.idle) === null &&
+				draft.uses === null,
 			run,
 		);
 	// Focus follows the confirm in and back out, so the keyboard never drops
@@ -1063,6 +1071,16 @@ function AccessStep({
 					value={draft.idle}
 					onChange={(idle): void => onDraftChange({ idle })}
 					end={expiresAtFromDuration(draft.duration)}
+					disabled={working}
+					testIdPrefix="queue-access"
+				/>
+			)}
+			{askDuration && (
+				<SingleUseField
+					value={draft.uses}
+					onChange={(uses): void => onDraftChange({ uses })}
+					end={expiresAtFromDuration(draft.duration)}
+					idleSeconds={idleSeconds(draft.idle)}
 					disabled={working}
 					testIdPrefix="queue-access"
 				/>

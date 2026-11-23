@@ -53,6 +53,7 @@ import {
 } from '@/shared/credentials/lib/bindingExpiry';
 import { BindingDurationField } from './BindingDurationField';
 import { IdleLimitField } from './IdleLimitField';
+import { SingleUseField } from './SingleUseField';
 import {
 	idleLabel,
 	idleLimitError,
@@ -148,6 +149,8 @@ export function VendorApproveFlow({
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
 	// The optional idle limit, seeded from the request too (null = off).
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
+	// The optional use count (1 = "End after one use"); null = off.
+	const [uses, setUses] = useState<number | null>(null);
 	const durationSeeded = useRef(false);
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
@@ -374,6 +377,7 @@ export function VendorApproveFlow({
 					expires_at: expiresAtIso(duration) ?? null,
 					max_idle_period: idleSeconds(idle),
 					...(idleWarning(idle) ? { idle_warning: true } : {}),
+					...(uses !== null ? { max_quota: uses } : {}),
 				}
 			: {}),
 	});
@@ -816,6 +820,16 @@ export function VendorApproveFlow({
 						end={expiresAtFromDuration(duration)}
 						testIdPrefix="approve"
 					/>
+					<SingleUseField
+						value={uses}
+						onChange={(next): void => {
+							setStepError(null);
+							setUses(next);
+						}}
+						end={expiresAtFromDuration(duration)}
+						idleSeconds={idleSeconds(idle)}
+						testIdPrefix="approve"
+					/>
 					{requestedText(requestedDuration, session.requested_max_idle_period) && (
 						<p
 							className="text-muted-foreground text-xs"
@@ -855,7 +869,8 @@ export function VendorApproveFlow({
 							noExpiry.request(
 								bindsAgent &&
 									choosesNoExpiry(duration) &&
-									idleSeconds(idle) === null,
+									idleSeconds(idle) === null &&
+									uses === null,
 								goToRules,
 							)
 						}

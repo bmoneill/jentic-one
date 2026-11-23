@@ -36,9 +36,45 @@ export interface BindingExpiryFields {
 	expiredReason?: string | null;
 	/** The idle limit, in seconds; null without one. */
 	maxIdlePeriod?: number | null;
+	/** How many calls it allows (1 is single use); null without a count. */
+	maxQuota?: number | null;
+	/** How many calls it still allows; null without a count. */
+	quotaRemaining?: number | null;
 }
 
 type EndKind = 'end_date' | 'idle';
+
+/** Which limit ended a binding: a time-based one, or its use count. */
+export type BindingEndReason = EndKind | 'uses';
+
+/** The binding's use count, when it has one: how many calls in all, and how many left. */
+function usesOf(binding: BindingExpiryFields): { max: number; left: number } | null {
+	if (binding.maxQuota == null) return null;
+	return { max: binding.maxQuota, left: Math.max(0, binding.quotaRemaining ?? 0) };
+}
+
+function usesExhausted(binding: BindingExpiryFields): boolean {
+	const uses = usesOf(binding);
+	return uses !== null && uses.left <= 0;
+}
+
+/**
+ * "Single use: not used yet" or "3 of 5 uses left" while a binding with a use
+ * count holds; null without a count or once it is used up.
+ */
+export function bindingUsesLabel(binding: BindingExpiryFields): string | null {
+	const uses = usesOf(binding);
+	if (uses === null || uses.left <= 0) return null;
+	if (uses.max === 1) return 'Single use: not used yet';
+	return `${uses.left} of ${uses.max} uses left`;
+}
+
+/** "Expired: already used once" — why a used-up binding ended. */
+function usesEndedLabel(binding: BindingExpiryFields): string {
+	const uses = usesOf(binding);
+	if (uses?.max === 1) return 'Expired: already used once';
+	return uses ? `Expired: all ${uses.max} uses taken` : 'Expired: no uses left';
+}
 
 /** The limit that ends the binding first, and when; null when it never ends. */
 function firstEnd(binding: BindingExpiryFields): { ms: number; kind: EndKind } | null {
@@ -97,7 +133,7 @@ export const NO_DURATION_HINT =
 
 /** Whether the binding no longer authorizes calls because one of its limits was reached. */
 export function bindingIsExpired(binding: BindingExpiryFields, now: number = Date.now()): boolean {
-	if (binding.expired) return true;
+	if (binding.expired || usesExhausted(binding)) return true;
 	const end = firstEnd(binding);
 	return end !== null && end.ms <= now;
 }
@@ -106,12 +142,18 @@ export function bindingIsExpired(binding: BindingExpiryFields, now: number = Dat
 export function bindingExpiredReason(
 	binding: BindingExpiryFields,
 	now: number = Date.now(),
-): EndKind | null {
+): BindingEndReason | null {
 	if (!bindingIsExpired(binding, now)) return null;
-	if (binding.expiredReason === 'end_date' || binding.expiredReason === 'idle') {
+	if (
+		binding.expiredReason === 'end_date' ||
+		binding.expiredReason === 'idle' ||
+		binding.expiredReason === 'uses'
+	) {
 		return binding.expiredReason;
 	}
-	return firstEnd(binding)?.kind ?? 'end_date';
+	const first = firstEnd(binding);
+	if (first !== null && first.ms <= now) return first.kind;
+	return usesExhausted(binding) ? 'uses' : 'end_date';
 }
 
 /** Whether the binding ends within {@link EXPIRES_SOON_MS} and hasn't yet. */
@@ -133,13 +175,23 @@ function idleEndedLabel(binding: BindingExpiryFields): string {
 /**
  * "Expires in 3 days" / "Expires in less than a minute" / "Expired 2 days ago"
  * / "Expired just now", or null when the binding never expires (or the server
- * didn't say), so nothing is claimed.
+ * didn't say), so nothing is claimed. A binding with a use count adds how
+ * many are left ("Expires in 3 days · Single use: not used yet"), or says it
+ * was used up ("Expired: already used once").
  */
 export function bindingExpiryLabel(
 	binding: BindingExpiryFields,
 	now: number = Date.now(),
 ): string | null {
-	if (bindingExpiredReason(binding, now) === 'idle') return idleEndedLabel(binding);
+	const reason = bindingExpiredReason(binding, now);
+	if (reason === 'uses') return usesEndedLabel(binding);
+	if (reason === 'idle') return idleEndedLabel(binding);
+	const time = timeLabel(binding, now);
+	const uses = reason === null ? bindingUsesLabel(binding) : null;
+	return time && uses ? `${time} · ${uses}` : (time ?? uses);
+}
+
+function timeLabel(binding: BindingExpiryFields, now: number): string | null {
 	const first = firstEnd(binding);
 	if (first?.kind === 'idle') {
 		const left = span(first.ms - now, true);
@@ -164,11 +216,18 @@ export function bindingExpiryShortLabel(
 	binding: BindingExpiryFields,
 	now: number = Date.now(),
 ): string | null {
-	if (bindingExpiredReason(binding, now) === 'idle') return 'Ended: unused';
+	const reason = bindingExpiredReason(binding, now);
+	if (reason === 'uses') return 'Ended: used';
+	if (reason === 'idle') return 'Ended: unused';
 	const first = firstEnd(binding);
 	if (first?.kind === 'idle') return `Ends in ${shortSpan(first.ms - now, true)} if idle`;
 	const end = endMs(binding.expiresAt);
-	if (end === null) return binding.expired ? 'Ended' : null;
+	if (end === null) {
+		if (binding.expired) return 'Ended';
+		const uses = usesOf(binding);
+		if (uses === null) return null;
+		return uses.max === 1 ? 'Single use' : `${uses.left} uses left`;
+	}
 	if (bindingIsExpired(binding, now)) return `Ended ${shortSpan(now - end, false)} ago`;
 	return `Ends in ${shortSpan(end - now, true)}`;
 }

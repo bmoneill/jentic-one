@@ -404,25 +404,14 @@ export function useBindCredentialToAgents() {
 			maxIdlePeriod?: number | null;
 			/** Warn the owner before that idle limit is reached. */
 			idleWarning?: boolean;
+			/** The use count (1 is single use), the same for every binding. */
+			maxQuota?: number | null;
 		}
 	>({
-		mutationFn: async ({
-			credentialId,
-			agentIds,
-			rules,
-			expiresAt,
-			maxIdlePeriod,
-			idleWarning,
-		}) => {
+		mutationFn: async ({ credentialId, agentIds, rules, ...policy }) => {
 			const rulesFailed: string[] = [];
 			for (const aid of agentIds) {
-				await bindCredentialToAgentBlocked(
-					aid,
-					credentialId,
-					expiresAt,
-					maxIdlePeriod,
-					idleWarning,
-				);
+				await bindCredentialToAgentBlocked(aid, credentialId, policy);
 				if (!rules) continue;
 				try {
 					await replaceBindingPermissions(aid, credentialId, [...rules]);

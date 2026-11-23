@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	describePolicy,
+	describeSingleUse,
 	idleWarnable,
 	idleWarning,
 	idleLabel,
@@ -87,5 +88,22 @@ describe('describePolicy', () => {
 			'Access ends if unused for 14 days. An agent that keeps using it keeps access.',
 		);
 		expect(describePolicy('never', null)).toBeNull();
+	});
+});
+
+describe('describeSingleUse', () => {
+	it('says how one use combines with the other limits', () => {
+		const end = new Date('2026-12-15T12:00:00Z');
+		expect(describeSingleUse(1, null, null)).toBe('Access ends after one use.');
+		expect(describeSingleUse(1, 'never', null)).toBe('Access ends after one use.');
+		expect(describeSingleUse(1, end, null)).toMatch(
+			/^Access ends after one use, or around .+ if not used by then\.$/,
+		);
+		expect(describeSingleUse(1, null, 14 * DAY)).toBe(
+			'Access ends after one use, or if unused for 14 days.',
+		);
+		expect(describeSingleUse(5, end, 14 * DAY)).toMatch(
+			/^Access ends after 5 uses, around .+, or sooner if unused for 14 days\.$/,
+		);
 	});
 });

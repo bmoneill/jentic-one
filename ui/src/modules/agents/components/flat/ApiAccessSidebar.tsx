@@ -632,6 +632,7 @@ export function ApiAccessSidebar({
 										expired={shown.expired ?? false}
 										maxIdlePeriod={shown.maxIdlePeriod ?? null}
 										idleWarning={shown.idleWarning ?? false}
+										maxQuota={shown.maxQuota ?? null}
 										expiredReason={shown.expiredReason ?? null}
 										testIdPrefix="sidebar-renew"
 									/>

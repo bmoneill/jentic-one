@@ -180,6 +180,9 @@ interface CredentialBindingRow {
 	max_idle_period?: number | null;
 	/** Whether the owner is warned before the idle limit is reached. */
 	idle_warning?: boolean;
+	/** Use count (1 = single use) and the uses left; null = unlimited. */
+	max_quota?: number | null;
+	quota_remaining?: number | null;
 	/** When it was granted or last renewed (restarts the idle clock). */
 	renewed_at?: string | null;
 	/** Last call through the credential; null = never used. */
@@ -330,11 +333,13 @@ function bindingJson(row: CredentialBindingRow) {
 function bindingExpiryJson(row: CredentialBindingRow): {
 	expires_at: string | null;
 	expired: boolean;
-	expired_reason: 'end_date' | 'idle' | null;
+	expired_reason: 'end_date' | 'idle' | 'uses' | null;
 	max_idle_period: number | null;
 	idle_expires_at: string | null;
 	renewed_at: string | null;
 	idle_warning: boolean;
+	max_quota: number | null;
+	quota_remaining: number | null;
 } {
 	const expiresAt = row.expires_at ?? null;
 	const limit = row.max_idle_period ?? null;
@@ -348,20 +353,27 @@ function bindingExpiryJson(row: CredentialBindingRow): {
 	const now = Date.now();
 	const endedByDate = expiresAt != null && Date.parse(expiresAt) <= now;
 	const endedByIdle = idleEnd != null && idleEnd <= now;
+	const maxQuota = row.max_quota ?? null;
+	const usedUp = maxQuota != null && (row.quota_remaining ?? 0) <= 0;
 	return {
 		expires_at: expiresAt,
-		expired: endedByDate || endedByIdle,
-		expired_reason: endedByIdle
-			? endedByDate && Date.parse(expiresAt!) < idleEnd!
-				? 'end_date'
-				: 'idle'
-			: endedByDate
-				? 'end_date'
-				: null,
+		expired: endedByDate || endedByIdle || usedUp,
+		expired_reason:
+			usedUp && !endedByDate && !endedByIdle
+				? 'uses'
+				: endedByIdle
+					? endedByDate && Date.parse(expiresAt!) < idleEnd!
+						? 'end_date'
+						: 'idle'
+					: endedByDate
+						? 'end_date'
+						: null,
 		max_idle_period: limit,
 		idle_expires_at: idleEnd != null ? new Date(idleEnd).toISOString() : null,
 		renewed_at: row.renewed_at ?? null,
 		idle_warning: row.idle_warning ?? false,
+		max_quota: maxQuota,
+		quota_remaining: maxQuota != null ? (row.quota_remaining ?? 0) : null,
 	};
 }
 
@@ -2074,6 +2086,7 @@ export const agentsHandlers = [
 			expires_at?: string | null;
 			max_idle_period?: number | null;
 			idle_warning?: boolean;
+			max_quota?: number | null;
 		};
 		const pastExpiry = pastExpiryError(body.expires_at);
 		if (pastExpiry) return pastExpiry;
@@ -2105,6 +2118,8 @@ export const agentsHandlers = [
 			expires_at: body.expires_at ?? null,
 			max_idle_period: body.max_idle_period ?? null,
 			idle_warning: body.idle_warning ?? false,
+			max_quota: body.max_quota ?? null,
+			quota_remaining: body.max_quota ?? null,
 			renewed_at: now(),
 			name: credential?.name ?? null,
 			serves: credential
@@ -2149,6 +2164,7 @@ export const agentsHandlers = [
 			expires_at?: string | null;
 			max_idle_period?: number | null;
 			idle_warning?: boolean;
+			max_quota?: number | null;
 		};
 		if ('expires_at' in body) {
 			const pastExpiry = pastExpiryError(body.expires_at);
@@ -2157,6 +2173,9 @@ export const agentsHandlers = [
 		}
 		if ('max_idle_period' in body) row.max_idle_period = body.max_idle_period ?? null;
 		if (body.idle_warning !== undefined) row.idle_warning = body.idle_warning;
+		if ('max_quota' in body) row.max_quota = body.max_quota ?? null;
+		// Every renewal restores the uses left.
+		row.quota_remaining = row.max_quota ?? null;
 		row.renewed_at = now();
 		return HttpResponse.json(bindingJson(row));
 	}),

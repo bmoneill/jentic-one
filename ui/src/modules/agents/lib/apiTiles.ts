@@ -60,6 +60,9 @@ export interface ApiTileModel {
 	idleExpiresAt?: string | null;
 	/** Whether the owner is warned before the idle limit is reached. */
 	idleWarning?: boolean;
+	/** The use count (1 is single use) and the uses left; null without one. */
+	maxQuota?: number | null;
+	quotaRemaining?: number | null;
 	/** OAuth sign-in not completed. Drives the dashed treatment. */
 	awaitingConsent: boolean;
 	/** The registry has an upstream spec update this API hasn't adopted. */
@@ -243,6 +246,8 @@ export function composeApiTiles(
 			maxIdlePeriod: binding.maxIdlePeriod ?? null,
 			idleExpiresAt: binding.idleExpiresAt ?? null,
 			idleWarning: binding.idleWarning ?? false,
+			maxQuota: binding.maxQuota ?? null,
+			quotaRemaining: binding.quotaRemaining ?? null,
 			awaitingConsent: credentialAwaitsConsent(credential),
 			authLabel: credential ? (AUTH_TILE_LABEL[credential.type] ?? null) : null,
 		};

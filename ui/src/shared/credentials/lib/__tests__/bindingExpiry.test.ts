@@ -156,3 +156,41 @@ describe('idle limits', () => {
 		).toBe(false);
 	});
 });
+
+describe('use counts', () => {
+	it('says how many uses are left, beside any end date', () => {
+		expect(bindingExpiryLabel({ maxQuota: 1, quotaRemaining: 1 }, NOW)).toBe(
+			'Single use: not used yet',
+		);
+		expect(bindingExpiryLabel({ maxQuota: 5, quotaRemaining: 3 }, NOW)).toBe(
+			'3 of 5 uses left',
+		);
+		expect(
+			bindingExpiryLabel({ ...endsIn(3 * DAY), maxQuota: 1, quotaRemaining: 1 }, NOW),
+		).toBe('Expires in 3 days · Single use: not used yet');
+		expect(bindingExpiryShortLabel({ maxQuota: 1, quotaRemaining: 1 }, NOW)).toBe('Single use');
+	});
+
+	it('ends a binding whose uses are gone, and says so', () => {
+		const used = { maxQuota: 1, quotaRemaining: 0 };
+		expect(bindingIsExpired(used, NOW)).toBe(true);
+		expect(bindingExpiryLabel(used, NOW)).toBe('Expired: already used once');
+		expect(bindingExpiryShortLabel(used, NOW)).toBe('Ended: used');
+		expect(bindingExpiryLabel({ maxQuota: 5, quotaRemaining: 0, expired: true }, NOW)).toBe(
+			'Expired: all 5 uses taken',
+		);
+		// The server's reason wins over a later end date.
+		expect(
+			bindingExpiryLabel(
+				{
+					...endsIn(DAY),
+					maxQuota: 1,
+					quotaRemaining: 0,
+					expired: true,
+					expiredReason: 'uses',
+				},
+				NOW,
+			),
+		).toBe('Expired: already used once');
+	});
+});

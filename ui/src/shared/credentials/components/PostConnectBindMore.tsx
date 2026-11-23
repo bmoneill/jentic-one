@@ -16,6 +16,7 @@ import {
 	type IdleLimit,
 } from '@/shared/credentials/lib/idleLimit';
 import { IdleLimitField } from '@/shared/credentials/components/IdleLimitField';
+import { SingleUseField } from '@/shared/credentials/components/SingleUseField';
 import {
 	NO_DURATION_HINT,
 	choosesNoExpiry,
@@ -57,6 +58,7 @@ export function PostConnectBindMore({
 	const [done, setDone] = useState(false);
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
+	const [uses, setUses] = useState<number | null>(null);
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
 
@@ -94,6 +96,7 @@ export function PostConnectBindMore({
 				expiresAt: expiresAtIso(duration),
 				maxIdlePeriod: idleSeconds(idle),
 				idleWarning: idleWarning(idle),
+				maxQuota: uses,
 			},
 			{
 				onSuccess: () => {
@@ -101,6 +104,7 @@ export function PostConnectBindMore({
 					setSelected(new Set());
 					setDuration(null);
 					setIdle(null);
+					setUses(null);
 				},
 			},
 		);
@@ -143,6 +147,14 @@ export function PostConnectBindMore({
 				disabled={bindMany.isPending}
 				testIdPrefix="bind-more"
 			/>
+			<SingleUseField
+				value={uses}
+				onChange={setUses}
+				end={expiresAtFromDuration(duration)}
+				idleSeconds={idleSeconds(idle)}
+				disabled={bindMany.isPending}
+				testIdPrefix="bind-more"
+			/>
 			{bindMany.error && <ErrorAlert message={bindMany.error} />}
 			{done && !bindMany.error && (
 				<p className="text-success text-xs">Bound to selected agents.</p>
@@ -153,7 +165,7 @@ export function PostConnectBindMore({
 				size="sm"
 				onClick={(): void =>
 					noExpiry.request(
-						choosesNoExpiry(duration) && idleSeconds(idle) === null,
+						choosesNoExpiry(duration) && idleSeconds(idle) === null && uses === null,
 						handleBind,
 					)
 				}

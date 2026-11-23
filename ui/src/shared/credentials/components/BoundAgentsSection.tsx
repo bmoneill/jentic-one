@@ -262,6 +262,7 @@ function BoundAgentRow({
 					expired={expired}
 					maxIdlePeriod={row.max_idle_period ?? null}
 					idleWarning={row.idle_warning ?? false}
+					maxQuota={row.max_quota ?? null}
 					expiredReason={row.expired_reason ?? null}
 					onRenewed={onToggleRenew}
 					testIdPrefix="bound-agent-renew-control"
@@ -279,6 +280,8 @@ function expiryFields(row: CredentialAgentResponse): BindingExpiryFields {
 		expiredReason: row.expired_reason ?? null,
 		maxIdlePeriod: row.max_idle_period ?? null,
 		idleExpiresAt: row.idle_expires_at ?? null,
+		maxQuota: row.max_quota ?? null,
+		quotaRemaining: row.quota_remaining ?? null,
 	};
 }
 

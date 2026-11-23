@@ -32,6 +32,8 @@ function seedBoundAgents(
 		max_idle_period?: number | null;
 		idle_expires_at?: string | null;
 		idle_warning?: boolean;
+		max_quota?: number | null;
+		quota_remaining?: number | null;
 	}>,
 ) {
 	worker.use(
@@ -60,6 +62,12 @@ function seedBoundAgents(
 					...('expires_at' in r && {
 						expires_at: r.expires_at,
 						expired: r.expired ?? false,
+					}),
+					...('max_quota' in r && {
+						max_quota: r.max_quota,
+						quota_remaining: r.quota_remaining ?? null,
+						expired: r.expired ?? false,
+						expired_reason: r.expired_reason ?? null,
 					}),
 				})),
 				has_more: false,
@@ -614,6 +622,41 @@ describe('BoundAgentsSection — when access ends', () => {
 		await user.click(box);
 		await user.click(screen.getByTestId('bound-agent-renew-control-save'));
 		await vi.waitFor(() => expect(renewals).toEqual([{ idle_warning: false }]));
+	});
+
+	it('says a single-use binding was used, and "Still needed" restores the use', async () => {
+		const renewals = watchRenewals();
+		seedBoundAgents('cred_gh_1', [
+			{ agent_id: 'agnt_fresh', agent_name: 'fresh-agent', max_quota: 1, quota_remaining: 1 },
+			{
+				agent_id: 'agnt_used',
+				agent_name: 'used-agent',
+				max_quota: 1,
+				quota_remaining: 0,
+				expired: true,
+				expired_reason: 'uses',
+			},
+		]);
+		const user = userEvent.setup();
+		renderSheet('cred_gh_1');
+
+		const [fresh, used] = await screen.findAllByTestId('bound-agent-row');
+		expect(within(fresh).getByTestId('bound-agent-expiry')).toHaveTextContent(
+			'Single use: not used yet',
+		);
+		expect(within(used).getByTestId('bound-agent-expiry')).toHaveTextContent(
+			'Expired: already used once',
+		);
+		await user.click(
+			within(used).getByRole('button', { name: /^Renew for \W?used-agent\W?$/ }),
+		);
+		expect(
+			within(screen.getByTestId('bound-agent-renew-control-single-use')).getByRole(
+				'checkbox',
+			),
+		).toBeChecked();
+		await user.click(screen.getByTestId('bound-agent-renew-control-still-needed'));
+		await vi.waitFor(() => expect(renewals).toEqual([{}]));
 	});
 
 	it('sorts the longest-unused first on request', async () => {

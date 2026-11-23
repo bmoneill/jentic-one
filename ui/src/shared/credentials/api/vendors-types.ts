@@ -267,6 +267,8 @@ export interface ConfirmRequest {
 	max_idle_period?: number | null;
 	/** Warn the agent's owner before that idle limit is reached. */
 	idle_warning?: boolean;
+	/** The new binding's use count (1 is single use); null or absent sets none. */
+	max_quota?: number | null;
 }
 
 /** Fields every non-OAuth confirm carries: the rules and the review it answers. */
@@ -282,6 +284,8 @@ interface ReviewedConfirm {
 	max_idle_period?: number | null;
 	/** Warn the agent's owner before that idle limit is reached. */
 	idle_warning?: boolean;
+	/** The new binding's use count (1 is single use); null or absent sets none. */
+	max_quota?: number | null;
 }
 
 export interface ApiKeyConfirmRequest extends ReviewedConfirm {

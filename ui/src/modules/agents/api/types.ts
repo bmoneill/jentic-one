@@ -158,6 +158,9 @@ export interface CredentialBindingEntity {
 	idleExpiresAt?: string | null;
 	/** Whether the owner is warned before the idle limit is reached. */
 	idleWarning?: boolean;
+	/** How many calls it allows (1 is single use), and how many are left; null without a count. */
+	maxQuota?: number | null;
+	quotaRemaining?: number | null;
 	/** When it was granted or last renewed (restarts the idle clock). */
 	renewedAt?: string | null;
 	/** When the agent last made a call through this credential, whatever its

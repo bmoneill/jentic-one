@@ -71,6 +71,7 @@ import {
 	AccessRulesStep,
 	BindingDurationField,
 	IdleLimitField,
+	SingleUseField,
 	NoExpiryConfirmDialog,
 	formatDurationEnd,
 	useNoExpiryConfirm,
@@ -176,6 +177,8 @@ export function BindAgentDialog({
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
 	// The optional idle limit (null = off).
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
+	// The optional use count: 1 for "End after one use", null = off.
+	const [uses, setUses] = useState<number | null>(null);
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
 	// A bind that landed but whose rules didn't, for some agents: kept so the
@@ -281,6 +284,7 @@ export function BindAgentDialog({
 		setCustomRules([]);
 		setDuration(null);
 		setIdle(null);
+		setUses(null);
 		setRulesFailure(null);
 		onClose();
 	};
@@ -315,6 +319,7 @@ export function BindAgentDialog({
 				expiresAt,
 				maxIdlePeriod: idleSeconds(idle),
 				idleWarning: idleWarning(idle),
+				maxQuota: uses,
 			},
 			{
 				onSuccess: ({ rulesFailed }) => {
@@ -537,6 +542,16 @@ export function BindAgentDialog({
 						testIdPrefix="bind-agent"
 					/>
 				)}
+				{!everyAgentBound && (
+					<SingleUseField
+						value={uses}
+						onChange={setUses}
+						end={expiresAtFromDuration(duration)}
+						idleSeconds={idleSeconds(idle)}
+						disabled={busy}
+						testIdPrefix="bind-agent"
+					/>
+				)}
 				{createError && (
 					<ErrorAlert
 						title="Couldn't create the no-auth credential"
@@ -569,8 +584,9 @@ export function BindAgentDialog({
 				size="sm"
 				onClick={(): void =>
 					noExpiry.request(
-						// An idle limit still ends the access, so only neither warns.
-						choosesNoExpiry(duration) && idleSeconds(idle) === null,
+						// An idle limit or a use count still ends the access, so only
+						// none of them warns.
+						choosesNoExpiry(duration) && idleSeconds(idle) === null && uses === null,
 						() => void handleBind(),
 					)
 				}
@@ -620,6 +636,8 @@ function expiryOf(row: CredentialAgentResponse): BindingExpiryFields {
 		expiredReason: row.expired_reason ?? null,
 		maxIdlePeriod: row.max_idle_period ?? null,
 		idleExpiresAt: row.idle_expires_at ?? null,
+		maxQuota: row.max_quota ?? null,
+		quotaRemaining: row.quota_remaining ?? null,
 	};
 }
 

@@ -684,6 +684,27 @@ describe('BindAgentDialog — how long the access lasts', () => {
 		});
 	});
 
+	it('sends single use, and single use alone ends access without a warning', async () => {
+		const user = userEvent.setup();
+		renderDialog();
+		await ready(user);
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), 'custom');
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-unit'), 'never');
+		await user.click(screen.getByText('End after one use'));
+		expect(screen.getByTestId('bind-agent-single-use-summary')).toHaveTextContent(
+			'Access ends after one use.',
+		);
+
+		await user.click(screen.getByTestId('bind-agent-confirm'));
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		expect(screen.queryByTestId('no-expiry-warning')).not.toBeInTheDocument();
+		expect(bodies[0].body).toEqual({
+			credential_id: 'cred_big',
+			expires_at: null,
+			max_quota: 1,
+		});
+	});
+
 	it('refuses an idle limit under a day', async () => {
 		const user = userEvent.setup();
 		renderDialog();

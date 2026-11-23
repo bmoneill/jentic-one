@@ -44,6 +44,7 @@ import {
 	type IdleLimit,
 } from '@/shared/credentials/lib/idleLimit';
 import { IdleLimitField } from './IdleLimitField';
+import { SingleUseField } from './SingleUseField';
 import {
 	NO_DURATION_HINT,
 	choosesNoExpiry,
@@ -117,6 +118,7 @@ export function VendorSelfConnectFlow({
 	// How long the binding lasts, when an agent is picked; nothing preselected.
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
+	const [uses, setUses] = useState<number | null>(null);
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
 
@@ -348,6 +350,7 @@ export function VendorSelfConnectFlow({
 							expires_at: expiresAtIso(duration) ?? null,
 							max_idle_period: idleSeconds(idle),
 							...(idleWarning(idle) ? { idle_warning: true } : {}),
+							...(uses !== null ? { max_quota: uses } : {}),
 						}
 					: {}),
 			});
@@ -505,6 +508,15 @@ export function VendorSelfConnectFlow({
 					testIdPrefix="self-connect"
 				/>
 			)}
+			{agentId && (
+				<SingleUseField
+					value={uses}
+					onChange={setUses}
+					end={expiresAtFromDuration(duration)}
+					idleSeconds={idleSeconds(idle)}
+					testIdPrefix="self-connect"
+				/>
+			)}
 
 			{flowError && <ErrorAlert message={flowError} />}
 
@@ -520,7 +532,8 @@ export function VendorSelfConnectFlow({
 						noExpiry.request(
 							agentId != null &&
 								choosesNoExpiry(duration) &&
-								idleSeconds(idle) === null,
+								idleSeconds(idle) === null &&
+								uses === null,
 							() => void goToRules(),
 						)
 					}
