@@ -32,6 +32,8 @@ const TYPE_ICON_MAP: Record<string, { Icon: LucideIcon; tone: string }> = {
 	'execution.repeated_failure': { Icon: AlertTriangle, tone: 'text-danger' },
 	'credential.expiring_soon': { Icon: Clock, tone: 'text-warning' },
 	'credential.expired': { Icon: KeyRound, tone: 'text-danger' },
+	// A binding the owner asked to hear about ends soon unless used.
+	'credential_grant.idle_expiring': { Icon: Clock, tone: 'text-warning' },
 	'agent.self_registered': { Icon: Bot, tone: 'text-warning' },
 	'agent.registration_approved': { Icon: CheckCircle2, tone: 'text-success' },
 	'agent.registration_denied': { Icon: XCircle, tone: 'text-warning' },

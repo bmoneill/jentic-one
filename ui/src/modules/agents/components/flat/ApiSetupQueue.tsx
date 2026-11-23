@@ -82,7 +82,12 @@ import {
 	expiresAtIso,
 	type BindingDuration,
 } from '@/shared/credentials/lib/bindingDuration';
-import { idleLimitError, idleSeconds, type IdleLimit } from '@/shared/credentials/lib/idleLimit';
+import {
+	idleLimitError,
+	idleSeconds,
+	idleWarning,
+	type IdleLimit,
+} from '@/shared/credentials/lib/idleLimit';
 import {
 	NO_DURATION_HINT,
 	choosesNoExpiry,
@@ -365,6 +370,7 @@ export function ApiSetupQueue({
 						// Worked out as the bind goes out: the duration runs from here.
 						expiresAt: expiresAtIso(draftFor(entry.key).duration),
 						maxIdlePeriod: idleSeconds(draftFor(entry.key).idle),
+						idleWarning: idleWarning(draftFor(entry.key).idle),
 					}));
 				} catch (e) {
 					setEntries((current) =>

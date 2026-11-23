@@ -31,6 +31,7 @@ function seedBoundAgents(
 		expired_reason?: string | null;
 		max_idle_period?: number | null;
 		idle_expires_at?: string | null;
+		idle_warning?: boolean;
 	}>,
 ) {
 	worker.use(
@@ -54,6 +55,7 @@ function seedBoundAgents(
 						idle_expires_at: r.idle_expires_at ?? null,
 						expired_reason: r.expired_reason ?? null,
 						expired: r.expired ?? false,
+						idle_warning: r.idle_warning ?? false,
 					}),
 					...('expires_at' in r && {
 						expires_at: r.expires_at,
@@ -587,6 +589,31 @@ describe('BoundAgentsSection — when access ends', () => {
 		).toBe('14d');
 		await user.click(screen.getByTestId('bound-agent-renew-control-still-needed'));
 		await vi.waitFor(() => expect(renewals).toEqual([{}]));
+	});
+
+	it('starts the warning box on the binding and saves only a change to it', async () => {
+		const renewals = watchRenewals();
+		seedBoundAgents('cred_gh_1', [
+			{
+				agent_id: 'agnt_warned',
+				agent_name: 'warned-agent',
+				max_idle_period: 14 * 86_400,
+				idle_expires_at: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+				idle_warning: true,
+			},
+		]);
+		const user = userEvent.setup();
+		renderSheet('cred_gh_1');
+
+		const row = await screen.findByTestId('bound-agent-row');
+		await user.click(within(row).getByTestId('bound-agent-renew'));
+		const box = within(screen.getByTestId('bound-agent-renew-control-idle-warning')).getByRole(
+			'checkbox',
+		);
+		expect(box).toBeChecked();
+		await user.click(box);
+		await user.click(screen.getByTestId('bound-agent-renew-control-save'));
+		await vi.waitFor(() => expect(renewals).toEqual([{ idle_warning: false }]));
 	});
 
 	it('sorts the longest-unused first on request', async () => {

@@ -29,6 +29,7 @@ import {
 	listAgentsForPicker,
 	listAllVendorOperations,
 	listConnectSessionRevisions,
+	listBindingsEndingSoon,
 	listOpenConnectRequests,
 	listVendors,
 	pollConnectSessionStatus,
@@ -43,6 +44,7 @@ import type {
 	AgentListResponse,
 	BindingAccessResponse,
 	ConnectSessionSummaryResponse,
+	EndingSoonBindingResponse,
 	PermissionRuleReadSchema,
 	PermissionRuleSchema,
 	RuleSetResponse,
@@ -329,6 +331,7 @@ export function invalidateBindingSurfaces(
 			}),
 		]),
 		client.invalidateQueries({ queryKey: credentialKeys.agents(credentialId) }),
+		client.invalidateQueries({ queryKey: bindingsEndingSoonKey }),
 	]);
 }
 
@@ -399,12 +402,27 @@ export function useBindCredentialToAgents() {
 			expiresAt?: string | null;
 			/** The idle limit in seconds, the same for every binding. */
 			maxIdlePeriod?: number | null;
+			/** Warn the owner before that idle limit is reached. */
+			idleWarning?: boolean;
 		}
 	>({
-		mutationFn: async ({ credentialId, agentIds, rules, expiresAt, maxIdlePeriod }) => {
+		mutationFn: async ({
+			credentialId,
+			agentIds,
+			rules,
+			expiresAt,
+			maxIdlePeriod,
+			idleWarning,
+		}) => {
 			const rulesFailed: string[] = [];
 			for (const aid of agentIds) {
-				await bindCredentialToAgentBlocked(aid, credentialId, expiresAt, maxIdlePeriod);
+				await bindCredentialToAgentBlocked(
+					aid,
+					credentialId,
+					expiresAt,
+					maxIdlePeriod,
+					idleWarning,
+				);
 				if (!rules) continue;
 				try {
 					await replaceBindingPermissions(aid, credentialId, [...rules]);
@@ -629,6 +647,27 @@ export function useOpenConnectRequests(options?: { enabled?: boolean }) {
 		queryFn: listOpenConnectRequests,
 		enabled: options?.enabled ?? true,
 		staleTime: 30_000,
+		refetchInterval: CONNECT_REQUESTS_REFETCH_MS,
+	});
+}
+
+/** The "Ending soon" list's key, under the attention root like the other inbox rows. */
+export const bindingsEndingSoonKey = [
+	...sharedQueryKeys.attentionRoot,
+	'bindings-ending-soon',
+] as const;
+
+/**
+ * Bindings that will soon reach their idle limit, with the warning on (see
+ * {@link listBindingsEndingSoon}). The window is two days, so the inbox's
+ * cadence is plenty; any renewal refreshes it at once.
+ */
+export function useBindingsEndingSoon(options?: { enabled?: boolean }) {
+	return useQuery<EndingSoonBindingResponse[]>({
+		queryKey: bindingsEndingSoonKey,
+		queryFn: listBindingsEndingSoon,
+		enabled: options?.enabled ?? true,
+		staleTime: 60_000,
 		refetchInterval: CONNECT_REQUESTS_REFETCH_MS,
 	});
 }

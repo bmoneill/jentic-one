@@ -17,6 +17,7 @@ import {
 	type AgentListResponse,
 	type BindingAccessResponse,
 	type ConnectSessionSummaryResponse,
+	type EndingSoonBindingResponse,
 	type PermissionRuleReadSchema,
 	type PermissionRuleSchema,
 	type RuleSetResponse,
@@ -151,6 +152,7 @@ export async function bindCredentialToAgentBlocked(
 	credentialId: string,
 	expiresAt?: string | null,
 	maxIdlePeriod?: number | null,
+	idleWarning = false,
 ): Promise<void> {
 	try {
 		await AgentsService.bindAgentCredential({
@@ -159,6 +161,7 @@ export async function bindCredentialToAgentBlocked(
 				credential_id: credentialId,
 				...(expiresAt !== undefined ? { expires_at: expiresAt } : {}),
 				...(maxIdlePeriod != null ? { max_idle_period: maxIdlePeriod } : {}),
+				...(idleWarning ? { idle_warning: true } : {}),
 			},
 		});
 	} catch (err) {
@@ -173,6 +176,8 @@ export interface BindingRenewal {
 	expiresAt?: string | null;
 	/** The idle limit in seconds. */
 	maxIdlePeriod?: number | null;
+	/** Whether the owner is warned before the idle limit is reached. */
+	idleWarning?: boolean;
 }
 
 /**
@@ -196,6 +201,7 @@ export async function renewCredentialBinding(
 				...(renewal.maxIdlePeriod !== undefined
 					? { max_idle_period: renewal.maxIdlePeriod }
 					: {}),
+				...(renewal.idleWarning !== undefined ? { idle_warning: renewal.idleWarning } : {}),
 			},
 		});
 	} catch (err) {
@@ -419,6 +425,17 @@ export async function listOpenConnectRequests(): Promise<ConnectSessionSummaryRe
 		.flatMap((page) => page.data)
 		.filter((s) => s.agent_id != null && s.requested_by_actor_id === s.agent_id)
 		.sort((a, b) => Date.parse(a.created_at) - Date.parse(b.created_at));
+}
+
+/**
+ * Bindings of the viewer's agents (every agent's, for an `org:admin`) whose
+ * owner asked to be warned and that will reach their idle limit within the
+ * warning window unless used, soonest first. The live state behind "Ending
+ * soon" in "Waiting for you".
+ */
+export async function listBindingsEndingSoon(): Promise<EndingSoonBindingResponse[]> {
+	const page = await AgentsService.listCredentialBindingsEndingSoon();
+	return page.data;
 }
 
 export function listVendors(): Promise<VendorListResponse> {

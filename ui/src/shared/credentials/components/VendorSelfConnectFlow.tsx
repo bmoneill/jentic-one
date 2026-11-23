@@ -37,7 +37,12 @@ import {
 	expiresAtIso,
 	type BindingDuration,
 } from '@/shared/credentials/lib/bindingDuration';
-import { idleLimitError, idleSeconds, type IdleLimit } from '@/shared/credentials/lib/idleLimit';
+import {
+	idleLimitError,
+	idleSeconds,
+	idleWarning,
+	type IdleLimit,
+} from '@/shared/credentials/lib/idleLimit';
 import { IdleLimitField } from './IdleLimitField';
 import {
 	NO_DURATION_HINT,
@@ -342,6 +347,7 @@ export function VendorSelfConnectFlow({
 					? {
 							expires_at: expiresAtIso(duration) ?? null,
 							max_idle_period: idleSeconds(idle),
+							...(idleWarning(idle) ? { idle_warning: true } : {}),
 						}
 					: {}),
 			});

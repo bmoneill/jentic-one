@@ -156,6 +156,8 @@ export interface CredentialBindingEntity {
 	maxIdlePeriod?: number | null;
 	/** When the idle limit ends it if unused; null without one. */
 	idleExpiresAt?: string | null;
+	/** Whether the owner is warned before the idle limit is reached. */
+	idleWarning?: boolean;
 	/** When it was granted or last renewed (restarts the idle clock). */
 	renewedAt?: string | null;
 	/** When the agent last made a call through this credential, whatever its

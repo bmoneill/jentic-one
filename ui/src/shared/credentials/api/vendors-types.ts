@@ -265,6 +265,8 @@ export interface ConfirmRequest {
 	expires_at?: string | null;
 	/** The new binding's idle limit in seconds; null or absent sets none. */
 	max_idle_period?: number | null;
+	/** Warn the agent's owner before that idle limit is reached. */
+	idle_warning?: boolean;
 }
 
 /** Fields every non-OAuth confirm carries: the rules and the review it answers. */
@@ -278,6 +280,8 @@ interface ReviewedConfirm {
 	expires_at?: string | null;
 	/** The new binding's idle limit in seconds; null or absent sets none. */
 	max_idle_period?: number | null;
+	/** Warn the agent's owner before that idle limit is reached. */
+	idle_warning?: boolean;
 }
 
 export interface ApiKeyConfirmRequest extends ReviewedConfirm {

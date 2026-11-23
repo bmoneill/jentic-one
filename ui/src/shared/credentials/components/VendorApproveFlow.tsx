@@ -58,6 +58,7 @@ import {
 	idleLimitError,
 	idleLimitFromSeconds,
 	idleSeconds,
+	idleWarning,
 	type IdleLimit,
 } from '@/shared/credentials/lib/idleLimit';
 import { NoExpiryConfirmDialog, useNoExpiryConfirm } from './NoExpiryConfirmDialog';
@@ -369,7 +370,11 @@ export function VendorApproveFlow({
 		digest: review?.digest ?? '',
 		revision_id: review?.revision?.id ?? null,
 		...(review?.agent
-			? { expires_at: expiresAtIso(duration) ?? null, max_idle_period: idleSeconds(idle) }
+			? {
+					expires_at: expiresAtIso(duration) ?? null,
+					max_idle_period: idleSeconds(idle),
+					...(idleWarning(idle) ? { idle_warning: true } : {}),
+				}
 			: {}),
 	});
 

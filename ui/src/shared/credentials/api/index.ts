@@ -523,9 +523,11 @@ export {
 } from './apis-hooks';
 
 export {
+	bindingsEndingSoonKey,
 	connectRequestsKey,
 	useAgentsForPicker,
 	useBindingAccess,
+	useBindingsEndingSoon,
 	useConfirmConnectSession,
 	useConnectSession,
 	useOpenConnectRequests,
@@ -577,6 +579,7 @@ export type {
 	ApiListResponse,
 	ConnectSessionSummaryResponse,
 	CatalogEntryResponse,
+	EndingSoonBindingResponse,
 	CatalogListResponse,
 	ProviderDiscoveryResponse,
 	ProviderDiscoveryEntryResponse,

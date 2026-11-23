@@ -7,6 +7,11 @@
  * Under it, one line says how the end date and the idle limit combine if
  * saved now (`end` is the end date the sibling control would set), so the
  * operator sees which limit applies first.
+ *
+ * With the row on, "Warn me before it ends" (off to start) asks for a warning
+ * up to 48 hours before the limit is reached. It is the value's `warn` flag,
+ * so turning the row off drops it too. A limit under 4 days can't be warned
+ * about, so the box is disabled there and the value sent is false.
  */
 import { useId } from 'react';
 import { Checkbox, Input, Select } from '@/shared/ui';
@@ -17,6 +22,7 @@ import {
 	describePolicy,
 	idleLimitError,
 	idleSeconds,
+	idleWarnable,
 	type IdleLimit,
 	type IdlePreset,
 	type IdleUnit,
@@ -46,6 +52,7 @@ export function IdleLimitField({
 	const error = idleLimitError(value);
 	const custom = value?.kind === 'custom' ? value : null;
 	const summary = error ? null : describePolicy(end, idleSeconds(value));
+	const warnable = idleWarnable(idleSeconds(value));
 
 	return (
 		<div className="space-y-1.5" data-testid={`${testIdPrefix}-idle`}>
@@ -73,10 +80,19 @@ export function IdleLimitField({
 								const next = e.target.value;
 								if (next === CUSTOM) {
 									if (!custom)
-										onChange({ kind: 'custom', amount: '14', unit: 'days' });
+										onChange({
+											kind: 'custom',
+											amount: '14',
+											unit: 'days',
+											warn: value.warn,
+										});
 									return;
 								}
-								onChange({ kind: 'preset', preset: next as IdlePreset });
+								onChange({
+									kind: 'preset',
+									preset: next as IdlePreset,
+									warn: value.warn,
+								});
 							}}
 						>
 							{IDLE_PRESETS.map((p) => (
@@ -149,6 +165,28 @@ export function IdleLimitField({
 						{summary}
 					</p>
 				))}
+			{value !== null && (
+				<div className="space-y-0.5 pl-6">
+					<div data-testid={`${testIdPrefix}-idle-warning`}>
+						<Checkbox
+							size="sm"
+							checked={warnable && value.warn === true}
+							disabled={disabled || !warnable}
+							onChange={(on): void => onChange({ ...value, warn: on })}
+						>
+							<span className="text-foreground text-sm">Warn me before it ends</span>
+						</Checkbox>
+					</div>
+					<p
+						className="text-muted-foreground pl-6 text-xs"
+						data-testid={`${testIdPrefix}-idle-warning-hint`}
+					>
+						{warnable
+							? 'Up to 48 hours ahead, in "Waiting for you" and the event stream.'
+							: 'Too short to warn: warnings need an idle limit of 4 days or more.'}
+					</p>
+				</div>
+			)}
 		</div>
 	);
 }

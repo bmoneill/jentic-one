@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
 	describePolicy,
+	idleWarnable,
+	idleWarning,
 	idleLabel,
 	idleLimitError,
 	idleLimitFromSeconds,
@@ -50,6 +52,26 @@ describe('idleLimitFromSeconds / idleLabel', () => {
 		expect(idleLabel(DAY)).toBe('1 day');
 		expect(idleLabel(14 * DAY)).toBe('14 days');
 		expect(idleLabel(36 * 3_600)).toBe('36 hours');
+	});
+});
+
+describe('idleWarning / idleWarnable', () => {
+	it('sends a ticked warning only on a limit of 4 days or more', () => {
+		expect(idleWarnable(4 * DAY)).toBe(true);
+		expect(idleWarnable(4 * DAY - 1)).toBe(false);
+		expect(idleWarnable(null)).toBe(false);
+		expect(idleWarning({ kind: 'preset', preset: '7d', warn: true })).toBe(true);
+		expect(idleWarning({ kind: 'preset', preset: '7d' })).toBe(false);
+		expect(idleWarning({ kind: 'custom', amount: '3', unit: 'days', warn: true })).toBe(false);
+		expect(idleWarning(null)).toBe(false);
+	});
+
+	it('seeds the warning from the binding', () => {
+		expect(idleLimitFromSeconds(14 * DAY, true)).toEqual({
+			kind: 'preset',
+			preset: '14d',
+			warn: true,
+		});
 	});
 });
 

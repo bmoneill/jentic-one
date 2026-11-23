@@ -2992,3 +2992,72 @@ describe('AgentsPage — held calls waiting on the viewer', () => {
 		expect(screen.getByRole('button', { name: 'Approvals' })).toBeInTheDocument();
 	});
 });
+
+describe('AgentsPage — access ending soon', () => {
+	beforeEach(async () => {
+		await page.viewport(1280, 900);
+		setToken('test-token');
+		window.localStorage.clear();
+		resetAgentsStore();
+		seedComposedStores();
+		resetOrphanPurgeAttemptsForTest();
+		resetConnectSessionsStore();
+		clearApprovalsStore();
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+		resetConnectSessionsStore();
+		resetApprovalsStore();
+	});
+
+	function endingSoon(credential: string, hoursLeft: number) {
+		const idleEnd = new Date(Date.now() + hoursLeft * 3_600_000).toISOString();
+		return {
+			id: `acb_${credential}`,
+			agent_id: 'agnt_active_1',
+			agent_name: 'inbox-triage-bot',
+			credential_id: `cred_${credential}`,
+			name: credential,
+			bound_at: new Date(Date.now() - 20 * 86_400_000).toISOString(),
+			suspended: false,
+			expires_at: null,
+			expired: false,
+			expired_reason: null,
+			max_idle_period: 14 * 86_400,
+			idle_expires_at: idleEnd,
+			idle_warning: true,
+			serves: [],
+			last_used_by_api: [],
+		};
+	}
+
+	it('lists a binding about to go idle, linking to its agent', async () => {
+		worker.use(
+			http.get('/agents/credentials\\:ending-soon', () =>
+				HttpResponse.json({ data: [endingSoon('Gmail', 30)] }),
+			),
+		);
+		renderPage();
+		const section = await screen.findByRole('region', { name: 'Waiting for you' });
+		const row = within(section).getByTestId('waiting-ending-soon');
+		expect(row).toHaveTextContent('inbox-triage-bot');
+		expect(row).toHaveTextContent('has access to Gmail that ends in 1 day unless used');
+		const link = within(row).getByRole('link', { name: /^Review/ });
+		expect(link.getAttribute('href')).toBe('/agents?agent=agnt_active_1');
+		await checkA11y(section);
+	});
+
+	it("collapses an agent's bindings into one row", async () => {
+		worker.use(
+			http.get('/agents/credentials\\:ending-soon', () =>
+				HttpResponse.json({ data: [endingSoon('Gmail', 20), endingSoon('Slack', 40)] }),
+			),
+		);
+		renderPage();
+		const section = await screen.findByRole('region', { name: 'Waiting for you' });
+		const rows = within(section).getAllByTestId('waiting-ending-soon');
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toHaveTextContent('has access to 2 credentials ending soon unless used');
+	});
+});

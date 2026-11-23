@@ -80,7 +80,12 @@ import {
 	expiresAtIso,
 	type BindingDuration,
 } from '@/shared/credentials/lib/bindingDuration';
-import { idleLimitError, idleSeconds, type IdleLimit } from '@/shared/credentials/lib/idleLimit';
+import {
+	idleLimitError,
+	idleSeconds,
+	idleWarning,
+	type IdleLimit,
+} from '@/shared/credentials/lib/idleLimit';
 import {
 	NO_DURATION_HINT,
 	bindingExpiresSoon,
@@ -309,6 +314,7 @@ export function BindAgentDialog({
 				rules,
 				expiresAt,
 				maxIdlePeriod: idleSeconds(idle),
+				idleWarning: idleWarning(idle),
 			},
 			{
 				onSuccess: ({ rulesFailed }) => {

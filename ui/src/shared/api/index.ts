@@ -272,4 +272,5 @@ export type { DecideHeldExecutionRequest } from '@/shared/api/generated/models/D
 // attention inbox and the Agents page; views use its hooks. Append-only.
 export { IntegrationsService } from '@/shared/api/generated/services/IntegrationsService';
 export type { ConnectSessionSummaryResponse } from '@/shared/api/generated/models/ConnectSessionSummaryResponse';
+export type { EndingSoonBindingResponse } from '@/shared/api/generated/models/EndingSoonBindingResponse';
 export type { BindingAccessResponse } from '@/shared/api/generated/models/BindingAccessResponse';

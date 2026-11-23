@@ -654,6 +654,36 @@ describe('BindAgentDialog — how long the access lasts', () => {
 		});
 	});
 
+	it('sends the idle warning when it is ticked, and not under 4 days', async () => {
+		const user = userEvent.setup();
+		renderDialog();
+		await ready(user);
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), '7d');
+		await user.click(screen.getByText('Also end if unused for'));
+		const warning = (): HTMLElement =>
+			within(screen.getByTestId('bind-agent-idle-warning')).getByRole('checkbox');
+		expect(warning()).not.toBeChecked();
+
+		// Three days is too short to warn about: the box is off and disabled.
+		await user.selectOptions(screen.getByTestId('bind-agent-idle-preset'), 'custom');
+		await user.clear(screen.getByTestId('bind-agent-idle-amount'));
+		await user.type(screen.getByTestId('bind-agent-idle-amount'), '3');
+		expect(warning()).toBeDisabled();
+		expect(screen.getByTestId('bind-agent-idle-warning-hint')).toHaveTextContent(
+			'Too short to warn',
+		);
+
+		await user.selectOptions(screen.getByTestId('bind-agent-idle-preset'), '14d');
+		await user.click(screen.getByText('Warn me before it ends'));
+		expect(warning()).toBeChecked();
+		await user.click(screen.getByTestId('bind-agent-confirm'));
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		expect(bodies[0].body).toMatchObject({
+			max_idle_period: 14 * 86_400,
+			idle_warning: true,
+		});
+	});
+
 	it('refuses an idle limit under a day', async () => {
 		const user = userEvent.setup();
 		renderDialog();

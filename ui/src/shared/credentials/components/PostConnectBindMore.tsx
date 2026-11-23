@@ -9,7 +9,12 @@ import {
 	expiresAtIso,
 	type BindingDuration,
 } from '@/shared/credentials/lib/bindingDuration';
-import { idleLimitError, idleSeconds, type IdleLimit } from '@/shared/credentials/lib/idleLimit';
+import {
+	idleLimitError,
+	idleSeconds,
+	idleWarning,
+	type IdleLimit,
+} from '@/shared/credentials/lib/idleLimit';
 import { IdleLimitField } from '@/shared/credentials/components/IdleLimitField';
 import {
 	NO_DURATION_HINT,
@@ -88,6 +93,7 @@ export function PostConnectBindMore({
 				agentIds: Array.from(selected),
 				expiresAt: expiresAtIso(duration),
 				maxIdlePeriod: idleSeconds(idle),
+				idleWarning: idleWarning(idle),
 			},
 			{
 				onSuccess: () => {

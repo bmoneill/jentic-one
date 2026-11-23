@@ -27,6 +27,7 @@ import {
 	idleLimitError,
 	idleLimitFromSeconds,
 	idleSeconds,
+	idleWarning,
 	type IdleLimit,
 } from '@/shared/credentials/lib/idleLimit';
 import { IdleLimitField } from '@/shared/credentials/components/IdleLimitField';
@@ -49,6 +50,8 @@ export interface RenewBindingControlProps {
 	expired: boolean;
 	/** The binding's current idle limit in seconds; null without one. */
 	maxIdlePeriod?: number | null;
+	/** Whether its owner is warned before that idle limit is reached. */
+	idleWarning?: boolean;
 	/** Which limit ended it (`end_date`, `idle`), when it has ended. */
 	expiredReason?: string | null;
 	/** Fit into a list row: no visible label. */
@@ -72,6 +75,7 @@ export function RenewBindingControl({
 	expiresAt,
 	expired,
 	maxIdlePeriod = null,
+	idleWarning: warnedBefore = false,
 	expiredReason = null,
 	compact = false,
 	onRenewed,
@@ -81,10 +85,16 @@ export function RenewBindingControl({
 	const confirm = useNoExpiryConfirm();
 	const fieldRef = useRef<HTMLSelectElement>(null);
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
-	const [idle, setIdle] = useState<IdleLimit | null>(() => idleLimitFromSeconds(maxIdlePeriod));
+	const [idle, setIdle] = useState<IdleLimit | null>(() =>
+		idleLimitFromSeconds(maxIdlePeriod, warnedBefore),
+	);
 
 	const idleNow = idleSeconds(idle);
-	const idleChanged = idleNow !== (maxIdlePeriod ?? null);
+	const warnNow = idleWarning(idle);
+	const limitChanged = idleNow !== (maxIdlePeriod ?? null);
+	const warnChanged = warnNow !== warnedBefore;
+	// The idle row (the limit or its warning) differs from the binding's.
+	const idleChanged = limitChanged || warnChanged;
 	const idleInvalid = idleLimitError(idle) !== null;
 	const clearing = choosesNoExpiry(duration);
 	// Clearing an end date the binding doesn't have changes nothing.
@@ -111,7 +121,8 @@ export function RenewBindingControl({
 				agentId,
 				credentialId,
 				...(at !== undefined ? { expiresAt: at } : {}),
-				...(idleChanged ? { maxIdlePeriod: idleNow } : {}),
+				...(limitChanged ? { maxIdlePeriod: idleNow } : {}),
+				...(warnChanged ? { idleWarning: warnNow } : {}),
 			},
 			{
 				onSuccess: () => {

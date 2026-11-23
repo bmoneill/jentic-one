@@ -9,6 +9,9 @@
  *   - a held call — the agent's call matched an Ask rule and waits on its
  *     owner (or an org admin) to approve or deny it. Its Review links open the
  *     approval's review page, the address the broker returns as `review_url`.
+ *   - access ending soon — a binding whose owner asked to be warned will
+ *     reach its idle limit within two days unless the agent uses it. Review
+ *     opens the agent, whose API tile renews it ("Still needed").
  *
  * Either link may never reach anyone, so the page reads the live state
  * (open connect sessions, pending approvals) instead of relying on it. One row
@@ -18,11 +21,17 @@
  * for it.
  */
 import { useMemo, type ReactNode } from 'react';
+import { AGENTS_READ, useCanAccess } from '@/shared/auth';
 import { AppLink, Tooltip, UserText } from '@/shared/ui';
 import { ROUTE_PATHS } from '@/shared/app';
 import { useActorDirectory } from '@/shared/hooks';
 import { formatTimestamp } from '@/shared/lib/utils';
-import { useOpenConnectRequests } from '@/shared/credentials/api';
+import {
+	useBindingsEndingSoon,
+	useOpenConnectRequests,
+	type EndingSoonBindingResponse,
+} from '@/shared/credentials/api';
+import { bindingExpiryLabel } from '@/shared/credentials/lib/bindingExpiry';
 import {
 	groupConnectRequestsByAgent,
 	describeConnectAsks,
@@ -52,6 +61,9 @@ export function WaitingForYouSection() {
 		() => groupApprovalsByAgent(approvals.data?.approvals ?? []),
 		[approvals.data],
 	);
+	const canReadAgents = useCanAccess(AGENTS_READ);
+	const endingSoon = useBindingsEndingSoon({ enabled: canReadAgents });
+	const endingGroups = useMemo(() => groupByAgent(endingSoon.data ?? []), [endingSoon.data]);
 	const directory = useActorDirectory([
 		...connectGroups.map((g) => g.agentId),
 		...approvalGroups.map((g) => g.agentId),
@@ -62,7 +74,9 @@ export function WaitingForYouSection() {
 	// render too. Likewise for held calls.
 	const shownConnect = canApprove ? connectGroups : [];
 	const shownApprovals = canDecide ? approvalGroups : [];
-	if (shownConnect.length === 0 && shownApprovals.length === 0) return null;
+	const shownEnding = canReadAgents ? endingGroups : [];
+	if (shownConnect.length === 0 && shownApprovals.length === 0 && shownEnding.length === 0)
+		return null;
 
 	return (
 		<section role="region" aria-labelledby="waiting-for-you-heading" className="space-y-1.5">
@@ -87,6 +101,9 @@ export function WaitingForYouSection() {
 						name={directory.resolve(group.agentId) ?? group.agentId}
 					/>
 				))}
+				{shownEnding.map((group) => (
+					<EndingSoonRow key={`ending:${group.agentId}`} group={group} />
+				))}
 			</ul>
 		</section>
 	);
@@ -97,23 +114,33 @@ function WaitingRow({
 	what,
 	since,
 	children,
+	testId,
 }: {
 	name: string;
 	what: string;
-	since: string;
+	/** When the wait started; left out, the row shows no "waiting" age. */
+	since?: string;
 	children: ReactNode;
+	testId?: string;
 }) {
 	return (
-		<li className="bg-warning/10 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-3.5 py-2.5">
+		<li
+			className="bg-warning/10 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-3.5 py-2.5"
+			data-testid={testId}
+		>
 			<span className="bg-warning h-1.5 w-1.5 shrink-0 rounded-full" aria-hidden="true" />
 			<p className="min-w-0 flex-1 basis-52 text-sm">
 				<UserText className="font-heading font-semibold">{name}</UserText>{' '}
 				<span className="text-muted-foreground">
 					{what}
-					{' · '}
-					<Tooltip content={`Asked ${formatTimestamp(since)}`}>
-						{waitingLabel(since)}
-					</Tooltip>
+					{since !== undefined && (
+						<>
+							{' · '}
+							<Tooltip content={`Asked ${formatTimestamp(since)}`}>
+								{waitingLabel(since)}
+							</Tooltip>
+						</>
+					)}
 				</span>
 			</p>
 			<span className="flex flex-wrap items-center gap-2">{children}</span>
@@ -193,6 +220,71 @@ function HeldCallsRow({ group, name }: { group: AgentPendingApprovals; name: str
 					)}
 				</AppLink>
 			))}
+		</WaitingRow>
+	);
+}
+
+interface AgentEndingSoon {
+	agentId: string;
+	agentName: string;
+	/** Soonest first, as the server orders them. */
+	bindings: EndingSoonBindingResponse[];
+}
+
+/** One group per agent, in the order its soonest binding ends. */
+function groupByAgent(rows: readonly EndingSoonBindingResponse[]): AgentEndingSoon[] {
+	const groups = new Map<string, AgentEndingSoon>();
+	for (const row of rows) {
+		const group = groups.get(row.agent_id);
+		if (group) group.bindings.push(row);
+		else
+			groups.set(row.agent_id, {
+				agentId: row.agent_id,
+				agentName: row.agent_name,
+				bindings: [row],
+			});
+	}
+	return [...groups.values()];
+}
+
+/** "access to Stripe ends in 1 day unless used", or a count for several. */
+function describeEndingSoon(bindings: readonly EndingSoonBindingResponse[]): string {
+	if (bindings.length > 1)
+		return `has access to ${bindings.length} credentials ending soon unless used`;
+	const [binding] = bindings;
+	const label = bindingExpiryLabel({
+		expiresAt: binding.expires_at ?? null,
+		expired: binding.expired ?? false,
+		expiredReason: binding.expired_reason ?? null,
+		maxIdlePeriod: binding.max_idle_period ?? null,
+		idleExpiresAt: binding.idle_expires_at ?? null,
+	});
+	const name = binding.name ?? 'a credential';
+	return label
+		? `has access to ${name} that ${label.charAt(0).toLowerCase()}${label.slice(1)}`
+		: `has access to ${name} ending soon unless used`;
+}
+
+function EndingSoonRow({ group }: { group: AgentEndingSoon }) {
+	const soonest = group.bindings[0]?.idle_expires_at;
+	return (
+		<WaitingRow
+			name={group.agentName}
+			what={describeEndingSoon(group.bindings)}
+			testId="waiting-ending-soon"
+		>
+			<AppLink
+				href={ROUTE_PATHS.agentTab(group.agentId)}
+				variant="tonal"
+				size="sm"
+				title={soonest ? `Ends if unused by ${formatTimestamp(soonest)}` : undefined}
+			>
+				Review
+				<span className="sr-only">
+					{' '}
+					{group.agentName}&apos;s access that ends soon unless used
+				</span>
+			</AppLink>
 		</WaitingRow>
 	);
 }

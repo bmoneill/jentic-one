@@ -178,6 +178,8 @@ interface CredentialBindingRow {
 	expires_at?: string | null;
 	/** Idle limit in seconds; null = none. */
 	max_idle_period?: number | null;
+	/** Whether the owner is warned before the idle limit is reached. */
+	idle_warning?: boolean;
 	/** When it was granted or last renewed (restarts the idle clock). */
 	renewed_at?: string | null;
 	/** Last call through the credential; null = never used. */
@@ -332,6 +334,7 @@ function bindingExpiryJson(row: CredentialBindingRow): {
 	max_idle_period: number | null;
 	idle_expires_at: string | null;
 	renewed_at: string | null;
+	idle_warning: boolean;
 } {
 	const expiresAt = row.expires_at ?? null;
 	const limit = row.max_idle_period ?? null;
@@ -358,7 +361,36 @@ function bindingExpiryJson(row: CredentialBindingRow): {
 		max_idle_period: limit,
 		idle_expires_at: idleEnd != null ? new Date(idleEnd).toISOString() : null,
 		renewed_at: row.renewed_at ?? null,
+		idle_warning: row.idle_warning ?? false,
 	};
+}
+
+const IDLE_WARNING_WINDOW_MS = 48 * 3_600_000;
+const IDLE_WARNING_MIN_S = 4 * 86_400;
+
+/**
+ * `GET /agents/credentials:ending-soon`: bindings with the warning on, an idle
+ * limit of 4 days or more and an idle deadline in the next 48 hours, still
+ * holding, soonest first.
+ */
+function bindingsEndingSoon(): unknown[] {
+	const now = Date.now();
+	return credentialBindings
+		.filter((row) => row.idle_warning && !row.suspended)
+		.filter((row) => (row.max_idle_period ?? 0) >= IDLE_WARNING_MIN_S)
+		.map((row) => ({ row, policy: bindingExpiryJson(row) }))
+		.filter(({ policy }) => {
+			if (policy.expired || policy.idle_expires_at === null) return false;
+			const end = Date.parse(policy.idle_expires_at);
+			return end > now && end <= now + IDLE_WARNING_WINDOW_MS;
+		})
+		.sort(
+			(a, b) => Date.parse(a.policy.idle_expires_at!) - Date.parse(b.policy.idle_expires_at!),
+		)
+		.map(({ row }) => ({
+			...bindingJson(row),
+			agent_name: agents.find((a) => a.id === row.agent_id)?.name ?? row.agent_id,
+		}));
 }
 
 /** The 422 a binding write gets for an end date that is not in the future. */
@@ -1764,6 +1796,10 @@ export const agentsHandlers = [
 
 	// ---- Agents ----
 	http.get('/agents', ({ request }) => paginate(agents, new URL(request.url))),
+	// Before `/agents/:id`, which would otherwise take `credentials:ending-soon` as an id.
+	http.get('/agents/credentials\\:ending-soon', () =>
+		HttpResponse.json({ data: bindingsEndingSoon() }),
+	),
 	http.get('/agents/:id', ({ params }) => {
 		const row = agents.find((a) => a.id === params.id);
 		return row ? HttpResponse.json(row) : new HttpResponse(null, { status: 404 });
@@ -2037,6 +2073,7 @@ export const agentsHandlers = [
 			credential_id?: string;
 			expires_at?: string | null;
 			max_idle_period?: number | null;
+			idle_warning?: boolean;
 		};
 		const pastExpiry = pastExpiryError(body.expires_at);
 		if (pastExpiry) return pastExpiry;
@@ -2067,6 +2104,7 @@ export const agentsHandlers = [
 			bound_at: now(),
 			expires_at: body.expires_at ?? null,
 			max_idle_period: body.max_idle_period ?? null,
+			idle_warning: body.idle_warning ?? false,
 			renewed_at: now(),
 			name: credential?.name ?? null,
 			serves: credential
@@ -2110,6 +2148,7 @@ export const agentsHandlers = [
 		const body = (await request.json().catch(() => ({}))) as {
 			expires_at?: string | null;
 			max_idle_period?: number | null;
+			idle_warning?: boolean;
 		};
 		if ('expires_at' in body) {
 			const pastExpiry = pastExpiryError(body.expires_at);
@@ -2117,6 +2156,7 @@ export const agentsHandlers = [
 			row.expires_at = body.expires_at ?? null;
 		}
 		if ('max_idle_period' in body) row.max_idle_period = body.max_idle_period ?? null;
+		if (body.idle_warning !== undefined) row.idle_warning = body.idle_warning;
 		row.renewed_at = now();
 		return HttpResponse.json(bindingJson(row));
 	}),
