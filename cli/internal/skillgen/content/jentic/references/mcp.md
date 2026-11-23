@@ -84,8 +84,9 @@ schemes (the error lists them), `requested_scopes` for vendor scopes,
 `[{"effect": "allow", "methods": ["GET"], "path": "/repos/.*"}]` — the
 approver reviews them), `requested_expires_in` for how long you need the
 access (`"7d"`, `"8h"`, `"30m"`; the approver decides the actual end date,
-so ask for only as long as the task needs), and a `reason` the approver
-sees. When
+so ask for only as long as the task needs), `requested_max_idle_period`
+(`"14d"`, 1d to 999d) to have the access end once you stop using it, and a
+`reason` the approver sees. When
 `resolved_flow` is `manual_*` or `awaiting_app` (the result then points
 `next_tool` at `execute`), a human enters the credential, which can take
 hours: relay the URL, **end your turn**, and retry the blocked call later.

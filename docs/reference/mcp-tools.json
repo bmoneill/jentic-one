@@ -292,6 +292,10 @@
             "description": "How long you need the access (optional), e.g. \"7d\", \"8h\" or \"30m\" (at most 999d). Shown to the approver, who decides the actual end date; ask for only as long as the task needs.",
             "type": "string"
           },
+          "requested_max_idle_period": {
+            "description": "Ask for the access to end once you leave it unused this long (optional), e.g. \"14d\" (1d to 999d). The approver decides; it never cuts you off while you keep using it.",
+            "type": "string"
+          },
           "requested_permission_rules": {
             "description": "Permission rules you are asking for on the new binding (optional, max 100; \"permission_rules\" is an accepted alias), e.g. [{\"effect\": \"allow\", \"methods\": [\"GET\"], \"path\": \"/repos/.*\"}]. The approver reviews and edits them before anything is granted; an allow rule must constrain methods, path, or operations.",
             "items": {

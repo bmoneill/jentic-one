@@ -70,7 +70,8 @@ scheme when the spec declares several (the error lists them); `--rules`
 proposes the binding's rules (a denial's `suggested_rules` fit as-is);
 `--scopes` names vendor scopes; `--expires-in 7d` (or `8h`, `30m`) says how
 long you need the access — the approver decides the actual end date, so ask
-for only as long as the task needs. For a `manual_*` or `awaiting_app` flow,
+for only as long as the task needs — and `--max-idle 14d` asks for it to end
+once you stop using it (1d to 999d). For a `manual_*` or `awaiting_app` flow,
 relay the URL, **end your turn**, and retry later — `--wait` returns at
 once for those unless you pass `--timeout`. Otherwise `--wait` polls until
 the session connects or ends (exit 3 if the timeout lapses). Once they

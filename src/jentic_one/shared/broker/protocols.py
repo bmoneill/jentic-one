@@ -234,6 +234,10 @@ class CredentialDerivation:
     binding_suspended: bool = False
     binding_pending: bool = False
     binding_expired: bool = False
+    #: With ``binding_expired``: the credential whose binding ended, and which
+    #: limit ended it (``end_date`` or ``idle``) — for the denial's detail.
+    expired_credential_id: str | None = None
+    expired_reason: str | None = None
     valid_until: datetime | None = None
 
 

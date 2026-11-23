@@ -24,7 +24,7 @@ export type CredentialAgentResponse = {
      */
     expired?: boolean;
     /**
-     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.
      */
     expired_reason?: (GrantEndReason | null);
     /**
@@ -32,9 +32,17 @@ export type CredentialAgentResponse = {
      */
     expires_at?: (string | null);
     /**
+     * When the idle limit ends the binding if it is not used before then (RFC 3339); null without an idle limit.
+     */
+    idle_expires_at?: (string | null);
+    /**
      * When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.
      */
     last_used_at?: (string | null);
+    /**
+     * Idle limit in seconds: the binding ends once it goes this long without a call. Null when it has none.
+     */
+    max_idle_period?: (number | null);
     /**
      * ID of the user who owns the bound agent; null for an unclaimed self-registration. Changing the binding (suspending, resuming or renewing it) takes the agent's owner or an `org:admin`, on top of the credential's own checks.
      */

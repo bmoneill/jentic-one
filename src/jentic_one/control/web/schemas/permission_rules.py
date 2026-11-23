@@ -273,7 +273,8 @@ class BindingAccessResponse(PermissionRuleListResponse):
         examples=[None],
         description=(
             "Which limit ended the binding while `expired` is true: `end_date`"
-            " (`expires_at` passed). Null while the binding holds."
+            " (`expires_at` passed) or `idle` (unused for its idle limit)."
+            " Null while the binding holds."
         ),
     )
     scopes_editable: bool = Field(

@@ -14,7 +14,8 @@ from sqlalchemy import Boolean, String, bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import BindParameter
 
-from jentic_one.shared.auth.agent_expiry import as_utc, binding_expired
+from jentic_one.shared.auth.agent_expiry import as_utc
+from jentic_one.shared.auth.grant_policy import GRANT_POLICY_COLUMNS, GrantPolicy, grant_ended
 from jentic_one.shared.db.locks import lock_credential_bindings
 from jentic_one.shared.db.types import UTCDateTime
 from jentic_one.shared.pagination import Cursor
@@ -54,6 +55,21 @@ class CredentialBoundAgentRow(NamedTuple):
     # Latest recorded execution by the agent through the credential; None when
     # never used or not looked up (see :meth:`last_used_by_agents`).
     last_used_at: datetime | None = None
+    # The idle limit (seconds) and its clock: the binding's own last-use stamp
+    # and when it was granted or last renewed.
+    max_idle_period: int | None = None
+    idle_used_at: datetime | None = None
+    renewed_at: datetime | None = None
+
+    def policy(self) -> GrantPolicy:
+        """The binding's policy, against the idle clock's own use stamp."""
+        return GrantPolicy(
+            expires_at=self.expires_at,
+            max_idle_period=self.max_idle_period,
+            last_used_at=self.idle_used_at,
+            renewed_at=self.renewed_at,
+            bound_at=self.bound_at,
+        )
 
 
 class AgentVisibility(NamedTuple):
@@ -78,6 +94,8 @@ class AgentCredentialBindingRow(NamedTuple):
     credential_name: str | None = None
     #: When the binding stops authorizing calls; ``None`` never expires.
     expires_at: datetime | None = None
+    #: The binding's whole policy (end date, idle limit and its clock).
+    policy: GrantPolicy = GrantPolicy()
 
 
 class RuleSetBindingRow(NamedTuple):
@@ -137,19 +155,23 @@ class PrerequisiteRepository:
         seeing the binding (with its flags) in ``/me`` but loses the widened
         read of the credential itself until it is resumed or renewed. Expiry
         is compared in Python against ``now`` (default: the clock), with the
-        broker's rule (:func:`binding_expired`). Runs against an admin
+        broker's rule (:func:`grant_ended`). Runs against an admin
         session and returns plain ids for ``build_access_filters`` (the
         control scoping module must not import admin ORM models or query
         across databases).
         """
         result = await session.execute(
             text(
-                "SELECT credential_id, expires_at FROM agent_credential_bindings "
+                f"SELECT credential_id, {GRANT_POLICY_COLUMNS} FROM agent_credential_bindings "
                 "WHERE agent_id = :agent_id AND suspended = false"
             ),
             {"agent_id": agent_id},
         )
-        return [str(row[0]) for row in result.fetchall() if not binding_expired(row[1], now=now)]
+        return [
+            str(row.credential_id)
+            for row in result.fetchall()
+            if not grant_ended(GrantPolicy.from_row(row), now=now)
+        ]
 
     @staticmethod
     async def list_agent_ids_owned_by(session: AsyncSession, *, owner_id: str) -> list[str]:
@@ -215,7 +237,8 @@ class PrerequisiteRepository:
 
         stmt = text(
             "SELECT b.id, a.id, a.name, a.status, b.bound_at, b.suspended, b.rule_set_id, "
-            "b.suspended_reason, a.owner_id, b.expires_at "
+            "b.suspended_reason, a.owner_id, b.expires_at, "
+            "b.max_idle_period, b.last_used_at, b.renewed_at "
             "FROM agent_credential_bindings b "
             "JOIN agents a ON a.id = b.agent_id "
             f"WHERE {' AND '.join(conditions)} "
@@ -225,9 +248,32 @@ class PrerequisiteRepository:
         if bind_params:
             stmt = stmt.bindparams(*bind_params)
         # Typed result columns: SQLite returns raw strings and integers otherwise.
-        typed = stmt.columns(bound_at=UTCDateTime(), suspended=Boolean(), expires_at=UTCDateTime())
+        typed = stmt.columns(
+            bound_at=UTCDateTime(),
+            suspended=Boolean(),
+            expires_at=UTCDateTime(),
+            last_used_at=UTCDateTime(),
+            renewed_at=UTCDateTime(),
+        )
         result = await session.execute(typed, params)
-        return [CredentialBoundAgentRow(*row) for row in result.fetchall()]
+        return [
+            CredentialBoundAgentRow(
+                binding_id=row[0],
+                agent_id=row[1],
+                agent_name=row[2],
+                agent_status=row[3],
+                bound_at=row[4],
+                suspended=row[5],
+                rule_set_id=row[6],
+                suspended_reason=row[7],
+                agent_owner_id=row[8],
+                expires_at=row[9],
+                max_idle_period=row[10],
+                idle_used_at=as_utc(row[11]) if row[11] is not None else None,
+                renewed_at=as_utc(row[12]) if row[12] is not None else None,
+            )
+            for row in result.fetchall()
+        ]
 
     @staticmethod
     async def list_agents_for_rule_set(
@@ -317,7 +363,8 @@ class PrerequisiteRepository:
         where = "b.agent_id = :agent_id AND b.credential_id = :credential_id"
         if visible_to is None:
             stmt = text(
-                "SELECT b.id, b.suspended, b.rule_set_id, a.name, b.expires_at "
+                "SELECT b.id, b.suspended, b.rule_set_id, a.name, b.expires_at, "
+                "b.max_idle_period, b.last_used_at, b.renewed_at, b.bound_at "
                 "FROM agent_credential_bindings b "
                 "LEFT JOIN agents a ON a.id = b.agent_id "
                 f"WHERE {where}"
@@ -325,7 +372,8 @@ class PrerequisiteRepository:
         else:
             params.update(self_id=visible_to.self_id, owner_ids=list(visible_to.owner_ids))
             stmt = text(
-                "SELECT b.id, b.suspended, b.rule_set_id, a.name, b.expires_at "
+                "SELECT b.id, b.suspended, b.rule_set_id, a.name, b.expires_at, "
+                "b.max_idle_period, b.last_used_at, b.renewed_at, b.bound_at "
                 "FROM agent_credential_bindings b "
                 "JOIN agents a ON a.id = b.agent_id "
                 f"WHERE {where} AND (a.id = :self_id OR a.owner_id IN :owner_ids)"
@@ -340,6 +388,13 @@ class PrerequisiteRepository:
             rule_set_id=str(row[2]) if row[2] is not None else None,
             agent_name=str(row[3]) if row[3] is not None else None,
             expires_at=as_utc(row[4]) if row[4] is not None else None,
+            policy=GrantPolicy(
+                expires_at=row[4],
+                max_idle_period=row[5],
+                last_used_at=row[6],
+                renewed_at=row[7],
+                bound_at=row[8],
+            ),
         )
 
     @staticmethod

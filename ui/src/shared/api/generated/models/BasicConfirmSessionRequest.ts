@@ -28,6 +28,10 @@ export type BasicConfirmSessionRequest = {
      */
     kind: string;
     /**
+     * The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.
+     */
+    max_idle_period?: (number | null);
+    /**
      * Password to store; write-only.
      */
     password: string;

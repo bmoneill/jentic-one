@@ -14,5 +14,9 @@ export type CredentialBindRequest = {
      * When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Omit for a binding that never expires.
      */
     expires_at?: (string | null);
+    /**
+     * Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Omit for no idle limit.
+     */
+    max_idle_period?: (number | null);
 };
 

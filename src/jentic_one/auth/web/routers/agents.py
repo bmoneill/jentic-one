@@ -35,6 +35,7 @@ from jentic_one.auth.web.schemas.agents import (
     DenyRequest,
     JwksUpdateRequest,
 )
+from jentic_one.shared.auth.grant_policy import UNSET
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.models import ActorType
 from jentic_one.shared.web import get_current_identity
@@ -447,6 +448,9 @@ def _credential_binding_response(view: CredentialBindingView) -> CredentialBindi
         expires_at=view.expires_at,
         expired=view.expired,
         expired_reason=view.expired_reason,
+        max_idle_period=view.max_idle_period,
+        idle_expires_at=view.idle_expires_at,
+        renewed_at=view.renewed_at,
         rule_set_id=view.rule_set_id,
         serves=view.serves,
         last_used_at=view.last_used_at,
@@ -538,6 +542,7 @@ async def bind_credential(
         agent_id,
         credential_id=body.credential_id,
         expires_at=body.expires_at,
+        max_idle_period=body.max_idle_period,
         identity=identity,
     )
     return _credential_binding_response(binding)
@@ -564,10 +569,13 @@ async def renew_credential_binding(
     identity: Identity = get_current_identity(required_permissions=["agents:write"]),
     agent_svc: AgentService = Depends(get_agent_service),
 ) -> CredentialBindingResponse:
-    """Set, extend or clear when a binding stops authorizing calls.
+    """Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 
     `expires_at` (future only, otherwise 422) sets or moves the end date; null
-    clears it, so the binding never expires. This is how an expired binding is
+    clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
+    limit; null removes it. A field left out stays as it is, and every renewal
+    restarts the idle clock, so an empty body re-certifies a binding that is
+    still needed. This is how an expired binding is
     renewed, and it never changes `suspended`: renewing does not resume a
     suspension, and resuming does not extend an expiry. Renewing re-grants the
     credential, so it takes the same checks as `:resume`: the caller must own
@@ -579,7 +587,11 @@ async def renew_credential_binding(
     binding = await agent_svc.renew_credential(
         agent_id,
         credential_id=credential_id,
-        expires_at=body.expires_at,
+        # A field left out of the body stays as it is (never read as a clear).
+        expires_at=body.expires_at if "expires_at" in body.model_fields_set else UNSET,
+        max_idle_period=(
+            body.max_idle_period if "max_idle_period" in body.model_fields_set else UNSET
+        ),
         identity=identity,
     )
     return _credential_binding_response(binding)

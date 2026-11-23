@@ -171,6 +171,22 @@ async def test_requested_expires_in_is_parsed_to_seconds() -> None:
     assert call["requested_expires_in"] == 604_800
 
 
+async def test_requested_max_idle_period_is_parsed_and_bounded() -> None:
+    result = await dispatch_tool_call(
+        _env(["credentials:connect"]),
+        "request_connection",
+        {"vendor": "github", "requested_max_idle_period": "14d"},
+    )
+    assert not result.is_error, result.content
+    (call,) = _FakeConnectSessionService.calls
+    assert call["requested_max_idle_period"] == 1_209_600
+    with pytest.raises(MCPError) as err:
+        await tools_mod.handle_request_connection(
+            _env(["credentials:connect"]), {"vendor": "github", "requested_max_idle_period": "12h"}
+        )
+    assert "between 1 day and 999 days" in str(err.value)
+
+
 @pytest.mark.parametrize("value", ["1w", "0d", "1000d"])
 async def test_bad_requested_expires_in_is_invalid_params(value: str) -> None:
     with pytest.raises(MCPError) as err:
@@ -247,6 +263,7 @@ async def test_success_returns_session_without_poll_token() -> None:
         "reason": "read PRs",
         "oauth_app_registration_id": None,
         "requested_expires_in": None,
+        "requested_max_idle_period": None,
     }
 
 

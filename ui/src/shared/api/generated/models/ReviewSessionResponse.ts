@@ -30,6 +30,10 @@ export type ReviewSessionResponse = {
      * How long the requester asked the access to last, in seconds from approval; null when nothing was asked. The approver chooses the actual end date on confirm.
      */
     requested_expires_in?: (number | null);
+    /**
+     * The idle limit the requester asked for, in seconds; null when none.
+     */
+    requested_max_idle_period?: (number | null);
     requested_permission_rules?: Array<PermissionRuleSchema>;
     requested_scopes?: Array<string>;
     resolved_flow: string;

@@ -21,13 +21,25 @@ export type CredentialBindingEntry = {
      */
     expired?: boolean;
     /**
-     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for its idle limit). Null while the binding holds.
      */
     expired_reason?: (GrantEndReason | null);
     /**
      * When the binding stops authorizing calls (RFC 3339); null if it never expires.
      */
     expires_at?: (string | null);
+    /**
+     * When the idle limit ends the binding if it is not used before then (RFC 3339); null without an idle limit. Each call moves it later.
+     */
+    idle_expires_at?: (string | null);
+    /**
+     * When this agent last made a call through the binding; null if never.
+     */
+    last_used_at?: (string | null);
+    /**
+     * Idle limit in seconds: the binding ends once it goes this long without a call; null when it has none.
+     */
+    max_idle_period?: (number | null);
     /**
      * Name of the bound credential; null if it no longer exists or cannot be resolved.
      */

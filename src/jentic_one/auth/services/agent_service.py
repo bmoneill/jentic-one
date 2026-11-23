@@ -69,6 +69,7 @@ from jentic_one.shared.auth.agent_permission_ceiling import (
     cap_agent_permissions,
 )
 from jentic_one.shared.auth.binding_write import guard_binding_write
+from jentic_one.shared.auth.grant_policy import GRANT_POLICY_FIELDS, UNSET, Unset
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.permission_catalog import (
     AGENTS_READ,
@@ -111,6 +112,11 @@ _PURGE_AUDIT_REASON = "agent purged"
 def _audit_value(value: Any) -> Any:
     """A field value as the audit log stores it (datetimes as RFC 3339 strings)."""
     return value.isoformat() if isinstance(value, datetime) else value
+
+
+def _audit_policy(binding: Any) -> dict[str, Any]:
+    """A binding's policy as the audit log records a renewal's before and after."""
+    return {field: _audit_value(getattr(binding, field)) for field in GRANT_POLICY_FIELDS}
 
 
 class AgentService:
@@ -921,6 +927,7 @@ class AgentService:
         credential_id: str,
         identity: Identity,
         expires_at: datetime | None = None,
+        max_idle_period: int | None = None,
     ) -> CredentialBindingView:
         """Create a direct agent↔credential binding.
 
@@ -956,6 +963,7 @@ class AgentService:
                     credential_id=credential_id,
                     created_by=identity.sub,
                     expires_at=expires_at,
+                    max_idle_period=max_idle_period,
                 )
             except IntegrityError:
                 raise CredentialBindingConflictError(agent_id, credential_id) from None
@@ -1161,10 +1169,15 @@ class AgentService:
         agent_id: str,
         *,
         credential_id: str,
-        expires_at: datetime | None,
         identity: Identity,
+        expires_at: datetime | Unset | None = UNSET,
+        max_idle_period: int | Unset | None = UNSET,
     ) -> CredentialBindingView:
-        """Set, move or clear a binding's fixed expiry (``None`` clears it).
+        """Re-certify a binding: set, move or clear its limits, and restart its idle clock.
+
+        Each limit passed is set (``None`` clears it); a limit left out stays
+        as it is. Every renewal restarts the idle clock (``renewed_at``), so
+        renewing with no change is the "still needed" re-certification.
 
         Renewing re-grants the credential, so it takes exactly the checks of
         :meth:`resume_credential`: the agent check, the credential-ownership
@@ -1172,6 +1185,11 @@ class AgentService:
         ``suspended``. Audited with before/after, and broker caches are
         invalidated so the new policy applies on the next call.
         """
+        policy: dict[str, Any] = {}
+        if not isinstance(expires_at, Unset):
+            policy["expires_at"] = expires_at
+        if not isinstance(max_idle_period, Unset):
+            policy["max_idle_period"] = max_idle_period
         if identity.actor_type != ActorType.USER:
             raise CredentialNotVisibleError(credential_id)
         agent = await self._load_binding_agent(agent_id, identity=identity)
@@ -1187,9 +1205,13 @@ class AgentService:
             )
             if before is None:
                 raise CredentialBindingNotFoundError(agent_id, credential_id)
-            before_expiry = _audit_value(before.expires_at)
-            await AgentCredentialBindingRepository.set_expires_at(
-                session, agent_id=agent_id, credential_id=credential_id, expires_at=expires_at
+            before_policy = _audit_policy(before)
+            await AgentCredentialBindingRepository.renew(
+                session,
+                agent_id=agent_id,
+                credential_id=credential_id,
+                policy=policy,
+                now=datetime.now(UTC),
             )
             await session.refresh(before)
             binding = before
@@ -1201,8 +1223,8 @@ class AgentService:
                 actor_type=identity.actor_type,
                 actor_id=identity.sub,
                 target_parent_id=agent_id,
-                before={"expires_at": before_expiry},
-                after={"expires_at": _audit_value(binding.expires_at)},
+                before=before_policy,
+                after=_audit_policy(binding),
                 reason="renew_credential_binding",
                 origin=identity.origin.value,
             )
@@ -1603,9 +1625,18 @@ class AgentService:
 
 
 def _apply_last_use(view: CredentialBindingView, last_uses: list[ApiLastUseRow]) -> None:
-    """Set the binding's overall and per-API "last used" from execution records."""
+    """Set the binding's overall and per-API "last used" from execution records.
+
+    The overall value is the later of the recorded executions and the
+    binding's own ``last_used_at`` (the idle clock, stamped about hourly), so
+    "last used" stays current while the idle limit reads only the column.
+    """
     own = [r for r in last_uses if r.credential_id == view.credential_id]
-    view.last_used_at = max((r.last_used_at for r in own), default=None)
+    view.last_used_at = max(
+        [r.last_used_at for r in own]
+        + ([view.idle_clock_used_at] if view.idle_clock_used_at is not None else []),
+        default=None,
+    )
     view.last_used_by_api = [
         ApiLastUseView(
             api_vendor=r.api_vendor,

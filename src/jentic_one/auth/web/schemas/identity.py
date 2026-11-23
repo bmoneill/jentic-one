@@ -80,9 +80,31 @@ class CredentialBindingEntry(BaseModel):
         default=None,
         description=(
             "Which limit ended the binding while `expired` is true: `end_date`"
-            " (`expires_at` passed). Null while the binding holds."
+            " (`expires_at` passed) or `idle` (unused for its idle limit)."
+            " Null while the binding holds."
         ),
         examples=[None],
+    )
+    max_idle_period: int | None = Field(
+        default=None,
+        description=(
+            "Idle limit in seconds: the binding ends once it goes this long without a call;"
+            " null when it has none."
+        ),
+        examples=[1_209_600],
+    )
+    idle_expires_at: datetime | None = Field(
+        default=None,
+        description=(
+            "When the idle limit ends the binding if it is not used before then (RFC 3339);"
+            " null without an idle limit. Each call moves it later."
+        ),
+        examples=["2026-12-31T23:59:00Z"],
+    )
+    last_used_at: datetime | None = Field(
+        default=None,
+        description="When this agent last made a call through the binding; null if never.",
+        examples=["2026-11-20T10:00:00Z"],
     )
     # Shared permission rule set this binding points at (None = inline rules)
     # — tells the agent which policy object governs it (theme 5, Q-04).

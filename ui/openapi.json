@@ -1888,6 +1888,7 @@
             "expires_at": "2026-12-31T23:59:00Z",
             "key": "example-secret",
             "kind": "api_key",
+            "max_idle_period": 1209600,
             "permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -1977,6 +1978,22 @@
               "api_key"
             ],
             "type": "string"
+          },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "maximum": 86313600.0,
+                "minimum": 86400.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
+            "examples": [
+              1209600
+            ]
           },
           "permission_rules": {
             "description": "Permission rules to bind for the agent (at most 100).",
@@ -4806,6 +4823,7 @@
             "expected_agent_id": "agnt_6968b3984d1c238dbe7e2e29",
             "expires_at": "2026-12-31T23:59:00Z",
             "kind": "basic",
+            "max_idle_period": 1209600,
             "password": "example-secret",
             "permission_rules": [
               {
@@ -4885,6 +4903,22 @@
               "basic"
             ],
             "type": "string"
+          },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "maximum": 86313600.0,
+                "minimum": 86400.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
+            "examples": [
+              1209600
+            ]
           },
           "password": {
             "description": "Password to store; write-only.",
@@ -4966,6 +5000,7 @@
             "expected_agent_id": "agnt_6968b3984d1c238dbe7e2e29",
             "expires_at": "2026-12-31T23:59:00Z",
             "kind": "bearer",
+            "max_idle_period": 1209600,
             "permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -5044,6 +5079,22 @@
               "bearer"
             ],
             "type": "string"
+          },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "maximum": 86313600.0,
+                "minimum": 86400.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
+            "examples": [
+              1209600
+            ]
           },
           "permission_rules": {
             "description": "Permission rules to bind for the agent (at most 100).",
@@ -5447,7 +5498,7 @@
                 "type": "null"
               }
             ],
-            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.",
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for its idle limit). Null while the binding holds.",
             "examples": [
               null
             ]
@@ -6767,7 +6818,9 @@
                 "expired": false,
                 "expired_reason": null,
                 "expires_at": "2026-12-31T23:59:00Z",
+                "idle_expires_at": "2026-12-31T23:59:00Z",
                 "last_used_at": "2026-02-03T14:05:00Z",
+                "max_idle_period": 1209600,
                 "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
                 "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                 "status": "active",
@@ -6791,7 +6844,9 @@
                   "expired": false,
                   "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
+                  "idle_expires_at": "2026-12-31T23:59:00Z",
                   "last_used_at": "2026-02-03T14:05:00Z",
+                  "max_idle_period": 1209600,
                   "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "status": "active",
@@ -6843,7 +6898,9 @@
             "expired": false,
             "expired_reason": null,
             "expires_at": "2026-12-31T23:59:00Z",
+            "idle_expires_at": "2026-12-31T23:59:00Z",
             "last_used_at": "2026-02-03T14:05:00Z",
+            "max_idle_period": 1209600,
             "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
             "rule_set_id": "prs_6968b3987c22b63e87e79f05",
             "status": "active",
@@ -6891,7 +6948,7 @@
                 "type": "null"
               }
             ],
-            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.",
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.",
             "examples": [
               null
             ]
@@ -6911,6 +6968,21 @@
               "2026-12-31T23:59:00Z"
             ]
           },
+          "idle_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the idle limit ends the binding if it is not used before then (RFC 3339); null without an idle limit.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
+            ]
+          },
           "last_used_at": {
             "anyOf": [
               {
@@ -6924,6 +6996,20 @@
             "description": "When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.",
             "examples": [
               "2026-02-03T14:05:00Z"
+            ]
+          },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Idle limit in seconds: the binding ends once it goes this long without a call. Null when it has none.",
+            "examples": [
+              1209600
             ]
           },
           "owner_id": {
@@ -6997,7 +7083,8 @@
         "examples": [
           {
             "credential_id": "cred_6968b39855d91a3561684b32",
-            "expires_at": "2026-12-31T23:59:00Z"
+            "expires_at": "2026-12-31T23:59:00Z",
+            "max_idle_period": 1209600
           }
         ],
         "properties": {
@@ -7024,6 +7111,22 @@
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
+          },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "maximum": 86313600.0,
+                "minimum": 86400.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Omit for no idle limit.",
+            "examples": [
+              1209600
+            ]
           }
         },
         "required": [
@@ -7040,6 +7143,9 @@
             "expired": false,
             "expired_reason": null,
             "expires_at": "2026-12-31T23:59:00Z",
+            "idle_expires_at": "2026-12-31T23:59:00Z",
+            "last_used_at": "2026-11-20T10:00:00Z",
+            "max_idle_period": 1209600,
             "name": "Stripe production key",
             "rule_set_id": "prs_6968b3987c22b63e87e79f05",
             "serves": [
@@ -7087,7 +7193,7 @@
                 "type": "null"
               }
             ],
-            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.",
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for its idle limit). Null while the binding holds.",
             "examples": [
               null
             ]
@@ -7105,6 +7211,50 @@
             "description": "When the binding stops authorizing calls (RFC 3339); null if it never expires.",
             "examples": [
               "2026-12-31T23:59:00Z"
+            ]
+          },
+          "idle_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the idle limit ends the binding if it is not used before then (RFC 3339); null without an idle limit. Each call moves it later.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
+            ]
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When this agent last made a call through the binding; null if never.",
+            "examples": [
+              "2026-11-20T10:00:00Z"
+            ]
+          },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Idle limit in seconds: the binding ends once it goes this long without a call; null when it has none.",
+            "examples": [
+              1209600
             ]
           },
           "name": {
@@ -7208,6 +7358,7 @@
                 "expired_reason": null,
                 "expires_at": "2026-12-31T23:59:00Z",
                 "id": "acb_6968b3989a4f1c2e7d3b5a60",
+                "idle_expires_at": "2026-12-31T23:59:00Z",
                 "last_used_at": "2026-02-03T14:05:00Z",
                 "last_used_by_api": [
                   {
@@ -7216,7 +7367,9 @@
                     "last_used_at": "2026-02-03T14:05:00Z"
                   }
                 ],
+                "max_idle_period": 1209600,
                 "name": "Stripe production key",
+                "renewed_at": "2026-12-31T23:59:00Z",
                 "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                 "serves": [
                   {
@@ -7244,6 +7397,7 @@
                   "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
+                  "idle_expires_at": "2026-12-31T23:59:00Z",
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "last_used_by_api": [
                     {
@@ -7252,7 +7406,9 @@
                       "last_used_at": "2026-02-03T14:05:00Z"
                     }
                   ],
+                  "max_idle_period": 1209600,
                   "name": "Stripe production key",
+                  "renewed_at": "2026-12-31T23:59:00Z",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "serves": [
                     {
@@ -7278,10 +7434,12 @@
         "type": "object"
       },
       "CredentialBindingPatchRequest": {
-        "description": "Request body for renewing a credential binding: set, move or clear its expiry.\n\n`expires_at` is required but nullable: a body without it is a 422, never read\nas clearing the expiry.",
+        "additionalProperties": false,
+        "description": "Request body for renewing a credential binding: re-certify it, and change its limits.\n\nEvery renewal restarts the binding's idle clock. Each limit sent is set, and\nnull clears it; a limit left out stays as it is, so an absent field is never\nread as clearing. An empty body only re-certifies (\"still needed\").",
         "examples": [
           {
-            "expires_at": "2026-12-31T23:59:00Z"
+            "expires_at": "2026-12-31T23:59:00Z",
+            "max_idle_period": 1209600
           }
         ],
         "properties": {
@@ -7295,15 +7453,28 @@
                 "type": "null"
               }
             ],
-            "description": "When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Required: send null to clear the expiry; a body without it is a 422.",
+            "description": "When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the end date; leave it out to keep it.",
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
+          },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "maximum": 86313600.0,
+                "minimum": 86400.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Send null to remove the idle limit; leave it out to keep it.",
+            "examples": [
+              1209600
+            ]
           }
         },
-        "required": [
-          "expires_at"
-        ],
         "type": "object"
       },
       "CredentialBindingResponse": {
@@ -7317,6 +7488,7 @@
             "expired_reason": null,
             "expires_at": "2026-12-31T23:59:00Z",
             "id": "acb_6968b3989a4f1c2e7d3b5a60",
+            "idle_expires_at": "2026-12-31T23:59:00Z",
             "last_used_at": "2026-02-03T14:05:00Z",
             "last_used_by_api": [
               {
@@ -7325,7 +7497,9 @@
                 "last_used_at": "2026-02-03T14:05:00Z"
               }
             ],
+            "max_idle_period": 1209600,
             "name": "Stripe production key",
+            "renewed_at": "2026-12-31T23:59:00Z",
             "rule_set_id": "prs_6968b3987c22b63e87e79f05",
             "serves": [
               {
@@ -7378,7 +7552,7 @@
                 "type": "null"
               }
             ],
-            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.",
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.",
             "examples": [
               null
             ]
@@ -7404,6 +7578,21 @@
               "acb_6968b3989a4f1c2e7d3b5a60"
             ],
             "type": "string"
+          },
+          "idle_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the idle limit ends the binding if it is not used before then (RFC 3339); null without an idle limit. Each use moves it later.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
+            ]
           },
           "last_used_at": {
             "anyOf": [
@@ -7437,6 +7626,20 @@
             },
             "type": "array"
           },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Null when it has no idle limit.",
+            "examples": [
+              1209600
+            ]
+          },
           "name": {
             "anyOf": [
               {
@@ -7449,6 +7652,21 @@
             "description": "Name of the bound credential; null if it cannot be resolved.",
             "examples": [
               "Stripe production key"
+            ]
+          },
+          "renewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the binding was granted or last renewed (RFC 3339); the idle clock restarts at the later of this and its last use.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
             ]
           },
           "rule_set_id": {
@@ -10653,6 +10871,7 @@
             "expected_agent_id": "agnt_6968b3984d1c238dbe7e2e29",
             "expires_at": "2026-12-31T23:59:00Z",
             "kind": "existing_credential",
+            "max_idle_period": 1209600,
             "permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -10739,6 +10958,22 @@
               "existing_credential"
             ],
             "type": "string"
+          },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "maximum": 86313600.0,
+                "minimum": 86400.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
+            "examples": [
+              1209600
+            ]
           },
           "permission_rules": {
             "description": "Permission rules to bind for the agent (at most 100).",
@@ -10956,7 +11191,8 @@
       "GrantEndReason": {
         "description": "Which limit ended a grant, as binding responses and denials report it.",
         "enum": [
-          "end_date"
+          "end_date",
+          "idle"
         ],
         "type": "string"
       },
@@ -12088,6 +12324,7 @@
             "preferred_flow": "authorization_code",
             "reason": "Needs read access to triage issues in the platform repo.",
             "requested_expires_in": 604800,
+            "requested_max_idle_period": 1209600,
             "requested_permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -12230,6 +12467,22 @@
             "description": "How long the requested access should last, in seconds, counted from approval (at most 999 days). Shown preselected on the review page; the approver decides the binding's actual end date. Omit to ask for nothing in particular.",
             "examples": [
               604800
+            ]
+          },
+          "requested_max_idle_period": {
+            "anyOf": [
+              {
+                "maximum": 86313600.0,
+                "minimum": 86400.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The idle limit to ask for, in seconds (1 to 999 days): the access would end once it goes this long without a call. Shown on the review page; the approver decides.",
+            "examples": [
+              1209600
             ]
           },
           "requested_permission_rules": {
@@ -12936,6 +13189,9 @@
                 "expired": false,
                 "expired_reason": null,
                 "expires_at": "2026-12-31T23:59:00Z",
+                "idle_expires_at": "2026-12-31T23:59:00Z",
+                "last_used_at": "2026-11-20T10:00:00Z",
+                "max_idle_period": 1209600,
                 "name": "Stripe production key",
                 "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                 "serves": [
@@ -12991,6 +13247,9 @@
                   "expired": false,
                   "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
+                  "idle_expires_at": "2026-12-31T23:59:00Z",
+                  "last_used_at": "2026-11-20T10:00:00Z",
+                  "max_idle_period": 1209600,
                   "name": "Stripe production key",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "serves": [
@@ -16106,6 +16365,7 @@
             "expected_agent_id": "agnt_6968b3984d1c238dbe7e2e29",
             "expires_at": "2026-12-31T23:59:00Z",
             "kind": "oauth",
+            "max_idle_period": 1209600,
             "permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -16204,6 +16464,22 @@
               "oauth"
             ],
             "type": "string"
+          },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "maximum": 86313600.0,
+                "minimum": 86400.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
+            "examples": [
+              1209600
+            ]
           },
           "permission_rules": {
             "description": "Permission rules to bind for the agent (at most 100).",
@@ -18369,6 +18645,7 @@
             "expected_agent_id": "agnt_6968b3984d1c238dbe7e2e29",
             "expires_at": "2026-12-31T23:59:00Z",
             "kind": "own_oauth_client",
+            "max_idle_period": 1209600,
             "permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -18491,6 +18768,22 @@
               "own_oauth_client"
             ],
             "type": "string"
+          },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "maximum": 86313600.0,
+                "minimum": 86400.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
+            "examples": [
+              1209600
+            ]
           },
           "permission_rules": {
             "description": "Permission rules to bind for the agent (at most 100).",
@@ -20834,6 +21127,7 @@
             "reason": "Needs read access to triage issues in the platform repo.",
             "requested_by_actor_id": "agnt_6968b3984d1c238dbe7e2e29",
             "requested_expires_in": 604800,
+            "requested_max_idle_period": 1209600,
             "requested_permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -21126,6 +21420,20 @@
             "description": "How long the requester asked the access to last, in seconds from approval; null when nothing was asked. The approver chooses the actual end date on confirm.",
             "examples": [
               604800
+            ]
+          },
+          "requested_max_idle_period": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The idle limit the requester asked for, in seconds; null when none.",
+            "examples": [
+              1209600
             ]
           },
           "requested_permission_rules": {
@@ -26980,6 +27288,7 @@
                       "expired_reason": null,
                       "expires_at": "2026-12-31T23:59:00Z",
                       "id": "acb_6968b3989a4f1c2e7d3b5a60",
+                      "idle_expires_at": "2026-12-31T23:59:00Z",
                       "last_used_at": "2026-02-03T14:05:00Z",
                       "last_used_by_api": [
                         {
@@ -26988,7 +27297,9 @@
                           "last_used_at": "2026-02-03T14:05:00Z"
                         }
                       ],
+                      "max_idle_period": 1209600,
                       "name": "Stripe production key",
+                      "renewed_at": "2026-12-31T23:59:00Z",
                       "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                       "serves": [
                         {
@@ -27088,7 +27399,8 @@
             "application/json": {
               "example": {
                 "credential_id": "cred_6968b39855d91a3561684b32",
-                "expires_at": "2026-12-31T23:59:00Z"
+                "expires_at": "2026-12-31T23:59:00Z",
+                "max_idle_period": 1209600
               },
               "schema": {
                 "$ref": "#/components/schemas/CredentialBindRequest"
@@ -27110,6 +27422,7 @@
                   "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
+                  "idle_expires_at": "2026-12-31T23:59:00Z",
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "last_used_by_api": [
                     {
@@ -27118,7 +27431,9 @@
                       "last_used_at": "2026-02-03T14:05:00Z"
                     }
                   ],
+                  "max_idle_period": 1209600,
                   "name": "Stripe production key",
+                  "renewed_at": "2026-12-31T23:59:00Z",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "serves": [
                     {
@@ -27327,7 +27642,7 @@
       },
       "description": "`PATCH`: Renew a credential binding. `DELETE`: Suspend or remove a credential binding.",
       "patch": {
-        "description": "Set, extend or clear when a binding stops authorizing calls.\n\n`expires_at` (future only, otherwise 422) sets or moves the end date; null\nclears it, so the binding never expires. This is how an expired binding is\nrenewed, and it never changes `suspended`: renewing does not resume a\nsuspension, and resuming does not extend an expiry. Renewing re-grants the\ncredential, so it takes the same checks as `:resume`: the caller must own\nthe credential (or hold `org:admin`) as well as see the agent, and an agent\ncannot renew its own binding. Audited; broker caches are invalidated, so\na shortened deadline is checked on every broker. A separate broker may cache a denial\nuntil its binding-cache TTL elapses. Returns the binding.",
+        "description": "Re-certify a binding: restart its idle clock, and set, extend or clear its limits.\n\n`expires_at` (future only, otherwise 422) sets or moves the end date; null\nclears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle\nlimit; null removes it. A field left out stays as it is, and every renewal\nrestarts the idle clock, so an empty body re-certifies a binding that is\nstill needed. This is how an expired binding is\nrenewed, and it never changes `suspended`: renewing does not resume a\nsuspension, and resuming does not extend an expiry. Renewing re-grants the\ncredential, so it takes the same checks as `:resume`: the caller must own\nthe credential (or hold `org:admin`) as well as see the agent, and an agent\ncannot renew its own binding. Audited; broker caches are invalidated, so\na shortened deadline is checked on every broker. A separate broker may cache a denial\nuntil its binding-cache TTL elapses. Returns the binding.",
         "operationId": "renewAgentCredentialBinding",
         "parameters": [
           {
@@ -27375,14 +27690,15 @@
           "content": {
             "application/json": {
               "example": {
-                "expires_at": "2026-12-31T23:59:00Z"
+                "expires_at": "2026-12-31T23:59:00Z",
+                "max_idle_period": 1209600
               },
               "schema": {
                 "$ref": "#/components/schemas/CredentialBindingPatchRequest"
               }
             }
           },
-          "description": "Request body for renewing a credential binding: set, move or clear its expiry.\n\n`expires_at` is required but nullable: a body without it is a 422, never read\nas clearing the expiry.",
+          "description": "Request body for renewing a credential binding: re-certify it, and change its limits.\n\nEvery renewal restarts the binding's idle clock. Each limit sent is set, and\nnull clears it; a limit left out stays as it is, so an absent field is never\nread as clearing. An empty body only re-certifies (\"still needed\").",
           "required": true
         },
         "responses": {
@@ -27397,6 +27713,7 @@
                   "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
+                  "idle_expires_at": "2026-12-31T23:59:00Z",
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "last_used_by_api": [
                     {
@@ -27405,7 +27722,9 @@
                       "last_used_at": "2026-02-03T14:05:00Z"
                     }
                   ],
+                  "max_idle_period": 1209600,
                   "name": "Stripe production key",
+                  "renewed_at": "2026-12-31T23:59:00Z",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "serves": [
                     {
@@ -27534,6 +27853,7 @@
                   "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
+                  "idle_expires_at": "2026-12-31T23:59:00Z",
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "last_used_by_api": [
                     {
@@ -27542,7 +27862,9 @@
                       "last_used_at": "2026-02-03T14:05:00Z"
                     }
                   ],
+                  "max_idle_period": 1209600,
                   "name": "Stripe production key",
+                  "renewed_at": "2026-12-31T23:59:00Z",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                   "serves": [
                     {
@@ -32822,6 +33144,7 @@
                   "reason": "Needs read access to triage issues in the platform repo.",
                   "requested_by_actor_id": "agnt_6968b3984d1c238dbe7e2e29",
                   "requested_expires_in": 604800,
+                  "requested_max_idle_period": 1209600,
                   "requested_permission_rules": [
                     {
                       "comment": "Lets the agent draft replies, never send them.",
@@ -34317,7 +34640,9 @@
                       "expired": false,
                       "expired_reason": null,
                       "expires_at": "2026-12-31T23:59:00Z",
+                      "idle_expires_at": "2026-12-31T23:59:00Z",
                       "last_used_at": "2026-02-03T14:05:00Z",
+                      "max_idle_period": 1209600,
                       "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
                       "rule_set_id": "prs_6968b3987c22b63e87e79f05",
                       "status": "active",
@@ -37881,6 +38206,7 @@
                 "preferred_flow": "authorization_code",
                 "reason": "Needs read access to triage issues in the platform repo.",
                 "requested_expires_in": 604800,
+                "requested_max_idle_period": 1209600,
                 "requested_permission_rules": [
                   {
                     "comment": "Lets the agent draft replies, never send them.",

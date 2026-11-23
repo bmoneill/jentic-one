@@ -406,7 +406,10 @@ async def test_slow_upstream_holds_no_admin_connection(
     assert len(upstream.seen) == 1
     _assert_no_admin_hold(upstream.seen, seeded_credential)
     assert upstream.seen[0].committed_access_events == 1
-    assert transactions.count - upstream.probe_transactions == 2, transactions
+    # The access audit, the binding's use stamp (the first call through it this
+    # hour restarts its idle clock), and the execution record — none of them
+    # held across the upstream call.
+    assert transactions.count - upstream.probe_transactions == 3, transactions
 
     record = await _execution(admin_db, trace_id)
     assert record is not None and record.status == ExecutionStatus.COMPLETED

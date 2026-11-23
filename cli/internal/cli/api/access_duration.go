@@ -11,6 +11,26 @@ import (
 // (999 days, the console's largest custom amount); the route refuses more.
 const connectExpiresInMax = 999 * 86400
 
+// connectMaxIdleMin and connectMaxIdleMax bound an idle limit a connect may
+// ask for (1 to 999 days); the route refuses anything else.
+const (
+	connectMaxIdleMin = 86400
+	connectMaxIdleMax = 999 * 86400
+)
+
+// parseIdleLimit reads an idle limit like parseAccessDuration, between 1 and
+// 999 days: last-use is recorded about hourly, so shorter limits can't be exact.
+func parseIdleLimit(s string) (int, error) {
+	seconds, err := parseAccessDuration(s)
+	if err != nil {
+		return 0, err
+	}
+	if seconds < connectMaxIdleMin || seconds > connectMaxIdleMax {
+		return 0, fmt.Errorf("idle limit %q must be between 1 day and 999 days", s)
+	}
+	return seconds, nil
+}
+
 var accessDurationRe = regexp.MustCompile(`^(\d+)([smhd]?)$`)
 
 // parseAccessDuration reads how long requested access should last — "7d",

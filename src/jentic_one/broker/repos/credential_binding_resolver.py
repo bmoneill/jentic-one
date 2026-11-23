@@ -18,8 +18,13 @@ from datetime import UTC, datetime
 
 from sqlalchemy import bindparam, text
 
-from jentic_one.shared.auth.agent_expiry import as_utc
-from jentic_one.shared.auth.agent_expiry import binding_expired as is_binding_expired
+from jentic_one.shared.auth.grant_policy import (
+    GRANT_POLICY_COLUMNS,
+    GrantEndReason,
+    GrantPolicy,
+    grant_deadline,
+    grant_end_reason,
+)
 from jentic_one.shared.broker.protocols import (
     BoundCredential,
     CredentialDerivation,
@@ -34,21 +39,21 @@ from jentic_one.shared.models.api_identity import (
     slugify_api_field,
 )
 
-_CANDIDATE_DEADLINE = text(
-    "SELECT COUNT(*), MIN(expires_at) FROM agent_credential_bindings "
+_CANDIDATE_POLICIES = text(
+    f"SELECT {GRANT_POLICY_COLUMNS} FROM agent_credential_bindings "
     "WHERE agent_id = :agent_id AND credential_id IN :ids AND suspended = false"
 ).bindparams(bindparam("ids", expanding=True))
 
 
 # admin DB — every direct binding the agent holds, with its suspension flag and
-# fixed expiry. Suspended bindings never authorize an execution (suspension is
-# the reversible per-consumer cut-off), nor do bindings whose ``expires_at`` has
-# passed; both are read in the same round-trip only so a denial can tell them
-# from a missing binding. The expiry is compared in Python against the
-# injectable clock, never in SQL.
+# policy (end date, idle limit and its clock). Suspended bindings never
+# authorize an execution (suspension is the reversible per-consumer cut-off),
+# nor do bindings whose policy has ended; both are read in the same round-trip
+# only so a denial can tell them from a missing binding. The policy is
+# evaluated in Python against the injectable clock, never in SQL.
 _AGENT_CREDENTIALS = text(
-    "SELECT credential_id, rule_set_id, suspended, expires_at FROM agent_credential_bindings "
-    "WHERE agent_id = :agent_id"
+    f"SELECT credential_id, rule_set_id, suspended, {GRANT_POLICY_COLUMNS} "
+    "FROM agent_credential_bindings WHERE agent_id = :agent_id"
 )
 
 # control DB — active credentials whose stored identity covers the API. The
@@ -144,10 +149,13 @@ class CredentialBindingResolver:
         """Check the live deadlines of cached candidates, including edits by another process."""
         ids = [c.credential_id for c in result.credentials]
         async with self._admin_db.read_session() as session:
-            count, deadline = (
-                await session.execute(_CANDIDATE_DEADLINE, {"agent_id": agent_id, "ids": ids})
-            ).one()
-        return count == len(ids) and (deadline is None or self._clock() < as_utc(deadline))
+            rows = (
+                await session.execute(_CANDIDATE_POLICIES, {"agent_id": agent_id, "ids": ids})
+            ).all()
+        now = self._clock()
+        return len(rows) == len(ids) and all(
+            grant_end_reason(GrantPolicy.from_row(row), now=now) is None for row in rows
+        )
 
     async def derive_credentials(
         self, *, agent_id: str, vendor: str, name: str, version: str
@@ -167,18 +175,21 @@ class CredentialBindingResolver:
         now = self._clock()
         rule_sets: dict[str, str | None] = {}
         expiries: dict[str, datetime] = {}
-        expired_ids: set[str] = set()
+        expired_reasons: dict[str, GrantEndReason] = {}
         suspended_ids: set[str] = set()
-        for credential_id, rule_set_id, suspended, expires_at in binding_rows:
-            if suspended:
-                suspended_ids.add(credential_id)
+        for row in binding_rows:
+            if row.suspended:
+                suspended_ids.add(row.credential_id)
                 continue
-            if is_binding_expired(expires_at, now=now):
-                expired_ids.add(credential_id)
+            policy = GrantPolicy.from_row(row)
+            reason = grant_end_reason(policy, now=now)
+            if reason is not None:
+                expired_reasons[row.credential_id] = reason
                 continue
-            rule_sets[credential_id] = rule_set_id
-            if expires_at is not None:
-                expiries[credential_id] = as_utc(expires_at)
+            rule_sets[row.credential_id] = row.rule_set_id
+            deadline = grant_deadline(policy)
+            if deadline is not None:
+                expiries[row.credential_id] = deadline
 
         async with self._control_db.session() as session:
             covering_rows = (
@@ -214,13 +225,13 @@ class CredentialBindingResolver:
                 suspended_ids, vendor=vendor, name=name, version=version
             )
 
-        # Likewise an expired binding covering the API: only a renewal helps,
-        # and a new connect would route around the expiry. Suspension is
-        # reported first by the caller.
-        binding_expired = False
-        if not candidates and expired_ids:
-            binding_expired = await self._suspended_covers(
-                expired_ids, vendor=vendor, name=name, version=version
+        # Likewise an ended binding covering the API: only a renewal helps,
+        # and a new connect would route around it. Suspension is reported
+        # first by the caller.
+        expired_covering: str | None = None
+        if not candidates and expired_reasons:
+            expired_covering = await self._covering_id(
+                set(expired_reasons), vendor=vendor, name=name, version=version
             )
 
         binding_pending = False
@@ -236,7 +247,11 @@ class CredentialBindingResolver:
             identity_mismatch=mismatch,
             binding_suspended=binding_suspended,
             binding_pending=binding_pending,
-            binding_expired=binding_expired,
+            binding_expired=expired_covering is not None,
+            expired_credential_id=expired_covering,
+            expired_reason=(
+                expired_reasons[expired_covering].value if expired_covering is not None else None
+            ),
             # The earliest moment a candidate binding lapses: a cache must not
             # serve this derivation at or after it.
             valid_until=min(
@@ -267,19 +282,26 @@ class CredentialBindingResolver:
         self, suspended_ids: set[str], *, vendor: str, name: str, version: str
     ) -> bool:
         """Whether any suspended-binding credential's stored identity covers the API."""
+        covering = await self._covering_id(suspended_ids, vendor=vendor, name=name, version=version)
+        return covering is not None
+
+    async def _covering_id(
+        self, credential_ids: set[str], *, vendor: str, name: str, version: str
+    ) -> str | None:
+        """One of ``credential_ids`` whose stored identity covers the API, whatever its state."""
         async with self._control_db.session() as session:
             row = (
                 await session.execute(
                     _SUSPENDED_COVERING,
                     {
-                        "credential_ids": sorted(suspended_ids),
+                        "credential_ids": sorted(credential_ids),
                         "vendor": vendor,
                         "name": name,
                         "version": version,
                     },
                 )
             ).first()
-        return row is not None
+        return str(row[0]) if row is not None else None
 
     async def _nearest_miss(
         self, bound_credential_ids: set[str], *, vendor: str, name: str, version: str

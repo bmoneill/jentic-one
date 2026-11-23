@@ -127,9 +127,14 @@ The outcomes:
   can renew it (`PATCH /agents/{agent_id}/credentials/{credential_id}`), a
   new connect answers `409 connect_session_binding_expired`, and the agent
   can no longer read the credential through the expired binding.
-  Suspension is reported first. Binding responses and `/me` report
-  `expired` with `expired_reason`, naming the limit that ended the binding
-  (`end_date` when `expires_at` passed).
+  Suspension is reported first. A binding can also carry an idle limit
+  (`max_idle_period`, 1 to 999 days): it ends once it goes that long without
+  a call, counted from its last use or its last renewal, whichever is later
+  (the broker records use about once an hour). Any limit reached ends the
+  binding. Binding responses and `/me` report `expired` with
+  `expired_reason`, naming the limit that ended it (`end_date` or `idle`),
+  and `idle_expires_at` for when an unused binding would end. Renewing
+  (`PATCH`) restarts the idle clock even with an empty body.
 - **1 winner → use it.** The response carries `Jentic-Credential-Id` and
   `Jentic-Credential-Name` (absent when no stored credential was used), and
   the execution record carries the same attribution — every execution names

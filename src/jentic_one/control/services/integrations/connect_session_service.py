@@ -174,6 +174,7 @@ from jentic_one.control.services.integrations.flow_handlers.manual import (
 from jentic_one.control.services.integrations.flow_handlers.session_app import SessionApp
 from jentic_one.control.services.integrations.requested_policy import (
     requested_expires_in_of,
+    requested_max_idle_period_of,
     requested_policy,
 )
 from jentic_one.control.services.integrations.revisions import create_revision, revision_digest
@@ -188,8 +189,8 @@ from jentic_one.control.services.vendors.service import (
 )
 from jentic_one.shared.access_guidance import catalog_api_id_covers, catalog_import_name
 from jentic_one.shared.audit import AuditAction, AuditTargetType, record_audit_best_effort
-from jentic_one.shared.auth.agent_expiry import binding_expired
 from jentic_one.shared.auth.binding_write import guard_binding_write
+from jentic_one.shared.auth.grant_policy import grant_ended
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.permission_catalog import (
     AGENTS_WRITE,
@@ -459,6 +460,8 @@ class ReviewData:
     requested_scopes: list[str] = field(default_factory=list)
     # How long the requester asked the access to last (seconds from approval).
     requested_expires_in: int | None = None
+    # The idle limit the requester asked for (seconds).
+    requested_max_idle_period: int | None = None
     # Server data the approver decides on (never echoed from the caller).
     provenance: ProvenanceView | None = None
     agent: AgentView | None = None
@@ -618,6 +621,8 @@ class ConfirmChecks:
     revision_id: str | None = None
     # The new binding's end date as the approver chose it (None = no expiry).
     expires_at: datetime | None = None
+    # The new binding's idle limit in seconds (None = none).
+    max_idle_period: int | None = None
 
 
 @dataclass(slots=True, frozen=True)
@@ -1179,6 +1184,8 @@ class ConnectSessionService:
         # approval. Stored as the session's ``requested_policy``; the
         # approver picks the binding's actual end date on confirm.
         requested_expires_in: int | None = None,
+        # The idle limit the request asks for, in seconds.
+        requested_max_idle_period: int | None = None,
     ) -> CreatedSession:
         """Create a pending session + upfront credential row.
 
@@ -1217,6 +1224,7 @@ class ConnectSessionService:
                 credential_name=credential_name,
                 oauth_app_registration_id=oauth_app_registration_id,
                 requested_expires_in=requested_expires_in,
+                requested_max_idle_period=requested_max_idle_period,
             )
 
         # Entry, flow and minting app come from one source — the pinned
@@ -1315,7 +1323,10 @@ class ConnectSessionService:
                     dedupe_key=dedupe_key,
                     requested_scopes=requested_scopes or [],
                     requested_permission_rules=requested_permission_rules or [],
-                    requested_policy=requested_policy(expires_in=requested_expires_in),
+                    requested_policy=requested_policy(
+                        expires_in=requested_expires_in,
+                        max_idle_period=requested_max_idle_period,
+                    ),
                     preferred_flow=preferred_flow,
                     reason=reason,
                     created_by=initiator_actor_id,
@@ -1390,6 +1401,7 @@ class ConnectSessionService:
         credential_name: str | None,
         oauth_app_registration_id: str | None,
         requested_expires_in: int | None = None,
+        requested_max_idle_period: int | None = None,
     ) -> CreatedSession:
         """Open a session for a registry API identity.
 
@@ -1538,7 +1550,10 @@ class ConnectSessionService:
                     poll_token_hash=hash_secret(poll_token),
                     requested_scopes=requested_scopes,
                     requested_permission_rules=requested_permission_rules,
-                    requested_policy=requested_policy(expires_in=requested_expires_in),
+                    requested_policy=requested_policy(
+                        expires_in=requested_expires_in,
+                        max_idle_period=requested_max_idle_period,
+                    ),
                     preferred_flow=preferred_flow,
                     reason=reason,
                     created_by=initiator_actor_id,
@@ -3436,7 +3451,7 @@ class ConnectSessionService:
             )
         if binding is None or (
             identity.actor_type == ActorType.AGENT
-            and (binding.suspended or binding_expired(binding.expires_at))
+            and (binding.suspended or grant_ended(binding.policy))
         ):
             raise EditBindingNotFoundError(credential_id)
         return binding
@@ -3703,6 +3718,7 @@ class ConnectSessionService:
             scopes=scopes,
             requested_permission_rules=row.requested_permission_rules or [],
             requested_expires_in=requested_expires_in_of(row.requested_policy),
+            requested_max_idle_period=requested_max_idle_period_of(row.requested_policy),
             api_vendor=api_vendor,
             api_name=api_name,
             api_version=api_version,
@@ -4328,6 +4344,8 @@ class ConnectSessionService:
         browser_binding: BrowserBindingClaim | None = None,
         # The new binding's end date as the approver chose it (None = none).
         expires_at: datetime | None = None,
+        # The new binding's idle limit in seconds (None = none).
+        max_idle_period: int | None = None,
     ) -> ConfirmResult:
         """Confirm scopes + permissions and kick off the vendor-side flow.
 
@@ -4512,6 +4530,7 @@ class ConnectSessionService:
                         credential_id=row.credential_id,
                         created_by=identity.sub,
                         expires_at=expires_at,
+                        max_idle_period=max_idle_period,
                     )
             except (BindingSuspendedError, BindingExpiredError) as exc:
                 await self._fail_cut_off_bind(row, exc)
@@ -4750,6 +4769,7 @@ class ConnectSessionService:
         created_by: str,
         control_session: Any | None = None,
         expires_at: datetime | None = None,
+        max_idle_period: int | None = None,
     ) -> tuple[str, bool]:
         async with guard_binding_write(
             admin_session,
@@ -4767,6 +4787,7 @@ class ConnectSessionService:
                 rule_set_id=None,
                 created_by=created_by,
                 expires_at=expires_at,
+                max_idle_period=max_idle_period,
             )
 
     async def _bind_for_confirm(
@@ -4776,6 +4797,7 @@ class ConnectSessionService:
         *,
         created_by: str,
         expires_at: datetime | None = None,
+        max_idle_period: int | None = None,
     ) -> bool:
         """Bind the agent (idempotent) and re-check it is still usable; True if newly bound.
 
@@ -4790,6 +4812,7 @@ class ConnectSessionService:
                 credential_id=credential_id,
                 created_by=created_by,
                 expires_at=expires_at,
+                max_idle_period=max_idle_period,
             )
         async with self._ctx.admin_db.session() as admin_session:
             agent = await EffectsRepository.get_agent_owner(admin_session, agent_id)
@@ -4870,6 +4893,7 @@ class ConnectSessionService:
                 row.credential_id,
                 created_by=identity.sub,
                 expires_at=variant.checks.expires_at,
+                max_idle_period=variant.checks.max_idle_period,
             )
         cas_fields: dict[str, Any] = {"agent_id": agent_id} if late_bound else {}
         try:
@@ -4974,6 +4998,7 @@ class ConnectSessionService:
             chosen.credential_id,
             created_by=identity.sub,
             expires_at=variant.checks.expires_at,
+            max_idle_period=variant.checks.max_idle_period,
         )
         cas_fields: dict[str, Any] = {"agent_id": agent_id} if late_bound else {}
         try:
@@ -5066,6 +5091,7 @@ class ConnectSessionService:
                 if variant.checks.expires_at is not None
                 else None
             ),
+            "max_idle_period": variant.checks.max_idle_period,
         }
         cas_fields: dict[str, Any] = {"agent_id": agent_id} if late_bound else {}
         # Taking the edit intent means the review reads this session as an
@@ -5230,6 +5256,7 @@ class ConnectSessionService:
                         credential_id=row.credential_id,
                         created_by=identity.sub,
                         expires_at=variant.checks.expires_at,
+                        max_idle_period=variant.checks.max_idle_period,
                     )
             except (BindingSuspendedError, BindingExpiredError) as exc:
                 await self._fail_cut_off_bind(row, exc)
@@ -5983,6 +6010,7 @@ class ConnectSessionService:
                                 if change.get("expires_at")
                                 else None
                             ),
+                            max_idle_period=change.get("max_idle_period"),
                         )
         except (BindingSuspendedError, BindingExpiredError) as exc:
             return await self._fail_cut_off_bind(row, exc)

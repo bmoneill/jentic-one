@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Collection, Mapping
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -40,6 +41,7 @@ from jentic_one.broker.core.errors import (
     CredentialServerVariableMismatchError as DomainCredentialServerVariableMismatchError,
 )
 from jentic_one.broker.core.injection import inject_auth
+from jentic_one.broker.repos.binding_use_repo import BindingUseRepository
 from jentic_one.broker.services.credentials.connect_target import resolve_connect_target
 from jentic_one.broker.services.credentials.errors import (
     AmbiguousCredentialError,
@@ -70,12 +72,19 @@ from jentic_one.shared.events import (
     valid_trace_id_or_none,
 )
 from jentic_one.shared.jobs.protocols import InjectedAuth
+from jentic_one.shared.models import ActorType
 from jentic_one.shared.models.api_identity import CredentialScope
 from jentic_one.shared.models.credentials import CredentialType
 from jentic_one.shared.models.events import ErrorSource, EventSeverity, EventTag, EventType
 from jentic_one.shared.schemas import APIReference
 
 logger = structlog.get_logger()
+
+#: Shared-state namespace that throttles ``last_used_at`` writes per binding.
+BINDING_USE_NAMESPACE = "binding-use"
+#: How stale ``last_used_at`` may get before a use stamps it again. Idle
+#: limits are at least a day, so an hour of drift never matters.
+BINDING_USE_INTERVAL = timedelta(hours=1)
 
 _EMPTY = InjectedAuth(headers={}, query_params={}, cookies={})
 
@@ -240,6 +249,7 @@ class CredentialService:
                     # a 500 here would fail the whole execute request (#903).
                     trace_id=valid_trace_id_or_none(trace_id),
                 )
+            await self._record_binding_use(identity=identity, credential_id=resolved.credential_id)
             return InjectedAuth(
                 headers=result.headers,
                 query_params=result.query_params,
@@ -445,6 +455,45 @@ class CredentialService:
                 type="ambiguous_credential",
                 extra={"candidates": [c.model_dump(mode="json") for c in exc.candidates]},
             ) from exc
+
+    async def _record_binding_use(self, *, identity: Identity, credential_id: str) -> None:
+        """Restart the binding's idle clock: this call is a use of it.
+
+        Every route that authorizes a call through a binding injects its
+        credential here, so ``/execute``, MCP and queued or approved calls all
+        count. The write happens at most once per :data:`BINDING_USE_INTERVAL`
+        per binding (a shared-state claim skips it in between, and the UPDATE
+        itself only fires on a stale value), in its own short transaction after
+        the access audit has committed: a failed write never fails the call,
+        it only lets the binding look idle up to an interval sooner.
+        """
+        if identity.actor_type != ActorType.AGENT:
+            return
+        key = f"{BINDING_USE_NAMESPACE}:{identity.sub}:{credential_id}"
+        try:
+            claimed = await self._ctx.state_backend.set_if_absent(
+                key, b"1", ttl_s=BINDING_USE_INTERVAL.total_seconds()
+            )
+        except Exception:  # the UPDATE's own staleness guard still applies
+            claimed = True
+        if not claimed:
+            return
+        try:
+            async with self._ctx.admin_db.transaction() as session:
+                await BindingUseRepository.record_use(
+                    session,
+                    agent_id=identity.sub,
+                    credential_id=credential_id,
+                    now=datetime.now(UTC),
+                    min_interval=BINDING_USE_INTERVAL,
+                )
+        except Exception:  # tracking use must never fail the call
+            logger.warning(
+                "binding_use_record_failed",
+                agent_id=identity.sub,
+                credential_id=credential_id,
+                exc_info=True,
+            )
 
     async def _emit_credential_failure(
         self,

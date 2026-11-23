@@ -184,11 +184,21 @@ def _suspended_binding_denial(api: APIReference, *, instance: str) -> BrokerErro
     )
 
 
-def _expired_binding_denial(api: APIReference, *, instance: str) -> BrokerError:
-    """The denial for an agent whose only binding covering the API has expired.
+#: The denial's detail for each limit that can end a binding.
+_EXPIRED_DETAIL = {
+    "end_date": "The credential binding for this API has expired: its end date passed",
+    "idle": "The credential binding for this API has expired: it went unused for its idle limit",
+}
+
+
+def _expired_binding_denial(
+    api: APIReference, *, instance: str, reason: str | None = None
+) -> BrokerError:
+    """The denial for an agent whose only binding covering the API has ended.
 
     Like the suspended case, its recovery is the operator's alone (a renewal),
-    so the directive carries no connect suggestion.
+    so the directive carries no connect suggestion. ``expired_reason`` names
+    the limit that ended it, so the operator knows what renewing must change.
     """
     _authz_denied.add(
         1,
@@ -199,7 +209,8 @@ def _expired_binding_denial(api: APIReference, *, instance: str) -> BrokerError:
         },
     )
     return CredentialBindingExpiredError(
-        "The credential binding for this API has expired",
+        _EXPIRED_DETAIL.get(reason or "", "The credential binding for this API has expired"),
+        extra={"expired_reason": reason} if reason else None,
         instance=instance,
         directive=credential_binding_expired_directive(
             vendor=api.vendor, name=api.name, version=api.version
@@ -317,7 +328,7 @@ async def derive_credential_bindings(
         if derivation.binding_suspended:
             raise _suspended_binding_denial(api, instance=instance)
         if derivation.binding_expired:
-            raise _expired_binding_denial(api, instance=instance)
+            raise _expired_binding_denial(api, instance=instance, reason=derivation.expired_reason)
         if derivation.binding_pending:
             raise _pending_credential_denial(
                 api,

@@ -74,6 +74,7 @@ func newConnectCmd(a *app) *cobra.Command {
 	var authType string
 	var rulesJSON string
 	var expiresIn string
+	var maxIdle string
 	var wait bool
 	var timeout time.Duration
 	cmd := &cobra.Command{
@@ -161,6 +162,18 @@ func newConnectCmd(a *app) *cobra.Command {
 				}
 				expiresInSeconds = seconds
 			}
+			var maxIdleSeconds int
+			if maxIdle != "" {
+				seconds, err := parseIdleLimit(maxIdle)
+				if err != nil {
+					return reportCoded(aud, &ux.CodedError{
+						Code:       ux.CodeMissingArgument,
+						Msg:        "--max-idle: " + err.Error(),
+						Actionable: "Pass an idle limit between 1d and 999d, e.g. --max-idle 14d.",
+					})
+				}
+				maxIdleSeconds = seconds
+			}
 			target := connectTargetLabel(vendor, api)
 			rerun := "jentic connect " + vendor
 			if api != nil {
@@ -225,6 +238,9 @@ func newConnectCmd(a *app) *cobra.Command {
 			}
 			if expiresInSeconds > 0 {
 				body.RequestedExpiresIn = &expiresInSeconds
+			}
+			if maxIdleSeconds > 0 {
+				body.RequestedMaxIdlePeriod = &maxIdleSeconds
 			}
 			// Never set body.AgentId: an agent caller IS the agent (the
 			// control plane injects the identity and refuses an override);
@@ -331,6 +347,8 @@ func newConnectCmd(a *app) *cobra.Command {
 		"permission rules you ask for on the binding, as a JSON list (the approver reviews them; a denial's suggested_rules fit as-is)")
 	cmd.Flags().StringVar(&expiresIn, "expires-in", "",
 		"how long you need the access, e.g. 7d, 8h or 30m (the approver decides the actual end date)")
+	cmd.Flags().StringVar(&maxIdle, "max-idle", "",
+		"ask for the access to end once unused this long, e.g. 14d (1d to 999d; the approver decides)")
 	cmd.Flags().BoolVar(&wait, "wait", false,
 		"poll the session until it connects or ends (rejected, expired, or cancelled)")
 	cmd.Flags().DurationVar(&timeout, "timeout", connectWaitDefault,

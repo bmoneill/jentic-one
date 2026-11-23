@@ -98,6 +98,7 @@ func CuratedBindings() []CuratedBinding {
 				"reason":                     "reason",
 				"oauth_app_registration_id":  "registration",
 				"requested_expires_in":       "expires-in",
+				"requested_max_idle_period":  "max-idle",
 			},
 			NotExposed: map[string]string{
 				"agent_id":       "never sent: an agent caller IS the agent (identity injected server-side; an override is refused 403); connecting FOR an agent is a dashboard action",

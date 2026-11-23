@@ -752,12 +752,15 @@ func (e ExistingCredentialConfirmSessionRequestKind) Valid() bool {
 // Defines values for GrantEndReason.
 const (
 	EndDate GrantEndReason = "end_date"
+	Idle    GrantEndReason = "idle"
 )
 
 // Valid indicates whether the value is a known member of the GrantEndReason enum.
 func (e GrantEndReason) Valid() bool {
 	switch e {
 	case EndDate:
+		return true
+	case Idle:
 		return true
 	default:
 		return false
@@ -2157,7 +2160,7 @@ type ApiInfoResponse struct {
 
 // ApiKeyConfirmSessionRequest Confirm a “manual_api_key“ session with the API key to store.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","key":"example-secret","kind":"api_key","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","key":"example-secret","kind":"api_key","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
 type ApiKeyConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -2188,6 +2191,11 @@ type ApiKeyConfirmSessionRequest struct {
 	//
 	// Examples: api_key
 	Kind ApiKeyConfirmSessionRequestKind `json:"kind"`
+
+	// MaxIdlePeriod The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
 
 	// PermissionRules Permission rules to bind for the agent (at most 100).
 	//
@@ -3166,7 +3174,7 @@ type BasicAuthUpdateRequestType string
 
 // BasicConfirmSessionRequest Confirm a “manual_basic“ session with the username and password to store.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"basic","password":"example-secret","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","username":"svc-reporting"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"basic","max_idle_period":1209600,"password":"example-secret","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","username":"svc-reporting"}
 type BasicConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -3192,6 +3200,11 @@ type BasicConfirmSessionRequest struct {
 	//
 	// Examples: basic
 	Kind BasicConfirmSessionRequestKind `json:"kind"`
+
+	// MaxIdlePeriod The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
 
 	// Password Password to store; write-only.
 	//
@@ -3221,7 +3234,7 @@ type BasicConfirmSessionRequestKind string
 
 // BearerConfirmSessionRequest Confirm a “manual_bearer“ session with the bearer token to store.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"bearer","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","token":"example-secret"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"bearer","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","token":"example-secret"}
 type BearerConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -3247,6 +3260,11 @@ type BearerConfirmSessionRequest struct {
 	//
 	// Examples: bearer
 	Kind BearerConfirmSessionRequestKind `json:"kind"`
+
+	// MaxIdlePeriod The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
 
 	// PermissionRules Permission rules to bind for the agent (at most 100).
 	//
@@ -3368,7 +3386,7 @@ type BindingAccessResponse struct {
 	// Examples: false
 	Expired *bool `json:"expired,omitempty"`
 
-	// ExpiredReason Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+	// ExpiredReason Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for its idle limit). Null while the binding holds.
 	//
 	// Examples: null
 	ExpiredReason *GrantEndReason `json:"expired_reason,omitempty"`
@@ -3885,11 +3903,11 @@ type CreateAdminRequest struct {
 
 // CredentialAgentListResponse Paginated list of agents directly bound to a credential.
 //
-// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}],"has_more":true,"next_cursor":"eyJ0IjogIjIwMjYtMDEtMTVUMDk6MzA6MDArMDA6MDAiLCAiaWQiOiAiM2YyYjhjMWUtN2Q0YS00ZTliLWE2YzUtMWQyZTNmNGE1YjZjIn0="}
+// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","max_idle_period":1209600,"owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}],"has_more":true,"next_cursor":"eyJ0IjogIjIwMjYtMDEtMTVUMDk6MzA6MDArMDA6MDAiLCAiaWQiOiAiM2YyYjhjMWUtN2Q0YS00ZTliLWE2YzUtMWQyZTNmNGE1YjZjIn0="}
 type CredentialAgentListResponse struct {
 	// Data The page of bound agents.
 	//
-	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}]
+	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","max_idle_period":1209600,"owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}]
 	Data []CredentialAgentResponse `json:"data"`
 
 	// HasMore Whether more results exist after this page.
@@ -3905,7 +3923,7 @@ type CredentialAgentListResponse struct {
 
 // CredentialAgentResponse Agent directly bound to a credential.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","max_idle_period":1209600,"owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}
 type CredentialAgentResponse struct {
 	// AgentId ID of the bound agent.
 	//
@@ -3927,7 +3945,7 @@ type CredentialAgentResponse struct {
 	// Examples: false
 	Expired *bool `json:"expired,omitempty"`
 
-	// ExpiredReason Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+	// ExpiredReason Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.
 	//
 	// Examples: null
 	ExpiredReason *GrantEndReason `json:"expired_reason,omitempty"`
@@ -3937,10 +3955,20 @@ type CredentialAgentResponse struct {
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
+	// IdleExpiresAt When the idle limit ends the binding if it is not used before then (RFC 3339); null without an idle limit.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	IdleExpiresAt *time.Time `json:"idle_expires_at,omitempty"`
+
 	// LastUsedAt When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.
 	//
 	// Examples: 2026-02-03T14:05:00Z
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+
+	// MaxIdlePeriod Idle limit in seconds: the binding ends once it goes this long without a call. Null when it has none.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
 
 	// OwnerId ID of the user who owns the bound agent; null for an unclaimed self-registration. Changing the binding (suspending, resuming or renewing it) takes the agent's owner or an `org:admin`, on top of the credential's own checks.
 	//
@@ -3970,7 +3998,7 @@ type CredentialAgentResponse struct {
 
 // CredentialBindRequest Request body for directly binding a credential to an agent.
 //
-// Examples: {"credential_id":"cred_6968b39855d91a3561684b32","expires_at":"2026-12-31T23:59:00Z"}
+// Examples: {"credential_id":"cred_6968b39855d91a3561684b32","expires_at":"2026-12-31T23:59:00Z","max_idle_period":1209600}
 type CredentialBindRequest struct {
 	// CredentialId ID of the credential to bind to the agent.
 	//
@@ -3981,11 +4009,16 @@ type CredentialBindRequest struct {
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// MaxIdlePeriod Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Omit for no idle limit.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
 }
 
 // CredentialBindingEntry Direct agent↔credential binding summary for the /me response (theme 5 phase 1).
 //
-// Examples: {"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}
+// Examples: {"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-11-20T10:00:00Z","max_idle_period":1209600,"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}
 type CredentialBindingEntry struct {
 	// BoundAt When the credential was bound (RFC 3339).
 	//
@@ -4002,7 +4035,7 @@ type CredentialBindingEntry struct {
 	// Examples: false
 	Expired *bool `json:"expired,omitempty"`
 
-	// ExpiredReason Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+	// ExpiredReason Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for its idle limit). Null while the binding holds.
 	//
 	// Examples: null
 	ExpiredReason *GrantEndReason `json:"expired_reason,omitempty"`
@@ -4011,6 +4044,21 @@ type CredentialBindingEntry struct {
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// IdleExpiresAt When the idle limit ends the binding if it is not used before then (RFC 3339); null without an idle limit. Each call moves it later.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	IdleExpiresAt *time.Time `json:"idle_expires_at,omitempty"`
+
+	// LastUsedAt When this agent last made a call through the binding; null if never.
+	//
+	// Examples: 2026-11-20T10:00:00Z
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+
+	// MaxIdlePeriod Idle limit in seconds: the binding ends once it goes this long without a call; null when it has none.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
 
 	// Name Name of the bound credential; null if it no longer exists or cannot be resolved.
 	//
@@ -4045,30 +4093,36 @@ type CredentialBindingEntry struct {
 
 // CredentialBindingListResponse List of direct credential bindings.
 //
-// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]}
+// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"max_idle_period":1209600,"name":"Stripe production key","renewed_at":"2026-12-31T23:59:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]}
 type CredentialBindingListResponse struct {
 	// Data The agent's direct credential bindings.
 	//
-	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]
+	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"max_idle_period":1209600,"name":"Stripe production key","renewed_at":"2026-12-31T23:59:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]
 	Data []CredentialBindingResponse `json:"data"`
 }
 
-// CredentialBindingPatchRequest Request body for renewing a credential binding: set, move or clear its expiry.
+// CredentialBindingPatchRequest Request body for renewing a credential binding: re-certify it, and change its limits.
 //
-// `expires_at` is required but nullable: a body without it is a 422, never read
-// as clearing the expiry.
+// Every renewal restarts the binding's idle clock. Each limit sent is set, and
+// null clears it; a limit left out stays as it is, so an absent field is never
+// read as clearing. An empty body only re-certifies ("still needed").
 //
-// Examples: {"expires_at":"2026-12-31T23:59:00Z"}
+// Examples: {"expires_at":"2026-12-31T23:59:00Z","max_idle_period":1209600}
 type CredentialBindingPatchRequest struct {
-	// ExpiresAt When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Required: send null to clear the expiry; a body without it is a 422.
+	// ExpiresAt When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the end date; leave it out to keep it.
 	//
 	// Examples: 2026-12-31T23:59:00Z
-	ExpiresAt *time.Time `json:"expires_at"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// MaxIdlePeriod Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Send null to remove the idle limit; leave it out to keep it.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
 }
 
 // CredentialBindingResponse Direct agent↔credential binding representation in API responses.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"max_idle_period":1209600,"name":"Stripe production key","renewed_at":"2026-12-31T23:59:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}
 type CredentialBindingResponse struct {
 	// AgentId ID of the agent the credential is bound to.
 	//
@@ -4090,7 +4144,7 @@ type CredentialBindingResponse struct {
 	// Examples: false
 	Expired *bool `json:"expired,omitempty"`
 
-	// ExpiredReason Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+	// ExpiredReason Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.
 	//
 	// Examples: null
 	ExpiredReason *GrantEndReason `json:"expired_reason,omitempty"`
@@ -4105,6 +4159,11 @@ type CredentialBindingResponse struct {
 	// Examples: acb_6968b3989a4f1c2e7d3b5a60
 	Id string `json:"id"`
 
+	// IdleExpiresAt When the idle limit ends the binding if it is not used before then (RFC 3339); null without an idle limit. Each use moves it later.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	IdleExpiresAt *time.Time `json:"idle_expires_at,omitempty"`
+
 	// LastUsedAt When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.
 	//
 	// Examples: 2026-02-03T14:05:00Z
@@ -4115,10 +4174,20 @@ type CredentialBindingResponse struct {
 	// Examples: [{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}]
 	LastUsedByApi *[]ApiLastUseResponse `json:"last_used_by_api,omitempty"`
 
+	// MaxIdlePeriod Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Null when it has no idle limit.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
+
 	// Name Name of the bound credential; null if it cannot be resolved.
 	//
 	// Examples: Stripe production key
 	Name *string `json:"name,omitempty"`
+
+	// RenewedAt When the binding was granted or last renewed (RFC 3339); the idle clock restarts at the later of this and its last use.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	RenewedAt *time.Time `json:"renewed_at,omitempty"`
 
 	// RuleSetId ID of the shared permission rule set attached; null when inline rules apply.
 	//
@@ -5159,7 +5228,7 @@ type ExecutionStatus string
 // When its OAuth grant lacks scopes the session asks for, the response is
 // the vendor challenge for them and the bind lands with the grant.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","credential_id":"cred_6968b39855d91a3561684b32","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"existing_credential","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","credential_id":"cred_6968b39855d91a3561684b32","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"existing_credential","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
 type ExistingCredentialConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -5190,6 +5259,11 @@ type ExistingCredentialConfirmSessionRequest struct {
 	//
 	// Examples: existing_credential
 	Kind ExistingCredentialConfirmSessionRequestKind `json:"kind"`
+
+	// MaxIdlePeriod The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
 
 	// PermissionRules Permission rules to bind for the agent (at most 100).
 	//
@@ -5732,7 +5806,7 @@ type InstanceIdentityResponseBackend string
 
 // IntegrationsConnectRequest Start connecting a credential for a vendor or a registry API.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","api":{"name":"stripe","vendor":"stripe.com","version":"2024-04-10"},"auth_type":"oauth2","name":"GitHub (work)","oauth_app_registration_id":"oar_6968b39821e5f89a6975f501","preferred_flow":"authorization_code","reason":"Needs read access to triage issues in the platform repo.","requested_expires_in":604800,"requested_permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"requested_scopes":["repo","read:user"],"vendor":"github"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","api":{"name":"stripe","vendor":"stripe.com","version":"2024-04-10"},"auth_type":"oauth2","name":"GitHub (work)","oauth_app_registration_id":"oar_6968b39821e5f89a6975f501","preferred_flow":"authorization_code","reason":"Needs read access to triage issues in the platform repo.","requested_expires_in":604800,"requested_max_idle_period":1209600,"requested_permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"requested_scopes":["repo","read:user"],"vendor":"github"}
 type IntegrationsConnectRequest struct {
 	// AgentId ID of the agent to bind the credential to on confirm; it must be an active agent the caller owns and may approve for (`agents:write`), or any agent for `org:admin`. Agent callers must omit it, and when omitted by a user the credential connects unbound.
 	//
@@ -5773,6 +5847,11 @@ type IntegrationsConnectRequest struct {
 	//
 	// Examples: 604800
 	RequestedExpiresIn *int `json:"requested_expires_in,omitempty"`
+
+	// RequestedMaxIdlePeriod The idle limit to ask for, in seconds (1 to 999 days): the access would end once it goes this long without a call. Shown on the review page; the approver decides.
+	//
+	// Examples: 1209600
+	RequestedMaxIdlePeriod *int `json:"requested_max_idle_period,omitempty"`
 
 	// RequestedPermissionRules Permission rules proposed for the agent, shown pre-filled on the review page; nothing is bound until confirm.
 	//
@@ -6043,7 +6122,7 @@ type McpConfigRuntime string
 
 // MeAgent Identity response for an agent actor.
 //
-// Examples: {"approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","credential_bindings":[{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}],"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","permissions":["apis:read","capabilities:execute"],"status":"active","token_permissions":["apis:read","capabilities:execute"],"type":"agent"}
+// Examples: {"approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","credential_bindings":[{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-11-20T10:00:00Z","max_idle_period":1209600,"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}],"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","permissions":["apis:read","capabilities:execute"],"status":"active","token_permissions":["apis:read","capabilities:execute"],"type":"agent"}
 type MeAgent struct {
 	// ApprovedBy ID of the user who approved the agent; null if not approved.
 	//
@@ -6052,7 +6131,7 @@ type MeAgent struct {
 
 	// CredentialBindings Credentials bound directly to the agent.
 	//
-	// Examples: [{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}]
+	// Examples: [{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-11-20T10:00:00Z","max_idle_period":1209600,"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}]
 	CredentialBindings *[]CredentialBindingEntry `json:"credential_bindings,omitempty"`
 
 	// Id Unique ID of the agent.
@@ -7195,7 +7274,7 @@ type OAuthClientUpdateRequest struct {
 //
 // The default variant — a body without “kind“ is this one.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","confirmed_scopes":["repo","read:user"],"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"oauth","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","confirmed_scopes":["repo","read:user"],"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"oauth","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
 type OAuthConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -7226,6 +7305,11 @@ type OAuthConfirmSessionRequest struct {
 	//
 	// Examples: oauth
 	Kind *OAuthConfirmSessionRequestKind `json:"kind,omitempty"`
+
+	// MaxIdlePeriod The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
 
 	// PermissionRules Permission rules to bind for the agent (at most 100).
 	//
@@ -7941,7 +8025,7 @@ type OverlayUpdateRequest struct {
 // the spec may be agent-submitted and the token endpoint receives the
 // client secret.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","authorize_url":"https://github.com/login/oauth/authorize","client_id":"Iv1.a1b2c3d4","client_secret":"example-secret","confirmed_scopes":["repo","read:user"],"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"own_oauth_client","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","token_url":"https://github.com/login/oauth/access_token"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","authorize_url":"https://github.com/login/oauth/authorize","client_id":"Iv1.a1b2c3d4","client_secret":"example-secret","confirmed_scopes":["repo","read:user"],"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"own_oauth_client","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","token_url":"https://github.com/login/oauth/access_token"}
 type OwnOAuthClientConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -7987,6 +8071,11 @@ type OwnOAuthClientConfirmSessionRequest struct {
 	//
 	// Examples: own_oauth_client
 	Kind OwnOAuthClientConfirmSessionRequestKind `json:"kind"`
+
+	// MaxIdlePeriod The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
 
 	// PermissionRules Permission rules to bind for the agent (at most 100).
 	//
@@ -8732,7 +8821,7 @@ type ReviewScopeResponse struct {
 // ReviewScopeResponseClassification Examples: write
 type ReviewScopeResponseClassification string
 
-// ReviewSessionResponse Examples: {"agent":{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","name":"Issue triage bot","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"},"api_reference":{"name":"stripe","vendor":"stripe.com","version":"2024-04-10"},"can_confirm":true,"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","edit":{"binding":{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","credential_id":"cred_6968b39855d91a3561684b32"},"conflicts":[{"kind":"missing_rule","rule_id":"apr_1"}],"current":{"granted_scopes":["gmail.readonly"],"rule_set":{"created_by":"usr_6968b3987ee4c3ec0b4ee3b9","curated":false,"id":"prs_6968b3987c22b63e87e79f05","name":"Stripe read-only","rules":[{"added_by":"agnt_6968b3984d1c238dbe7e2e29","effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"path":"/v1/charges"}]},"rules":[{"added_by":"agnt_6968b3984d1c238dbe7e2e29","effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"path":"/v1/charges"}],"suspended":false},"needs_vendor_consent":true,"other_bound_agents":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29"}],"other_bound_agents_truncated":false,"result":{"rules":[{"added_by":"agnt_6968b3984d1c238dbe7e2e29","effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"path":"/v1/charges"}],"scopes":["gmail.readonly","gmail.send"],"suspended":false,"target":"binding"},"revision":{"id":"csr_6968b3983b8b91c75627bee6","number":2},"widens_access":true},"existing_credentials":[{"can_bind":true,"credential_id":"cred_6968b39855d91a3561684b32","granted_scopes":["repo"],"missing_scopes":["read:user"],"name":"GitHub (work)","needs_vendor_consent":true,"other_bound_agents":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29"}],"other_bound_agents_truncated":false,"type":"oauth2"}],"last_rejected_at":"2026-01-10T16:45:00Z","pinned_hosts":["api.github.com"],"provenance":{"catalog_api_id":"stripe.com","origin":"catalog","revision_id":"3f2b8c1e-7d4a-4e9b-a6c5-1d2e3f4a5b6c","source_url":"https://raw.githubusercontent.com/stripe/openapi/master/spec3.json","submitted_by":"usr_6968b3987ee4c3ec0b4ee3b9"},"reason":"Needs read access to triage issues in the platform repo.","requested_by_actor_id":"agnt_6968b3984d1c238dbe7e2e29","requested_expires_in":604800,"requested_permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"requested_scopes":["repo","read:user"],"resolved_flow":"authorization_code","revision":{"id":"csr_6968b3983b8b91c75627bee6","number":2},"scheme":{"authorization_url":"https://github.com/login/oauth/authorize","field_name":"Authorization","location":"header","token_url":"https://github.com/login/oauth/access_token","type":"oauth2"},"scopes":[{"classification":"write","default":false,"description":"Full control of private repositories","name":"repo","requested":true}],"session_id":"cs_6968b3983b8b91c75627bee5","stale":false,"state":"created","target_kind":"vendor","vendor_display_name":"GitHub","vendor_key":"github"}
+// ReviewSessionResponse Examples: {"agent":{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","name":"Issue triage bot","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"},"api_reference":{"name":"stripe","vendor":"stripe.com","version":"2024-04-10"},"can_confirm":true,"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","edit":{"binding":{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","credential_id":"cred_6968b39855d91a3561684b32"},"conflicts":[{"kind":"missing_rule","rule_id":"apr_1"}],"current":{"granted_scopes":["gmail.readonly"],"rule_set":{"created_by":"usr_6968b3987ee4c3ec0b4ee3b9","curated":false,"id":"prs_6968b3987c22b63e87e79f05","name":"Stripe read-only","rules":[{"added_by":"agnt_6968b3984d1c238dbe7e2e29","effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"path":"/v1/charges"}]},"rules":[{"added_by":"agnt_6968b3984d1c238dbe7e2e29","effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"path":"/v1/charges"}],"suspended":false},"needs_vendor_consent":true,"other_bound_agents":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29"}],"other_bound_agents_truncated":false,"result":{"rules":[{"added_by":"agnt_6968b3984d1c238dbe7e2e29","effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"path":"/v1/charges"}],"scopes":["gmail.readonly","gmail.send"],"suspended":false,"target":"binding"},"revision":{"id":"csr_6968b3983b8b91c75627bee6","number":2},"widens_access":true},"existing_credentials":[{"can_bind":true,"credential_id":"cred_6968b39855d91a3561684b32","granted_scopes":["repo"],"missing_scopes":["read:user"],"name":"GitHub (work)","needs_vendor_consent":true,"other_bound_agents":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29"}],"other_bound_agents_truncated":false,"type":"oauth2"}],"last_rejected_at":"2026-01-10T16:45:00Z","pinned_hosts":["api.github.com"],"provenance":{"catalog_api_id":"stripe.com","origin":"catalog","revision_id":"3f2b8c1e-7d4a-4e9b-a6c5-1d2e3f4a5b6c","source_url":"https://raw.githubusercontent.com/stripe/openapi/master/spec3.json","submitted_by":"usr_6968b3987ee4c3ec0b4ee3b9"},"reason":"Needs read access to triage issues in the platform repo.","requested_by_actor_id":"agnt_6968b3984d1c238dbe7e2e29","requested_expires_in":604800,"requested_max_idle_period":1209600,"requested_permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"requested_scopes":["repo","read:user"],"resolved_flow":"authorization_code","revision":{"id":"csr_6968b3983b8b91c75627bee6","number":2},"scheme":{"authorization_url":"https://github.com/login/oauth/authorize","field_name":"Authorization","location":"header","token_url":"https://github.com/login/oauth/access_token","type":"oauth2"},"scopes":[{"classification":"write","default":false,"description":"Full control of private repositories","name":"repo","requested":true}],"session_id":"cs_6968b3983b8b91c75627bee5","stale":false,"state":"created","target_kind":"vendor","vendor_display_name":"GitHub","vendor_key":"github"}
 type ReviewSessionResponse struct {
 	// Agent Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","name":"Issue triage bot","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","status":"active"}
 	Agent *ReviewAgentResponse `json:"agent,omitempty"`
@@ -8783,6 +8872,11 @@ type ReviewSessionResponse struct {
 	//
 	// Examples: 604800
 	RequestedExpiresIn *int `json:"requested_expires_in,omitempty"`
+
+	// RequestedMaxIdlePeriod The idle limit the requester asked for, in seconds; null when none.
+	//
+	// Examples: 1209600
+	RequestedMaxIdlePeriod *int `json:"requested_max_idle_period,omitempty"`
 
 	// RequestedPermissionRules Examples: [{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}]
 	RequestedPermissionRules *[]PermissionRuleSchema `json:"requested_permission_rules,omitempty"`
@@ -12920,10 +13014,13 @@ type ClientInterface interface {
 
 	// RenewAgentCredentialBindingWithBody Renew a credential binding
 	//
-	// Set, extend or clear when a binding stops authorizing calls.
+	// Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 	//
 	// `expires_at` (future only, otherwise 422) sets or moves the end date; null
-	// clears it, so the binding never expires. This is how an expired binding is
+	// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
+	// limit; null removes it. A field left out stays as it is, and every renewal
+	// restarts the idle clock, so an empty body re-certifies a binding that is
+	// still needed. This is how an expired binding is
 	// renewed, and it never changes `suspended`: renewing does not resume a
 	// suspension, and resuming does not extend an expiry. Renewing re-grants the
 	// credential, so it takes the same checks as `:resume`: the caller must own
@@ -12939,10 +13036,13 @@ type ClientInterface interface {
 
 	// RenewAgentCredentialBinding Renew a credential binding
 	//
-	// Set, extend or clear when a binding stops authorizing calls.
+	// Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 	//
 	// `expires_at` (future only, otherwise 422) sets or moves the end date; null
-	// clears it, so the binding never expires. This is how an expired binding is
+	// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
+	// limit; null removes it. A field left out stays as it is, and every renewal
+	// restarts the idle clock, so an empty body re-certifies a binding that is
+	// still needed. This is how an expired binding is
 	// renewed, and it never changes `suspended`: renewing does not resume a
 	// suspension, and resuming does not extend an expiry. Renewing re-grants the
 	// credential, so it takes the same checks as `:resume`: the caller must own
@@ -16381,10 +16481,13 @@ func (c *Client) UnbindAgentCredential(ctx context.Context, agentId string, cred
 
 // RenewAgentCredentialBindingWithBody Renew a credential binding
 //
-// Set, extend or clear when a binding stops authorizing calls.
+// Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 //
 // `expires_at` (future only, otherwise 422) sets or moves the end date; null
-// clears it, so the binding never expires. This is how an expired binding is
+// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
+// limit; null removes it. A field left out stays as it is, and every renewal
+// restarts the idle clock, so an empty body re-certifies a binding that is
+// still needed. This is how an expired binding is
 // renewed, and it never changes `suspended`: renewing does not resume a
 // suspension, and resuming does not extend an expiry. Renewing re-grants the
 // credential, so it takes the same checks as `:resume`: the caller must own
@@ -16410,10 +16513,13 @@ func (c *Client) RenewAgentCredentialBindingWithBody(ctx context.Context, agentI
 
 // RenewAgentCredentialBinding Renew a credential binding
 //
-// Set, extend or clear when a binding stops authorizing calls.
+// Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 //
 // `expires_at` (future only, otherwise 422) sets or moves the end date; null
-// clears it, so the binding never expires. This is how an expired binding is
+// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
+// limit; null removes it. A field left out stays as it is, and every renewal
+// restarts the idle clock, so an empty body re-certifies a binding that is
+// still needed. This is how an expired binding is
 // renewed, and it never changes `suspended`: renewing does not resume a
 // suspension, and resuming does not extend an expiry. Renewing re-grants the
 // credential, so it takes the same checks as `:resume`: the caller must own
@@ -30526,10 +30632,13 @@ type ClientWithResponsesInterface interface {
 
 	// RenewAgentCredentialBindingWithBodyWithResponse Renew a credential binding
 	//
-	// Set, extend or clear when a binding stops authorizing calls.
+	// Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 	//
 	// `expires_at` (future only, otherwise 422) sets or moves the end date; null
-	// clears it, so the binding never expires. This is how an expired binding is
+	// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
+	// limit; null removes it. A field left out stays as it is, and every renewal
+	// restarts the idle clock, so an empty body re-certifies a binding that is
+	// still needed. This is how an expired binding is
 	// renewed, and it never changes `suspended`: renewing does not resume a
 	// suspension, and resuming does not extend an expiry. Renewing re-grants the
 	// credential, so it takes the same checks as `:resume`: the caller must own
@@ -30545,10 +30654,13 @@ type ClientWithResponsesInterface interface {
 
 	// RenewAgentCredentialBindingWithResponse Renew a credential binding
 	//
-	// Set, extend or clear when a binding stops authorizing calls.
+	// Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 	//
 	// `expires_at` (future only, otherwise 422) sets or moves the end date; null
-	// clears it, so the binding never expires. This is how an expired binding is
+	// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
+	// limit; null removes it. A field left out stays as it is, and every renewal
+	// restarts the idle clock, so an empty body re-certifies a binding that is
+	// still needed. This is how an expired binding is
 	// renewed, and it never changes `suspended`: renewing does not resume a
 	// suspension, and resuming does not extend an expiry. Renewing re-grants the
 	// credential, so it takes the same checks as `:resume`: the caller must own
@@ -50046,10 +50158,13 @@ func (c *ClientWithResponses) UnbindAgentCredentialWithResponse(ctx context.Cont
 
 // RenewAgentCredentialBindingWithBodyWithResponse Renew a credential binding
 //
-// Set, extend or clear when a binding stops authorizing calls.
+// Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 //
 // `expires_at` (future only, otherwise 422) sets or moves the end date; null
-// clears it, so the binding never expires. This is how an expired binding is
+// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
+// limit; null removes it. A field left out stays as it is, and every renewal
+// restarts the idle clock, so an empty body re-certifies a binding that is
+// still needed. This is how an expired binding is
 // renewed, and it never changes `suspended`: renewing does not resume a
 // suspension, and resuming does not extend an expiry. Renewing re-grants the
 // credential, so it takes the same checks as `:resume`: the caller must own
@@ -50071,10 +50186,13 @@ func (c *ClientWithResponses) RenewAgentCredentialBindingWithBodyWithResponse(ct
 
 // RenewAgentCredentialBindingWithResponse Renew a credential binding
 //
-// Set, extend or clear when a binding stops authorizing calls.
+// Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 //
 // `expires_at` (future only, otherwise 422) sets or moves the end date; null
-// clears it, so the binding never expires. This is how an expired binding is
+// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
+// limit; null removes it. A field left out stays as it is, and every renewal
+// restarts the idle clock, so an empty body re-certifies a binding that is
+// still needed. This is how an expired binding is
 // renewed, and it never changes `suspended`: renewing does not resume a
 // suspension, and resuming does not extend an expiry. Renewing re-grants the
 // credential, so it takes the same checks as `:resume`: the caller must own

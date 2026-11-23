@@ -6,7 +6,8 @@ from contextlib import asynccontextmanager, nullcontext
 from sqlalchemy import bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jentic_one.shared.auth.agent_expiry import as_utc, binding_expired
+from jentic_one.shared.auth.agent_expiry import binding_expired
+from jentic_one.shared.auth.grant_policy import GRANT_POLICY_COLUMNS, GrantPolicy, grant_deadline
 from jentic_one.shared.db import DatabaseSession
 from jentic_one.shared.db.errors import DatabaseConsistencyError
 from jentic_one.shared.db.locks import lock_agent_bindings, lock_credential_bindings
@@ -46,13 +47,17 @@ async def guard_binding_write(
     await lock_agent_bindings(admin, agent_id)
     await lock_credential_bindings(admin, credential_id)
     sql = (
-        "SELECT credential_id, suspended, expires_at FROM agent_credential_bindings "
+        f"SELECT credential_id, suspended, {GRANT_POLICY_COLUMNS} FROM agent_credential_bindings "
         "WHERE agent_id = :agent_id ORDER BY credential_id"
     )
     if admin.get_bind().dialect.name == "postgresql":
         sql += " FOR UPDATE"
     rows = (await admin.execute(text(sql), {"agent_id": agent_id})).all()
-    policies = [row for row in rows if row.suspended or row.expires_at is not None]
+    policies = [
+        row
+        for row in rows
+        if row.suspended or row.expires_at is not None or row.max_idle_period is not None
+    ]
     deadline = None
     if policies:
         async with (
@@ -77,8 +82,15 @@ async def guard_binding_write(
         ]
         if any(row.suspended for row in overlaps):
             raise suspended_error(agent_id)
+        # The earliest moment any overlapping binding's policy ends it (its end
+        # date or idle limit), checked now and again after the write.
         deadline = min(
-            (as_utc(row.expires_at) for row in overlaps if row.expires_at is not None), default=None
+            (
+                d
+                for d in (grant_deadline(GrantPolicy.from_row(row)) for row in overlaps)
+                if d is not None
+            ),
+            default=None,
         )
         if binding_expired(deadline):
             raise expired_error(agent_id)

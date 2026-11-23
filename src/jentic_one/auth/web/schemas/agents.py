@@ -7,7 +7,11 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from jentic_one.shared.auth.grant_policy import GrantEndReason
+from jentic_one.shared.auth.grant_policy import (
+    MAX_IDLE_PERIOD_SECONDS,
+    MIN_IDLE_PERIOD_SECONDS,
+    GrantEndReason,
+)
 from jentic_one.shared.schemas import ServedApiRef
 from jentic_one.shared.web import openapi_examples as ex
 from jentic_one.shared.web.sensitive import SENSITIVE
@@ -44,6 +48,14 @@ _BINDING_EXPIRES_AT_DESCRIPTION = (
     " moment the broker refuses the agent's calls through it with 403"
     " `credential_binding_expired`, whatever its token. The binding keeps its permission"
     " rules; an owner renews it by setting a later time or null."
+)
+
+_BINDING_IDLE_DESCRIPTION = (
+    "Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends"
+    " once it has gone this long without a call, and the broker then refuses calls"
+    " through it with 403 `credential_binding_expired`. Each call restarts the clock"
+    " (counted at most about hourly), and so does every renewal; a binding that is never"
+    " used ends one idle period after it was granted."
 )
 
 
@@ -226,9 +238,31 @@ class CredentialBindingResponse(BaseModel):
         default=None,
         description=(
             "Which limit ended the binding while `expired` is true: `end_date`"
-            " (`expires_at` passed). Null while the binding holds."
+            " (`expires_at` passed) or `idle` (unused for `max_idle_period`)."
+            " Null while the binding holds."
         ),
         examples=[None],
+    )
+    max_idle_period: int | None = Field(
+        default=None,
+        description=_BINDING_IDLE_DESCRIPTION + " Null when it has no idle limit.",
+        examples=[1_209_600],
+    )
+    idle_expires_at: datetime | None = Field(
+        default=None,
+        description=(
+            "When the idle limit ends the binding if it is not used before then (RFC 3339);"
+            " null without an idle limit. Each use moves it later."
+        ),
+        examples=[_EX_EXPIRES_AT],
+    )
+    renewed_at: datetime | None = Field(
+        default=None,
+        description=(
+            "When the binding was granted or last renewed (RFC 3339); the idle clock"
+            " restarts at the later of this and its last use."
+        ),
+        examples=[_EX_EXPIRES_AT],
     )
     # Shared permission rule set the binding points at (None = inline rules).
     rule_set_id: str | None = Field(
@@ -427,19 +461,32 @@ class ApiKeyHistoryResponse(BaseModel):
 
 
 class CredentialBindingPatchRequest(BaseModel):
-    """Request body for renewing a credential binding: set, move or clear its expiry.
+    """Request body for renewing a credential binding: re-certify it, and change its limits.
 
-    `expires_at` is required but nullable: a body without it is a 422, never read
-    as clearing the expiry.
+    Every renewal restarts the binding's idle clock. Each limit sent is set, and
+    null clears it; a limit left out stays as it is, so an absent field is never
+    read as clearing. An empty body only re-certifies ("still needed").
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     expires_at: datetime | None = Field(
-        ...,
+        default=None,
         description=(
             _BINDING_EXPIRES_AT_DESCRIPTION
-            + " Required: send null to clear the expiry; a body without it is a 422."
+            + " Send null to clear the end date; leave it out to keep it."
         ),
         examples=[_EX_EXPIRES_AT],
+    )
+    max_idle_period: int | None = Field(
+        default=None,
+        ge=MIN_IDLE_PERIOD_SECONDS,
+        le=MAX_IDLE_PERIOD_SECONDS,
+        description=(
+            _BINDING_IDLE_DESCRIPTION
+            + " Send null to remove the idle limit; leave it out to keep it."
+        ),
+        examples=[1_209_600],
     )
 
     _check_expires_at = field_validator("expires_at")(_require_future)
@@ -458,6 +505,13 @@ class CredentialBindRequest(BaseModel):
         default=None,
         description=_BINDING_EXPIRES_AT_DESCRIPTION + " Omit for a binding that never expires.",
         examples=[_EX_EXPIRES_AT],
+    )
+    max_idle_period: int | None = Field(
+        default=None,
+        ge=MIN_IDLE_PERIOD_SECONDS,
+        le=MAX_IDLE_PERIOD_SECONDS,
+        description=_BINDING_IDLE_DESCRIPTION + " Omit for no idle limit.",
+        examples=[1_209_600],
     )
 
     _check_expires_at = field_validator("expires_at")(_require_future)

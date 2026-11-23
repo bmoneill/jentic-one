@@ -15,3 +15,14 @@ func TestParseAccessDuration(t *testing.T) {
 		}
 	}
 }
+
+func TestParseIdleLimit(t *testing.T) {
+	if got, err := parseIdleLimit("14d"); err != nil || got != 14*86400 {
+		t.Errorf("parseIdleLimit(14d) = %d, %v", got, err)
+	}
+	for _, in := range []string{"12h", "23h", "1000d"} {
+		if _, err := parseIdleLimit(in); err == nil {
+			t.Errorf("parseIdleLimit(%q) succeeded; want an error", in)
+		}
+	}
+}

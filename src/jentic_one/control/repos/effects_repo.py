@@ -7,13 +7,13 @@ NOTHING for idempotent inserts without requiring rollback.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import NamedTuple
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from jentic_one.shared.auth.agent_expiry import binding_expired
+from jentic_one.shared.auth.grant_policy import GRANT_POLICY_COLUMNS, GrantPolicy, grant_ended
 from jentic_one.shared.db.ids import generate_ksuid
 from jentic_one.shared.db.locks import lock_agent_bindings, lock_credential_bindings
 
@@ -73,6 +73,7 @@ class EffectsRepository:
         rule_set_id: str | None,
         created_by: str,
         expires_at: datetime | None = None,
+        max_idle_period: int | None = None,
     ) -> tuple[str, bool]:
         """Create a direct agent↔credential binding idempotently via raw SQL (admin DB).
 
@@ -80,7 +81,8 @@ class EffectsRepository:
         untouched (its ``rule_set_id``/``suspended`` state and its policy are
         authoritative) — the retry/reconcile path must converge without
         clobbering operator edits made between attempts. ``expires_at`` is the
-        end date the approver chose; it applies only to a new binding.
+        end date the approver chose and ``max_idle_period`` the idle limit; they
+        apply only to a new binding.
         """
         await lock_agent_bindings(session, agent_id)
         await lock_credential_bindings(session, credential_id)
@@ -88,8 +90,10 @@ class EffectsRepository:
         result = await session.execute(
             text(
                 "INSERT INTO agent_credential_bindings "
-                "(id, agent_id, credential_id, rule_set_id, created_by, expires_at) "
-                "VALUES (:id, :agent_id, :credential_id, :rule_set_id, :created_by, :expires_at) "
+                "(id, agent_id, credential_id, rule_set_id, created_by, expires_at, "
+                "max_idle_period, renewed_at) "
+                "VALUES (:id, :agent_id, :credential_id, :rule_set_id, :created_by, :expires_at, "
+                ":max_idle_period, :renewed_at) "
                 "ON CONFLICT (agent_id, credential_id) DO NOTHING "
                 "RETURNING id"
             ),
@@ -100,6 +104,9 @@ class EffectsRepository:
                 "rule_set_id": rule_set_id,
                 "created_by": created_by,
                 "expires_at": expires_at,
+                "max_idle_period": max_idle_period,
+                # Granting starts the idle clock.
+                "renewed_at": datetime.now(UTC),
             },
         )
         inserted_id = result.scalar_one_or_none()
@@ -149,12 +156,17 @@ class EffectsRepository:
         """
         result = await session.execute(
             text(
-                "SELECT credential_id, expires_at FROM agent_credential_bindings "
-                "WHERE agent_id = :agent_id AND suspended = false AND expires_at IS NOT NULL"
+                f"SELECT credential_id, {GRANT_POLICY_COLUMNS} FROM agent_credential_bindings "
+                "WHERE agent_id = :agent_id AND suspended = false "
+                "AND (expires_at IS NOT NULL OR max_idle_period IS NOT NULL)"
             ),
             {"agent_id": agent_id},
         )
-        return [str(row[0]) for row in result.all() if binding_expired(row[1], now=now)]
+        return [
+            str(row.credential_id)
+            for row in result.all()
+            if grant_ended(GrantPolicy.from_row(row), now=now)
+        ]
 
     @staticmethod
     async def unbind_agent_from_credential(

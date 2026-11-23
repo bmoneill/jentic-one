@@ -26,7 +26,7 @@ export type CredentialBindingResponse = {
      */
     expired?: boolean;
     /**
-     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.
      */
     expired_reason?: (GrantEndReason | null);
     /**
@@ -38,6 +38,10 @@ export type CredentialBindingResponse = {
      */
     id: string;
     /**
+     * When the idle limit ends the binding if it is not used before then (RFC 3339); null without an idle limit. Each use moves it later.
+     */
+    idle_expires_at?: (string | null);
+    /**
      * When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.
      */
     last_used_at?: (string | null);
@@ -46,9 +50,17 @@ export type CredentialBindingResponse = {
      */
     last_used_by_api?: Array<ApiLastUseResponse>;
     /**
+     * Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Null when it has no idle limit.
+     */
+    max_idle_period?: (number | null);
+    /**
      * Name of the bound credential; null if it cannot be resolved.
      */
     name?: (string | null);
+    /**
+     * When the binding was granted or last renewed (RFC 3339); the idle clock restarts at the later of this and its last use.
+     */
+    renewed_at?: (string | null);
     /**
      * ID of the shared permission rule set attached; null when inline rules apply.
      */

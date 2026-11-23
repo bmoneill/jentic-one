@@ -3,15 +3,20 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Request body for renewing a credential binding: set, move or clear its expiry.
+ * Request body for renewing a credential binding: re-certify it, and change its limits.
  *
- * `expires_at` is required but nullable: a body without it is a 422, never read
- * as clearing the expiry.
+ * Every renewal restarts the binding's idle clock. Each limit sent is set, and
+ * null clears it; a limit left out stays as it is, so an absent field is never
+ * read as clearing. An empty body only re-certifies ("still needed").
  */
 export type CredentialBindingPatchRequest = {
     /**
-     * When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Required: send null to clear the expiry; a body without it is a 422.
+     * When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the end date; leave it out to keep it.
      */
-    expires_at: (string | null);
+    expires_at?: (string | null);
+    /**
+     * Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Send null to remove the idle limit; leave it out to keep it.
+     */
+    max_idle_period?: (number | null);
 };
 

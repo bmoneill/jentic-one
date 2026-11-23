@@ -35,6 +35,10 @@ def _future_expiry(value: datetime | None) -> datetime | None:
     return aware
 
 
+#: Idle limits a connect may ask for or set, in seconds (1 to 999 days).
+MIN_IDLE_PERIOD_S = 86_400
+MAX_IDLE_PERIOD_S = 999 * 86_400
+
 #: The binding's end date chosen on confirm; null or absent binds with none.
 ConfirmExpiresAt = Annotated[datetime | None, AfterValidator(_future_expiry)]
 
@@ -293,6 +297,16 @@ class IntegrationsConnectRequest(BaseModel):
             "How long the requested access should last, in seconds, counted from approval "
             "(at most 999 days). Shown preselected on the review page; the approver decides "
             "the binding's actual end date. Omit to ask for nothing in particular."
+        ),
+    )
+    requested_max_idle_period: int | None = Field(
+        default=None,
+        ge=MIN_IDLE_PERIOD_S,
+        le=MAX_IDLE_PERIOD_S,
+        examples=[1_209_600],
+        description=(
+            "The idle limit to ask for, in seconds (1 to 999 days): the access would end once "
+            "it goes this long without a call. Shown on the review page; the approver decides."
         ),
     )
     # As-requested permission rules — typically the initiating agent's ask,
@@ -1020,6 +1034,11 @@ class ReviewSessionResponse(BaseModel):
             "when nothing was asked. The approver chooses the actual end date on confirm."
         ),
     )
+    requested_max_idle_period: int | None = Field(
+        default=None,
+        examples=[1_209_600],
+        description="The idle limit the requester asked for, in seconds; null when none.",
+    )
     provenance: ReviewProvenanceResponse | None = None
     agent: ReviewAgentResponse | None = None
     scheme: ReviewSchemeResponse | None = None
@@ -1200,6 +1219,17 @@ class OAuthConfirmSessionRequest(BaseModel):
         examples=["2026-12-31T23:59:00Z"],
         description=_CONFIRM_EXPIRES_AT_DESCRIPTION,
     )
+    max_idle_period: int | None = Field(
+        default=None,
+        ge=MIN_IDLE_PERIOD_S,
+        le=MAX_IDLE_PERIOD_S,
+        examples=[1_209_600],
+        description=(
+            "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose "
+            "it: the binding ends once it goes this long without a call. Null or absent sets "
+            "none. Ignored when the agent is already bound to the credential."
+        ),
+    )
 
 
 class _ReviewedConfirm(BaseModel):
@@ -1242,6 +1272,17 @@ class _ReviewedConfirm(BaseModel):
         default=None,
         examples=["2026-12-31T23:59:00Z"],
         description=_CONFIRM_EXPIRES_AT_DESCRIPTION,
+    )
+    max_idle_period: int | None = Field(
+        default=None,
+        ge=MIN_IDLE_PERIOD_S,
+        le=MAX_IDLE_PERIOD_S,
+        examples=[1_209_600],
+        description=(
+            "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose "
+            "it: the binding ends once it goes this long without a call. Null or absent sets "
+            "none. Ignored when the agent is already bound to the credential."
+        ),
     )
 
 

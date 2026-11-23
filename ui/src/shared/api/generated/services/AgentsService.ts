@@ -469,10 +469,13 @@ export class AgentsService {
     }
     /**
      * Renew a credential binding
-     * Set, extend or clear when a binding stops authorizing calls.
+     * Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
      *
      * `expires_at` (future only, otherwise 422) sets or moves the end date; null
-     * clears it, so the binding never expires. This is how an expired binding is
+     * clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
+     * limit; null removes it. A field left out stays as it is, and every renewal
+     * restarts the idle clock, so an empty body re-certifies a binding that is
+     * still needed. This is how an expired binding is
      * renewed, and it never changes `suspended`: renewing does not resume a
      * suspension, and resuming does not extend an expiry. Renewing re-grants the
      * credential, so it takes the same checks as `:resume`: the caller must own
@@ -497,10 +500,11 @@ export class AgentsService {
          */
         credentialId: string,
         /**
-         * Request body for renewing a credential binding: set, move or clear its expiry.
+         * Request body for renewing a credential binding: re-certify it, and change its limits.
          *
-         * `expires_at` is required but nullable: a body without it is a 422, never read
-         * as clearing the expiry.
+         * Every renewal restarts the binding's idle clock. Each limit sent is set, and
+         * null clears it; a limit left out stays as it is, so an absent field is never
+         * read as clearing. An empty body only re-certifies ("still needed").
          */
         requestBody: CredentialBindingPatchRequest,
     }): CancelablePromise<CredentialBindingResponse> {

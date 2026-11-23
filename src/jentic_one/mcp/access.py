@@ -57,7 +57,9 @@ from jentic_one.control.services.vendors.service import (
 from jentic_one.control.web.errors import check_access_directive
 from jentic_one.control.web.routers.credentials import binding_access_response
 from jentic_one.control.web.schemas.integrations import (
+    MAX_IDLE_PERIOD_S,
     MAX_REQUESTED_EXPIRES_IN_S,
+    MIN_IDLE_PERIOD_S,
     SCOPE_COMMENT_MAX,
     ConnectOptionsResponse,
 )
@@ -93,6 +95,7 @@ _REQUEST_CONNECTION_PARAMS = [
     ParamSpec("oauth_app_registration_id", "string", ("registration_id",)),
     ParamSpec("requested_permission_rules", "json", ("permission_rules",)),
     ParamSpec("requested_expires_in", "string"),
+    ParamSpec("requested_max_idle_period", "string"),
 ]
 
 #: Guidance when the agent already has an open request for the target (Go:
@@ -462,6 +465,21 @@ def _requested_expires_in(raw: object) -> int | None:
     return seconds
 
 
+def _requested_max_idle_period(raw: object) -> int | None:
+    """``requested_max_idle_period`` as seconds, 1 to 999 days (Go: same rule)."""
+    if raw is None or raw == "":
+        return None
+    if not isinstance(raw, str):
+        raise invalid_params("requested_max_idle_period must be a duration such as 14d")
+    try:
+        seconds = parse_duration_seconds(raw)
+    except ValueError as exc:
+        raise invalid_params(f"requested_max_idle_period: {exc}") from None
+    if not MIN_IDLE_PERIOD_S <= seconds <= MAX_IDLE_PERIOD_S:
+        raise invalid_params("requested_max_idle_period must be between 1 day and 999 days")
+    return seconds
+
+
 async def handle_request_connection(
     env: CallEnv, arguments: dict[str, Any]
 ) -> mcp_types.CallToolResult:
@@ -524,6 +542,7 @@ async def handle_request_connection(
         )
     requested_rules = _requested_permission_rules(args.get("requested_permission_rules"))
     requested_expires_in = _requested_expires_in(args.get("requested_expires_in"))
+    requested_max_idle_period = _requested_max_idle_period(args.get("requested_max_idle_period"))
     try:
         # The route's any-of gate (credentials:connect | credentials:write);
         # agents hold credentials:connect by default.
@@ -563,6 +582,7 @@ async def handle_request_connection(
             reason=reason or None,
             oauth_app_registration_id=registration_id,
             requested_expires_in=requested_expires_in,
+            requested_max_idle_period=requested_max_idle_period,
         )
     except (
         ManualFlowsDisabledError,

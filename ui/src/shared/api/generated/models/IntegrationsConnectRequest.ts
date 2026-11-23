@@ -41,6 +41,10 @@ export type IntegrationsConnectRequest = {
      */
     requested_expires_in?: (number | null);
     /**
+     * The idle limit to ask for, in seconds (1 to 999 days): the access would end once it goes this long without a call. Shown on the review page; the approver decides.
+     */
+    requested_max_idle_period?: (number | null);
+    /**
      * Permission rules proposed for the agent, shown pre-filled on the review page; nothing is bound until confirm.
      */
     requested_permission_rules?: Array<PermissionRuleSchema>;

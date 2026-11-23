@@ -151,3 +151,47 @@ async def test_http_confirm_refuses_an_end_date_in_the_past(env: Context) -> Non
         response = await owner.post(f"/connect-sessions/{session_id}:confirm", json=body)
     assert response.status_code == 422, response.text
     assert "expires_at must be in the future" in response.text
+
+
+async def test_the_idle_limit_is_requested_and_set_on_confirm(env: Context) -> None:
+    await import_spec(env, KEY_SCHEME)
+    created = await connect(env, requested_max_idle_period=14 * 86_400)
+    review = await svc(env).get_review_data(created.session_id, poll_token=None, identity=OWNER)
+    assert review.requested_max_idle_period == 14 * 86_400
+
+    base = checks(
+        await digest(env, created.session_id), revision_id=await revision(env, created.session_id)
+    )
+    await svc(env).confirm_variant(
+        created.session_id,
+        poll_token=None,
+        variant=SecretConfirm(
+            kind="api_key",
+            secret=ApiKeySecret(key=SecretStr(_SECRET)),
+            checks=replace(base, max_idle_period=7 * 86_400),
+        ),
+        identity=OWNER,
+    )
+
+    credential_id = await _credential_of(env, created.session_id)
+    async with env.admin_db.session() as session:
+        limit, renewed = (
+            await session.execute(
+                text(
+                    "SELECT max_idle_period, renewed_at FROM agent_credential_bindings"
+                    " WHERE agent_id = :a AND credential_id = :c"
+                ),
+                {"a": AGENT_ID, "c": credential_id},
+            )
+        ).one()
+    assert limit == 7 * 86_400
+    assert renewed is not None
+
+
+async def test_http_refuses_an_idle_limit_under_a_day(env: Context) -> None:
+    await import_spec(env, KEY_SCHEME)
+    async with client(env, AGENT) as agent:
+        refused = await agent.post(
+            "/integrations:connect", json={**API_BODY, "requested_max_idle_period": 3_600}
+        )
+    assert refused.status_code == 422, refused.text

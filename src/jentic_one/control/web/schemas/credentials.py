@@ -1062,7 +1062,24 @@ class CredentialAgentResponse(BaseModel):
         examples=[None],
         description=(
             "Which limit ended the binding while `expired` is true: `end_date`"
-            " (`expires_at` passed). Null while the binding holds."
+            " (`expires_at` passed) or `idle` (unused for `max_idle_period`)."
+            " Null while the binding holds."
+        ),
+    )
+    max_idle_period: int | None = Field(
+        default=None,
+        examples=[1_209_600],
+        description=(
+            "Idle limit in seconds: the binding ends once it goes this long without a call."
+            " Null when it has none."
+        ),
+    )
+    idle_expires_at: datetime | None = Field(
+        default=None,
+        examples=["2026-12-31T23:59:00Z"],
+        description=(
+            "When the idle limit ends the binding if it is not used before then (RFC 3339);"
+            " null without an idle limit."
         ),
     )
     last_used_at: datetime | None = Field(

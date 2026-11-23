@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, Index, String, UniqueConstraint, text
+from sqlalchemy import Boolean, Index, Integer, String, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -83,3 +83,14 @@ class AgentCredentialBinding(AuditableMixin, AdminBase):
     # and independent of ``suspended``: resuming never extends it and renewing
     # never resumes. A renewal (PATCH) sets, moves or clears it.
     expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # Idle limit, in whole seconds: the binding ends once it has gone this
+    # long without a use. None = no idle limit. Enforced at read time like
+    # ``expires_at``; the idle clock runs from the later of ``last_used_at``
+    # and ``renewed_at`` (falling back to ``bound_at``).
+    max_idle_period: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # When the agent last made a call through the binding, written by the
+    # broker at most about once an hour. None = never used.
+    last_used_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # When the binding was granted or last renewed (PATCH): restarts the idle
+    # clock without counting as a use.
+    renewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
