@@ -45,9 +45,10 @@ ConfirmExpiresAt = Annotated[datetime | None, AfterValidator(_future_expiry)]
 
 _CONFIRM_EXPIRES_AT_DESCRIPTION = (
     "When the new binding stops authorizing calls (RFC 3339, in the future), as the "
-    "approver chose it; worked out when the approver confirms. Null or absent binds with no "
-    "expiry. Ignored when the agent is already bound to the credential: that binding keeps "
-    "its own end date."
+    "approver chose it; worked out when the approver confirms. Null binds with no expiry "
+    "(refused under an org maximum). A body that sets none of `expires_at`, "
+    "`max_idle_period` and `max_quota` gets the org's default policy. Ignored when the "
+    "agent is already bound to the credential: that binding keeps its own end date."
 )
 
 # ---------------------------------------------------------------------------

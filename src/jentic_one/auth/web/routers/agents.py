@@ -34,14 +34,17 @@ from jentic_one.auth.web.schemas.agents import (
     CredentialBindingResponse,
     CredentialBindRequest,
     DenyRequest,
+    DurationLimitResponse,
     EndingSoonBindingListResponse,
     EndingSoonBindingResponse,
+    GrantPolicyLimitsResponse,
     JwksUpdateRequest,
 )
 from jentic_one.shared.auth.grant_policy import UNSET
 from jentic_one.shared.auth.identity import Identity
+from jentic_one.shared.context import Context
 from jentic_one.shared.models import ActorType
-from jentic_one.shared.web import get_current_identity
+from jentic_one.shared.web import get_ctx, get_current_identity
 from jentic_one.shared.web import openapi_examples as ex
 from jentic_one.shared.web.openapi_responses import conflict, not_found, with_responses
 
@@ -150,6 +153,40 @@ async def list_agents(
         data=[_agent_response(a) for a in page.data],
         has_more=page.has_more,
         next_cursor=page.next_cursor,
+    )
+
+
+@router.get(
+    "/agents/credentials:policy",
+    operation_id="getGrantPolicyLimits",
+    summary="Get the org's grant defaults and maximums",
+)
+async def get_grant_policy_limits(
+    identity: Identity = get_current_identity(),
+    ctx: Context = Depends(get_ctx),
+) -> GrantPolicyLimitsResponse:
+    """The org's defaults and maximums for new credential grants and agents.
+
+    A default applies when a request creating a grant (or an agent) sets no
+    policy; a maximum refuses (422 `grant_policy_limit_exceeded`) anything
+    longer, or no limit at all, on every path that creates or renews one. The
+    console preselects the defaults and disables choices above a maximum.
+    Readable by any signed-in caller.
+    """
+    del identity
+    cfg = ctx.config.grant_expiry
+    return GrantPolicyLimitsResponse(
+        expires_in=DurationLimitResponse(
+            default_seconds=cfg.default_expires_in_s, max_seconds=cfg.max_expires_in_s
+        ),
+        idle_period=DurationLimitResponse(
+            default_seconds=cfg.default_idle_period_s, max_seconds=cfg.max_idle_period_s
+        ),
+        single_use_by_default=cfg.single_use_by_default,
+        agent_expires_in=DurationLimitResponse(
+            default_seconds=cfg.agent_default_expires_in_s,
+            max_seconds=cfg.agent_max_expires_in_s,
+        ),
     )
 
 
@@ -575,10 +612,14 @@ async def bind_credential(
     binding = await agent_svc.bind_credential(
         agent_id,
         credential_id=body.credential_id,
-        expires_at=body.expires_at,
-        max_idle_period=body.max_idle_period,
+        # A limit left out of the body is unset: with none set, the org's
+        # default policy applies.
+        expires_at=body.expires_at if "expires_at" in body.model_fields_set else UNSET,
+        max_idle_period=(
+            body.max_idle_period if "max_idle_period" in body.model_fields_set else UNSET
+        ),
         idle_warning=body.idle_warning,
-        max_quota=body.max_quota,
+        max_quota=body.max_quota if "max_quota" in body.model_fields_set else UNSET,
         identity=identity,
     )
     return _credential_binding_response(binding)

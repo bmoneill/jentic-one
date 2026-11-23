@@ -393,6 +393,24 @@ async def test_only_a_reviewer_who_may_renew_can_grant_fresh_access(
     assert (await _binding(ctx, _OTHERS_CREDENTIAL)).max_idle_period == 14 * 86_400
 
 
+async def test_fresh_access_respects_the_org_maximum(
+    integration_context: Context, parties: _Parties, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ctx = integration_context
+    monkeypatch.setattr(ctx.config.grant_expiry, "max_expires_in_s", 7 * 86_400)
+    held_id = (await _call(ctx, parties.agent))["held_execution_id"]
+    async with _admin_client(ctx, parties.owner) as client:
+        # "No expiry" (every limit left out) is refused under a maximum.
+        refused = await client.post(
+            f"/executions/holds/{held_id}:decide",
+            json={"decision": "approve", "renewal": {}},
+        )
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["type"].endswith("grant_policy_limit_exceeded")
+        detail = (await client.get(f"/executions/holds/{held_id}")).json()
+    assert detail["state"] == "pending"
+
+
 async def test_renewal_holds_never_count_against_the_pending_cap(
     integration_context: Context, parties: _Parties
 ) -> None:

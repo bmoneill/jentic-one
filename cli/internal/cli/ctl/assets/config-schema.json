@@ -1034,6 +1034,66 @@
     "GrantExpiryConfig": {
       "description": "Settings for credential grant (agent binding) expiry.",
       "properties": {
+        "agent_default_expires_in_s": {
+          "anyOf": [
+            {
+              "maximum": 86313600,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Default lifetime, in seconds, of an agent created or approved without an expiry. Unset: such an agent does not expire.",
+          "title": "Agent Default Expires In S"
+        },
+        "agent_max_expires_in_s": {
+          "anyOf": [
+            {
+              "maximum": 86313600,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Longest an agent may last, in seconds from when its expiry is set. When set, every agent must expire: no expiry, or a later one, is refused (422).",
+          "title": "Agent Max Expires In S"
+        },
+        "default_expires_in_s": {
+          "anyOf": [
+            {
+              "maximum": 86313600,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Default lifetime, in seconds, of a new credential grant whose creation sets no policy: it ends this long after it is granted. Unset (the open-source default): such a grant has no end date.",
+          "title": "Default Expires In S"
+        },
+        "default_idle_period_s": {
+          "anyOf": [
+            {
+              "maximum": 86313600,
+              "minimum": 86400,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Default idle limit, in seconds, of a new credential grant whose creation sets no policy. Unset: no idle limit.",
+          "title": "Default Idle Period S"
+        },
         "idle_warning_interval_s": {
           "default": 86400,
           "description": "Seconds between runs of the job that warns an agent's owner before a binding with the idle warning on reaches its idle limit. Defaults to once a day; the warning window should be at least twice this, so every binding is seen at least once inside it.",
@@ -1054,6 +1114,42 @@
           "minimum": 1,
           "title": "Idle Warning Window H",
           "type": "integer"
+        },
+        "max_expires_in_s": {
+          "anyOf": [
+            {
+              "maximum": 86313600,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Longest a credential grant may last, in seconds from when it is granted or renewed. When set, every grant must end: a grant with no end date, or one further out, is refused (422), and a creation that sets no policy gets the default (or this maximum when no default is set).",
+          "title": "Max Expires In S"
+        },
+        "max_idle_period_s": {
+          "anyOf": [
+            {
+              "maximum": 86313600,
+              "minimum": 86400,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Longest idle limit a credential grant may carry, in seconds. When set, every grant must carry one: none, or a longer one, is refused (422).",
+          "title": "Max Idle Period S"
+        },
+        "single_use_by_default": {
+          "default": false,
+          "description": "Whether a new credential grant whose creation sets no policy allows a single call (a use count of 1).",
+          "title": "Single Use By Default",
+          "type": "boolean"
         }
       },
       "title": "GrantExpiryConfig",

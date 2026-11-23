@@ -24,6 +24,7 @@ from tests.integration.control.connect_sec.support import (
     API_BODY,
     KEY_SCHEME,
     OWNER,
+    RULES,
     checks,
     client,
     connect,
@@ -151,6 +152,47 @@ async def test_http_confirm_refuses_an_end_date_in_the_past(env: Context) -> Non
         response = await owner.post(f"/connect-sessions/{session_id}:confirm", json=body)
     assert response.status_code == 422, response.text
     assert "expires_at must be in the future" in response.text
+
+
+async def test_http_confirm_applies_the_org_limits(
+    env: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With an org maximum, "No expiry" is refused; a body with no policy gets the default."""
+    monkeypatch.setattr(env.config.grant_expiry, "default_expires_in_s", 86_400)
+    monkeypatch.setattr(env.config.grant_expiry, "max_expires_in_s", 7 * 86_400)
+    await import_spec(env, KEY_SCHEME)
+    created = await connect(env)
+    session_id = created.session_id
+    body = {
+        "kind": "api_key",
+        "key": _SECRET,
+        "permission_rules": RULES,
+        "digest": await digest(env, session_id),
+        "revision_id": await revision(env, session_id),
+        "expected_agent_id": AGENT_ID,
+    }
+    async with client(env, OWNER) as owner:
+        refused = await owner.post(
+            f"/connect-sessions/{session_id}:confirm", json={**body, "expires_at": None}
+        )
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["type"].endswith("grant_policy_limit_exceeded")
+        confirmed = await owner.post(f"/connect-sessions/{session_id}:confirm", json=body)
+    assert confirmed.status_code == 200, confirmed.text
+
+    credential_id = await _credential_of(env, session_id)
+    async with env.admin_db.session() as session:
+        expires_at = (
+            await session.execute(
+                text(
+                    "SELECT expires_at FROM agent_credential_bindings"
+                    " WHERE agent_id = :a AND credential_id = :c"
+                ),
+                {"a": AGENT_ID, "c": credential_id},
+            )
+        ).scalar_one()
+    left = as_utc(expires_at) - datetime.now(UTC)
+    assert timedelta(hours=23) < left <= timedelta(days=1)
 
 
 async def test_the_idle_limit_is_requested_and_set_on_confirm(env: Context) -> None:

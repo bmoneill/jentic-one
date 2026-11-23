@@ -989,6 +989,85 @@ def test_a_use_count_must_be_a_positive_whole_number(
     assert resp.status_code == 422
 
 
+def test_org_grant_limits_are_reported(
+    admin_client: TestClient, web_context: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    limits = web_context.config.grant_expiry
+    monkeypatch.setattr(limits, "default_expires_in_s", 7 * 86_400)
+    monkeypatch.setattr(limits, "max_expires_in_s", 30 * 86_400)
+    monkeypatch.setattr(limits, "single_use_by_default", True)
+    resp = admin_client.get("/agents/credentials:policy")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["expires_in"] == {"default_seconds": 7 * 86_400, "max_seconds": 30 * 86_400}
+    assert body["idle_period"] == {"default_seconds": None, "max_seconds": None}
+    assert body["single_use_by_default"] is True
+    assert body["agent_expires_in"] == {"default_seconds": None, "max_seconds": None}
+
+
+def test_a_bind_with_no_policy_gets_the_org_default(
+    admin_client: TestClient,
+    web_context: Context,
+    binding_agent_id: str,
+    control_credential_id: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    limits = web_context.config.grant_expiry
+    monkeypatch.setattr(limits, "default_expires_in_s", 7 * 86_400)
+    monkeypatch.setattr(limits, "single_use_by_default", True)
+    resp = admin_client.post(
+        f"/agents/{binding_agent_id}/credentials", json={"credential_id": control_credential_id}
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    left = datetime.fromisoformat(body["expires_at"]) - datetime.now(UTC)
+    assert timedelta(days=6, hours=23) < left <= timedelta(days=7)
+    assert body["max_quota"] == 1
+
+
+def test_an_org_maximum_refuses_no_end_date_and_longer_ones(
+    admin_client: TestClient,
+    web_context: Context,
+    binding_agent_id: str,
+    control_credential_id: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = f"/agents/{binding_agent_id}/credentials"
+    # Bound before the org set a maximum: no end date.
+    assert admin_client.post(url, json={"credential_id": control_credential_id}).status_code == 201
+    monkeypatch.setattr(web_context.config.grant_expiry, "max_expires_in_s", 30 * 86_400)
+
+    # A renewal that leaves the end date alone is not refused for it.
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={"idle_warning": True})
+    assert resp.status_code == 200, resp.text
+    # One that clears it, or sets it past the maximum, is.
+    for expires_at in (None, (datetime.now(UTC) + timedelta(days=31)).isoformat()):
+        resp = admin_client.patch(f"{url}/{control_credential_id}", json={"expires_at": expires_at})
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["type"].endswith("grant_policy_limit_exceeded")
+    within = (datetime.now(UTC) + timedelta(days=30)).isoformat()
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={"expires_at": within})
+    assert resp.status_code == 200, resp.text
+
+
+def test_an_org_agent_maximum_applies_to_new_and_changed_agents(
+    admin_client: TestClient, web_context: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(web_context.config.grant_expiry, "agent_max_expires_in_s", 7 * 86_400)
+    resp = admin_client.post("/agents", json={"name": "bounded"})
+    assert resp.status_code == 201, resp.text
+    agent_id = resp.json()["id"]
+    left = datetime.fromisoformat(resp.json()["expires_at"]) - datetime.now(UTC)
+    assert timedelta(days=6, hours=23) < left <= timedelta(days=7)
+
+    later = (datetime.now(UTC) + timedelta(days=8)).isoformat()
+    resp = admin_client.post("/agents", json={"name": "too-long", "expires_at": later})
+    assert resp.status_code == 422, resp.text
+    resp = admin_client.patch(f"/agents/{agent_id}", json={"expires_at": None})
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["type"].endswith("grant_policy_limit_exceeded")
+
+
 def test_renew_does_not_resume_a_suspended_binding(
     admin_client: TestClient, binding_agent_id: str, control_credential_id: str
 ) -> None:

@@ -325,6 +325,37 @@ class CredentialBindingListResponse(BaseModel):
     )
 
 
+class DurationLimitResponse(BaseModel):
+    """A default and a maximum for one duration, in seconds; null when unset."""
+
+    default_seconds: int | None = Field(
+        default=None,
+        description="Applied when a creation sets no policy; null for none.",
+        examples=[2_592_000],
+    )
+    max_seconds: int | None = Field(
+        default=None,
+        description="The longest allowed; when set, every grant (or agent) must have one.",
+        examples=[2_592_000],
+    )
+
+
+class GrantPolicyLimitsResponse(BaseModel):
+    """The org's defaults and maximums for new grants and agents."""
+
+    expires_in: DurationLimitResponse = Field(
+        description="A grant's end date, as a lifetime from when it is granted or renewed."
+    )
+    idle_period: DurationLimitResponse = Field(description="A grant's idle limit.")
+    single_use_by_default: bool = Field(
+        description="Whether a grant created with no policy allows a single call.",
+        examples=[False],
+    )
+    agent_expires_in: DurationLimitResponse = Field(
+        description="An agent's expiry, as a lifetime from when it is set."
+    )
+
+
 class EndingSoonBindingResponse(CredentialBindingResponse):
     """A binding whose idle limit will end it soon unless the agent uses it."""
 
@@ -562,7 +593,10 @@ class CredentialBindRequest(BaseModel):
     )
     expires_at: datetime | None = Field(
         default=None,
-        description=_BINDING_EXPIRES_AT_DESCRIPTION + " Omit for a binding that never expires.",
+        description=_BINDING_EXPIRES_AT_DESCRIPTION
+        + " Null for a binding that never expires (refused under an org maximum). A body"
+        " that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's"
+        " default policy (`GET /agents/credentials:policy`; none unless the org sets one).",
         examples=[_EX_EXPIRES_AT],
     )
     max_idle_period: int | None = Field(

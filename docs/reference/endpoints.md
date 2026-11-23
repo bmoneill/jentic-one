@@ -28,7 +28,7 @@ Every API endpoint grouped by its **typical caller**, then by surface, annotated
 
 > The grouping and the _Typical caller_ column are an **advisory hint** at who usually calls a route, inferred from the permission family. They are **not** an enforced restriction: access is gated by the **permission**, not the actor kind, so any actor holding the required permission can call the endpoint.
 
-_Total endpoints: **178**._
+_Total endpoints: **179**._
 
 
 ## Agent-facing (typically an agent) (32)
@@ -211,7 +211,7 @@ _Total endpoints: **178**._
 | POST | `/users/{user_id}:enable` | `users:write` | operator | Enable a user |
 | POST | `/users/{user_id}:reissue-invite` | `users:write` | operator | Reissue a user's invite |
 
-## Any authenticated actor (84)
+## Any authenticated actor (85)
 
 
 ### `actors`
@@ -242,6 +242,7 @@ _Total endpoints: **178**._
 
 | Method | Path | Permission(s) | Typical caller | Summary |
 |---|---|---|---|---|
+| GET | `/agents/credentials:policy` | _any authenticated_ | any | Get the org's grant defaults and maximums |
 | GET | `/agents/{agent_id}` | _any authenticated_ | any | Get an agent |
 | GET | `/agents/{agent_id}/credentials` | _any authenticated_ | any | List an agent's credential bindings |
 | GET | `/agents/{agent_id}/oauth-grants` | _any authenticated_ | any | List an agent's connected OAuth clients |

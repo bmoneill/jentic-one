@@ -144,7 +144,16 @@ The outcomes:
   the limit that ended it (`end_date`, `idle` or `uses`), and
   `idle_expires_at` for when an unused binding would end. Renewing (`PATCH`)
   restarts the idle clock and restores the use count, even with an empty
-  body. With
+  body.
+  An org can set defaults and maximums for these limits in config
+  (`grant_expiry.default_expires_in_s`, `max_expires_in_s`,
+  `default_idle_period_s`, `max_idle_period_s`, `single_use_by_default`; and
+  `agent_default_expires_in_s` / `agent_max_expires_in_s` for agents). A
+  default applies when a request creating a binding sets none of
+  `expires_at`, `max_idle_period` and `max_quota`; a maximum refuses
+  (`422 grant_policy_limit_exceeded`) a longer limit, or none at all, on every
+  path that creates or renews a binding, checking only the limits a request
+  sets. `GET /agents/credentials:policy` reports them. With
   `idle_warning` turned on (off by default; it takes an idle limit of 4 days
   or more), the agent's owner gets one `credential_grant.idle_expiring` event
   in the 48 hours before the idle limit is reached, and

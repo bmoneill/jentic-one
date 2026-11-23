@@ -10,6 +10,7 @@ ad-hoc error ``JSONResponse`` bodies.
 from __future__ import annotations
 
 from dataclasses import asdict
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import structlog
@@ -90,6 +91,8 @@ from jentic_one.control.web.schemas.integrations import (
     StatusResponse,
 )
 from jentic_one.control.web.schemas.permission_rules import PermissionRuleSchema
+from jentic_one.shared.auth.grant_limits import NewGrantPolicy, new_grant_policy
+from jentic_one.shared.auth.grant_policy import UNSET
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
 from jentic_one.shared.models import ActorType
@@ -763,6 +766,7 @@ async def confirm_connect_session(
     binding = mint_browser_binding(request)
 
     result: ConfirmResult
+    policy = None if isinstance(body, EditConfirmSessionRequest) else _new_policy(body, ctx)
     if isinstance(body, EditConfirmSessionRequest):
         result = await svc.confirm_edit(
             session_id,
@@ -787,16 +791,17 @@ async def confirm_connect_session(
             digest=body.digest,
             revision_id=body.revision_id,
             browser_binding=binding.claim,
-            expires_at=body.expires_at,
-            max_idle_period=body.max_idle_period,
+            expires_at=policy.expires_at if policy else None,
+            max_idle_period=policy.max_idle_period if policy else None,
             idle_warning=body.idle_warning,
-            max_quota=body.max_quota,
+            max_quota=policy.max_quota if policy else None,
         )
     else:
+        assert policy is not None
         result = await svc.confirm_variant(
             session_id,
             poll_token=poll_token,
-            variant=_to_variant(body),
+            variant=_to_variant(body, policy),
             identity=identity,
             browser_binding=binding.claim,
         )
@@ -823,12 +828,33 @@ def _confirm_response(result: ConfirmResult) -> ConfirmSessionResponse:
     return ConnectedConfirmSessionResponse(credential_id=result.credential_id)
 
 
+def _new_policy(
+    body: OAuthConfirmSessionRequest
+    | ApiKeyConfirmSessionRequest
+    | BearerConfirmSessionRequest
+    | BasicConfirmSessionRequest
+    | OwnOAuthClientConfirmSessionRequest
+    | ExistingCredentialConfirmSessionRequest,
+    ctx: Context,
+) -> NewGrantPolicy:
+    """The new binding's policy: the org's default when the body sets none, then its maximums."""
+    fields = body.model_fields_set
+    return new_grant_policy(
+        ctx.config.grant_expiry,
+        now=datetime.now(UTC),
+        expires_at=body.expires_at if "expires_at" in fields else UNSET,
+        max_idle_period=body.max_idle_period if "max_idle_period" in fields else UNSET,
+        max_quota=body.max_quota if "max_quota" in fields else UNSET,
+    )
+
+
 def _to_variant(
     body: ApiKeyConfirmSessionRequest
     | BearerConfirmSessionRequest
     | BasicConfirmSessionRequest
     | OwnOAuthClientConfirmSessionRequest
     | ExistingCredentialConfirmSessionRequest,
+    policy: NewGrantPolicy,
 ) -> ConfirmVariant:
     checks = ConfirmChecks(
         permission_rules=[r.model_dump() for r in body.permission_rules],
@@ -836,10 +862,10 @@ def _to_variant(
         digest=body.digest,
         agent_id=body.agent_id,
         revision_id=body.revision_id,
-        expires_at=body.expires_at,
-        max_idle_period=body.max_idle_period,
+        expires_at=policy.expires_at,
+        max_idle_period=policy.max_idle_period,
         idle_warning=body.idle_warning,
-        max_quota=body.max_quota,
+        max_quota=policy.max_quota,
     )
     if isinstance(body, ApiKeyConfirmSessionRequest):
         return SecretConfirm(kind=body.kind, secret=ApiKeySecret(key=body.key), checks=checks)

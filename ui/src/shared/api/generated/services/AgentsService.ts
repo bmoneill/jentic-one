@@ -19,6 +19,7 @@ import type { CredentialBindingResponse } from '../models/CredentialBindingRespo
 import type { CredentialBindRequest } from '../models/CredentialBindRequest';
 import type { DenyRequest } from '../models/DenyRequest';
 import type { EndingSoonBindingListResponse } from '../models/EndingSoonBindingListResponse';
+import type { GrantPolicyLimitsResponse } from '../models/GrantPolicyLimitsResponse';
 import type { JwksUpdateRequest } from '../models/JwksUpdateRequest';
 import type { OAuthGrantListResponse } from '../models/OAuthGrantListResponse';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -131,6 +132,32 @@ export class AgentsService {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/agents/credentials:ending-soon',
+            errors: {
+                400: `Bad Request`,
+                401: `Unauthorized`,
+                403: `Forbidden`,
+                422: `Unprocessable Entity`,
+                500: `Internal Server Error`,
+                503: `Service Unavailable`,
+            },
+        });
+    }
+    /**
+     * Get the org's grant defaults and maximums
+     * The org's defaults and maximums for new credential grants and agents.
+     *
+     * A default applies when a request creating a grant (or an agent) sets no
+     * policy; a maximum refuses (422 `grant_policy_limit_exceeded`) anything
+     * longer, or no limit at all, on every path that creates or renews one. The
+     * console preselects the defaults and disables choices above a maximum.
+     * Readable by any signed-in caller.
+     * @returns GrantPolicyLimitsResponse Successful Response
+     * @throws ApiError
+     */
+    public static getGrantPolicyLimits(): CancelablePromise<GrantPolicyLimitsResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/agents/credentials:policy',
             errors: {
                 400: `Bad Request`,
                 401: `Unauthorized`,

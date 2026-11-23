@@ -1956,7 +1956,7 @@
                 "type": "null"
               }
             ],
-            "description": "When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.",
+            "description": "When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null binds with no expiry (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy. Ignored when the agent is already bound to the credential: that binding keeps its own end date.",
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
@@ -4919,7 +4919,7 @@
                 "type": "null"
               }
             ],
-            "description": "When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.",
+            "description": "When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null binds with no expiry (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy. Ignored when the agent is already bound to the credential: that binding keeps its own end date.",
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
@@ -5121,7 +5121,7 @@
                 "type": "null"
               }
             ],
-            "description": "When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.",
+            "description": "When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null binds with no expiry (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy. Ignored when the agent is already bound to the credential: that binding keeps its own end date.",
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
@@ -7232,7 +7232,7 @@
                 "type": "null"
               }
             ],
-            "description": "When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Omit for a binding that never expires.",
+            "description": "When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Null for a binding that never expires (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy (`GET /agents/credentials:policy`; none unless the org sets one).",
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
@@ -8928,6 +8928,46 @@
           "authorization_endpoint",
           "token_endpoint"
         ],
+        "type": "object"
+      },
+      "DurationLimitResponse": {
+        "description": "A default and a maximum for one duration, in seconds; null when unset.",
+        "examples": [
+          {
+            "default_seconds": 2592000,
+            "max_seconds": 2592000
+          }
+        ],
+        "properties": {
+          "default_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Applied when a creation sets no policy; null for none.",
+            "examples": [
+              2592000
+            ]
+          },
+          "max_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The longest allowed; when set, every grant (or agent) must have one.",
+            "examples": [
+              2592000
+            ]
+          }
+        },
         "type": "object"
       },
       "EditAgentRef": {
@@ -11638,7 +11678,7 @@
                 "type": "null"
               }
             ],
-            "description": "When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.",
+            "description": "When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null binds with no expiry (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy. Ignored when the agent is already bound to the credential: that binding keeps its own end date.",
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
@@ -11912,6 +11952,72 @@
           "uses"
         ],
         "type": "string"
+      },
+      "GrantPolicyLimitsResponse": {
+        "description": "The org's defaults and maximums for new grants and agents.",
+        "examples": [
+          {
+            "agent_expires_in": {
+              "default_seconds": 2592000,
+              "max_seconds": 2592000
+            },
+            "expires_in": {
+              "default_seconds": 2592000,
+              "max_seconds": 2592000
+            },
+            "idle_period": {
+              "default_seconds": 2592000,
+              "max_seconds": 2592000
+            },
+            "single_use_by_default": false
+          }
+        ],
+        "properties": {
+          "agent_expires_in": {
+            "$ref": "#/components/schemas/DurationLimitResponse",
+            "description": "An agent's expiry, as a lifetime from when it is set.",
+            "examples": [
+              {
+                "default_seconds": 2592000,
+                "max_seconds": 2592000
+              }
+            ]
+          },
+          "expires_in": {
+            "$ref": "#/components/schemas/DurationLimitResponse",
+            "description": "A grant's end date, as a lifetime from when it is granted or renewed.",
+            "examples": [
+              {
+                "default_seconds": 2592000,
+                "max_seconds": 2592000
+              }
+            ]
+          },
+          "idle_period": {
+            "$ref": "#/components/schemas/DurationLimitResponse",
+            "description": "A grant's idle limit.",
+            "examples": [
+              {
+                "default_seconds": 2592000,
+                "max_seconds": 2592000
+              }
+            ]
+          },
+          "single_use_by_default": {
+            "description": "Whether a grant created with no policy allows a single call.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "expires_in",
+          "idle_period",
+          "single_use_by_default",
+          "agent_expires_in"
+        ],
+        "type": "object"
       },
       "GrantRenewalRequest": {
         "additionalProperties": false,
@@ -17427,7 +17533,7 @@
                 "type": "null"
               }
             ],
-            "description": "When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.",
+            "description": "When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null binds with no expiry (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy. Ignored when the agent is already bound to the credential: that binding keeps its own end date.",
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
@@ -19758,7 +19864,7 @@
                 "type": "null"
               }
             ],
-            "description": "When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.",
+            "description": "When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null binds with no expiry (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy. Ignored when the agent is already bound to the credential: that binding keeps its own end date.",
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
@@ -27905,6 +28011,71 @@
         ]
       },
       "summary": "List credential bindings ending soon"
+    },
+    "/agents/credentials:policy": {
+      "description": "`GET`: Get the org's grant defaults and maximums.",
+      "get": {
+        "description": "The org's defaults and maximums for new credential grants and agents.\n\nA default applies when a request creating a grant (or an agent) sets no\npolicy; a maximum refuses (422 `grant_policy_limit_exceeded`) anything\nlonger, or no limit at all, on every path that creates or renews one. The\nconsole preselects the defaults and disables choices above a maximum.\nReadable by any signed-in caller.",
+        "operationId": "getGrantPolicyLimits",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "agent_expires_in": {
+                    "default_seconds": 2592000,
+                    "max_seconds": 2592000
+                  },
+                  "expires_in": {
+                    "default_seconds": 2592000,
+                    "max_seconds": 2592000
+                  },
+                  "idle_period": {
+                    "default_seconds": 2592000,
+                    "max_seconds": 2592000
+                  },
+                  "single_use_by_default": false
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/GrantPolicyLimitsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "OAuth2": []
+          }
+        ],
+        "summary": "Get the org's grant defaults and maximums",
+        "tags": [
+          "Agents"
+        ]
+      },
+      "summary": "Get the org's grant defaults and maximums"
     },
     "/agents/{agent_id}": {
       "delete": {

@@ -70,6 +70,12 @@ from jentic_one.shared.auth.agent_permission_ceiling import (
     cap_agent_permissions,
 )
 from jentic_one.shared.auth.binding_write import guard_binding_write
+from jentic_one.shared.auth.grant_limits import (
+    check_agent_expiry,
+    check_grant_limits,
+    default_agent_expiry,
+    new_grant_policy,
+)
 from jentic_one.shared.auth.grant_policy import (
     GRANT_POLICY_FIELDS,
     UNSET,
@@ -158,6 +164,11 @@ class AgentService:
         """
         if status not in (ActorStatus.ACTIVE, ActorStatus.PENDING):
             raise ValueError(f"agents are created active or pending, not {status}")
+        # The org's agent expiry: its default when none is given, and its maximum.
+        limits = self._ctx.config.grant_expiry
+        now = datetime.now(UTC)
+        expires_at = payload.expires_at or default_agent_expiry(limits, now=now)
+        check_agent_expiry(limits, now=now, expires_at=expires_at)
         permissions_to_grant: list[str] = []
         if status is ActorStatus.ACTIVE:
             if payload.permissions:
@@ -174,7 +185,7 @@ class AgentService:
                 description=payload.description,
                 created_by=identity.sub,
                 status=status,
-                expires_at=payload.expires_at,
+                expires_at=expires_at,
             )
             for permission in permissions_to_grant:
                 await ActorPermissionGrantRepository.grant(
@@ -324,6 +335,14 @@ class AgentService:
             agent = await self._check_transition(
                 session, agent_id, ActorVerb.APPROVE, identity=identity
             )
+            # The org's agent expiry: a cleared or given expiry is checked against
+            # its maximum; with none given, an agent without one gets the default.
+            limits = self._ctx.config.grant_expiry
+            now = datetime.now(UTC)
+            if clear_expiry or expires_at is not None:
+                check_agent_expiry(limits, now=now, expires_at=expires_at)
+            elif agent.expires_at is None:
+                expires_at = default_agent_expiry(limits, now=now)
             effective_owner_id = agent.owner_id if agent.owner_id is not None else identity.sub
             owner_effective = await self._owner_effective(session, effective_owner_id)
             existing_grants = await ActorPermissionGrantRepository.list_for_actor(
@@ -978,18 +997,27 @@ class AgentService:
         *,
         credential_id: str,
         identity: Identity,
-        expires_at: datetime | None = None,
-        max_idle_period: int | None = None,
+        expires_at: datetime | Unset | None = UNSET,
+        max_idle_period: int | Unset | None = UNSET,
         idle_warning: bool = False,
-        max_quota: int | None = None,
+        max_quota: int | Unset | None = UNSET,
     ) -> CredentialBindingView:
         """Create a direct agent↔credential binding.
 
         Verifies the caller can see the target credential before writing the
         binding (control-DB lookup). ``expires_at`` (already validated as a
         future time by the web layer) ends the binding then; ``None`` never
-        expires.
+        expires. A request that sets none of the limits (all ``UNSET``) gets
+        the org's default policy; whatever it sets must be within the org's
+        maximums (``GrantPolicyLimitError`` otherwise).
         """
+        policy = new_grant_policy(
+            self._ctx.config.grant_expiry,
+            now=datetime.now(UTC),
+            expires_at=expires_at,
+            max_idle_period=max_idle_period,
+            max_quota=max_quota,
+        )
         agent = await self._load_binding_agent(agent_id, identity=identity)
         ref = None
         if self._ctx.is_db_allowed("control"):
@@ -1016,10 +1044,10 @@ class AgentService:
                     agent_id=agent_id,
                     credential_id=credential_id,
                     created_by=identity.sub,
-                    expires_at=expires_at,
-                    max_idle_period=max_idle_period,
+                    expires_at=policy.expires_at,
+                    max_idle_period=policy.max_idle_period,
                     idle_warning=idle_warning,
-                    max_quota=max_quota,
+                    max_quota=policy.max_quota,
                 )
             except IntegrityError:
                 raise CredentialBindingConflictError(agent_id, credential_id) from None
@@ -1281,6 +1309,13 @@ class AgentService:
             policy["idle_warning"] = idle_warning
         if not isinstance(max_quota, Unset):
             policy["max_quota"] = max_quota
+        # The org's maximums apply to the limits this renewal sets.
+        check_grant_limits(
+            self._ctx.config.grant_expiry,
+            now=datetime.now(UTC),
+            expires_at=expires_at,
+            max_idle_period=max_idle_period,
+        )
         agent, ref = await self._require_renewable(
             agent_id, credential_id=credential_id, identity=identity
         )
@@ -1434,6 +1469,12 @@ class AgentService:
         """
         if "expires_at" in update_data and identity.actor_type != ActorType.USER:
             raise ActorNotFoundError(agent_id)
+        if "expires_at" in update_data:
+            check_agent_expiry(
+                self._ctx.config.grant_expiry,
+                now=datetime.now(UTC),
+                expires_at=update_data["expires_at"],
+            )
         if not update_data:
             async with self._ctx.admin_db.session() as session:
                 agent = await self._load_owned_agent(session, agent_id, identity=identity)

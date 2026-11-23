@@ -11,7 +11,7 @@ export type CredentialBindRequest = {
      */
     credential_id: string;
     /**
-     * When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Omit for a binding that never expires.
+     * When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Null for a binding that never expires (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy (`GET /agents/credentials:policy`; none unless the org sets one).
      */
     expires_at?: (string | null);
     /**

@@ -2198,7 +2198,7 @@ type ApiKeyConfirmSessionRequest struct {
 	// Examples: agnt_6968b3984d1c238dbe7e2e29
 	ExpectedAgentId *string `json:"expected_agent_id,omitempty"`
 
-	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
+	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null binds with no expiry (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
@@ -3222,7 +3222,7 @@ type BasicConfirmSessionRequest struct {
 	// Examples: agnt_6968b3984d1c238dbe7e2e29
 	ExpectedAgentId *string `json:"expected_agent_id,omitempty"`
 
-	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
+	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null binds with no expiry (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
@@ -3292,7 +3292,7 @@ type BearerConfirmSessionRequest struct {
 	// Examples: agnt_6968b3984d1c238dbe7e2e29
 	ExpectedAgentId *string `json:"expected_agent_id,omitempty"`
 
-	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
+	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null binds with no expiry (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
@@ -4071,7 +4071,7 @@ type CredentialBindRequest struct {
 	// Examples: cred_6968b39855d91a3561684b32
 	CredentialId string `json:"credential_id"`
 
-	// ExpiresAt When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Omit for a binding that never expires.
+	// ExpiresAt When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Null for a binding that never expires (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy (`GET /agents/credentials:policy`; none unless the org sets one).
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
@@ -4677,6 +4677,21 @@ type DeviceAuthorizationRegistrationCreateRequest struct {
 //
 // Examples: device_authorization
 type DeviceAuthorizationRegistrationCreateRequestFlowKind string
+
+// DurationLimitResponse A default and a maximum for one duration, in seconds; null when unset.
+//
+// Examples: {"default_seconds":2592000,"max_seconds":2592000}
+type DurationLimitResponse struct {
+	// DefaultSeconds Applied when a creation sets no policy; null for none.
+	//
+	// Examples: 2592000
+	DefaultSeconds *int `json:"default_seconds,omitempty"`
+
+	// MaxSeconds The longest allowed; when set, every grant (or agent) must have one.
+	//
+	// Examples: 2592000
+	MaxSeconds *int `json:"max_seconds,omitempty"`
+}
 
 // EditAgentRef Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29"}
 type EditAgentRef struct {
@@ -5496,7 +5511,7 @@ type ExistingCredentialConfirmSessionRequest struct {
 	// Examples: agnt_6968b3984d1c238dbe7e2e29
 	ExpectedAgentId *string `json:"expected_agent_id,omitempty"`
 
-	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
+	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null binds with no expiry (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
@@ -5610,6 +5625,31 @@ type GovernedHostsResponse struct {
 
 // GrantEndReason Which limit ended a grant, as binding responses and denials report it.
 type GrantEndReason string
+
+// GrantPolicyLimitsResponse The org's defaults and maximums for new grants and agents.
+//
+// Examples: {"agent_expires_in":{"default_seconds":2592000,"max_seconds":2592000},"expires_in":{"default_seconds":2592000,"max_seconds":2592000},"idle_period":{"default_seconds":2592000,"max_seconds":2592000},"single_use_by_default":false}
+type GrantPolicyLimitsResponse struct {
+	// AgentExpiresIn An agent's expiry, as a lifetime from when it is set.
+	//
+	// Examples: {"default_seconds":2592000,"max_seconds":2592000}
+	AgentExpiresIn DurationLimitResponse `json:"agent_expires_in"`
+
+	// ExpiresIn A grant's end date, as a lifetime from when it is granted or renewed.
+	//
+	// Examples: {"default_seconds":2592000,"max_seconds":2592000}
+	ExpiresIn DurationLimitResponse `json:"expires_in"`
+
+	// IdlePeriod A grant's idle limit.
+	//
+	// Examples: {"default_seconds":2592000,"max_seconds":2592000}
+	IdlePeriod DurationLimitResponse `json:"idle_period"`
+
+	// SingleUseByDefault Whether a grant created with no policy allows a single call.
+	//
+	// Examples: false
+	SingleUseByDefault bool `json:"single_use_by_default"`
+}
 
 // GrantRenewalRequest Fresh access for an ended binding. Every field left out sets no such limit.
 //
@@ -7645,7 +7685,7 @@ type OAuthConfirmSessionRequest struct {
 	// Examples: agnt_6968b3984d1c238dbe7e2e29
 	ExpectedAgentId *string `json:"expected_agent_id,omitempty"`
 
-	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
+	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null binds with no expiry (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
@@ -8421,7 +8461,7 @@ type OwnOAuthClientConfirmSessionRequest struct {
 	// Examples: agnt_6968b3984d1c238dbe7e2e29
 	ExpectedAgentId *string `json:"expected_agent_id,omitempty"`
 
-	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null or absent binds with no expiry. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
+	// ExpiresAt When the new binding stops authorizing calls (RFC 3339, in the future), as the approver chose it; worked out when the approver confirms. Null binds with no expiry (refused under an org maximum). A body that sets none of `expires_at`, `max_idle_period` and `max_quota` gets the org's default policy. Ignored when the agent is already bound to the credential: that binding keeps its own end date.
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
@@ -13221,6 +13261,19 @@ type ClientInterface interface {
 	// Corresponds with GET /agents/credentials:ending-soon (the `ListCredentialBindingsEndingSoon` operationId).
 	ListCredentialBindingsEndingSoon(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetGrantPolicyLimits Get the org's grant defaults and maximums
+	//
+	// The org's defaults and maximums for new credential grants and agents.
+	//
+	// A default applies when a request creating a grant (or an agent) sets no
+	// policy; a maximum refuses (422 `grant_policy_limit_exceeded`) anything
+	// longer, or no limit at all, on every path that creates or renews one. The
+	// console preselects the defaults and disables choices above a maximum.
+	// Readable by any signed-in caller.
+	//
+	// Corresponds with GET /agents/credentials:policy (the `GetGrantPolicyLimits` operationId).
+	GetGrantPolicyLimits(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ArchiveAgent Archive an agent
 	//
 	// Archive an agent — or, with ``purge=true``, hard-delete it.
@@ -16618,6 +16671,29 @@ func (c *Client) CreateAgent(ctx context.Context, body CreateAgentJSONRequestBod
 // Corresponds with GET /agents/credentials:ending-soon (the `ListCredentialBindingsEndingSoon` operationId).
 func (c *Client) ListCredentialBindingsEndingSoon(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListCredentialBindingsEndingSoonRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetGrantPolicyLimits Get the org's grant defaults and maximums
+//
+// The org's defaults and maximums for new credential grants and agents.
+//
+// A default applies when a request creating a grant (or an agent) sets no
+// policy; a maximum refuses (422 `grant_policy_limit_exceeded`) anything
+// longer, or no limit at all, on every path that creates or renews one. The
+// console preselects the defaults and disables choices above a maximum.
+// Readable by any signed-in caller.
+//
+// Corresponds with GET /agents/credentials:policy (the `GetGrantPolicyLimits` operationId).
+func (c *Client) GetGrantPolicyLimits(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetGrantPolicyLimitsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -22417,6 +22493,33 @@ func NewListCredentialBindingsEndingSoonRequest(server string) (*http.Request, e
 	}
 
 	operationPath := fmt.Sprintf("/agents/credentials:ending-soon")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetGrantPolicyLimitsRequest constructs an http.Request for the GetGrantPolicyLimits method
+func NewGetGrantPolicyLimitsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/credentials:policy")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -30926,6 +31029,21 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /agents/credentials:ending-soon (the `ListCredentialBindingsEndingSoon` operationId).
 	ListCredentialBindingsEndingSoonWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListCredentialBindingsEndingSoonHTTPResp, error)
 
+	// GetGrantPolicyLimitsWithResponse Get the org's grant defaults and maximums
+	//
+	// The org's defaults and maximums for new credential grants and agents.
+	//
+	// A default applies when a request creating a grant (or an agent) sets no
+	// policy; a maximum refuses (422 `grant_policy_limit_exceeded`) anything
+	// longer, or no limit at all, on every path that creates or renews one. The
+	// console preselects the defaults and disables choices above a maximum.
+	// Readable by any signed-in caller.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/credentials:policy (the `GetGrantPolicyLimits` operationId).
+	GetGrantPolicyLimitsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetGrantPolicyLimitsHTTPResp, error)
+
 	// ArchiveAgentWithResponse Archive an agent
 	//
 	// Archive an agent — or, with ``purge=true``, hard-delete it.
@@ -35727,6 +35845,96 @@ func (r ListCredentialBindingsEndingSoonHTTPResp) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ListCredentialBindingsEndingSoonHTTPResp) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetGrantPolicyLimitsHTTPResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *GrantPolicyLimitsResponse
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *BadRequest
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Unauthorized
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *UnprocessableEntity
+	// ApplicationproblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationproblemJSON500 *InternalServerError
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *ServiceUnavailable
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *UnexpectedError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetGrantPolicyLimitsHTTPResp) GetJSON200() *GrantPolicyLimitsResponse {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetGrantPolicyLimitsHTTPResp) GetApplicationproblemJSON400() *BadRequest {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetGrantPolicyLimitsHTTPResp) GetApplicationproblemJSON401() *Unauthorized {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetGrantPolicyLimitsHTTPResp) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r GetGrantPolicyLimitsHTTPResp) GetApplicationproblemJSON422() *UnprocessableEntity {
+	return r.ApplicationproblemJSON422
+}
+
+// GetApplicationproblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r GetGrantPolicyLimitsHTTPResp) GetApplicationproblemJSON500() *InternalServerError {
+	return r.ApplicationproblemJSON500
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetGrantPolicyLimitsHTTPResp) GetApplicationproblemJSON503() *ServiceUnavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetGrantPolicyLimitsHTTPResp) GetApplicationproblemJSONDefault() *UnexpectedError {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetGrantPolicyLimitsHTTPResp) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetGrantPolicyLimitsHTTPResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetGrantPolicyLimitsHTTPResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetGrantPolicyLimitsHTTPResp) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -50520,6 +50728,27 @@ func (c *ClientWithResponses) ListCredentialBindingsEndingSoonWithResponse(ctx c
 	return ParseListCredentialBindingsEndingSoonHTTPResp(rsp)
 }
 
+// GetGrantPolicyLimitsWithResponse Get the org's grant defaults and maximums
+//
+// The org's defaults and maximums for new credential grants and agents.
+//
+// A default applies when a request creating a grant (or an agent) sets no
+// policy; a maximum refuses (422 `grant_policy_limit_exceeded`) anything
+// longer, or no limit at all, on every path that creates or renews one. The
+// console preselects the defaults and disables choices above a maximum.
+// Readable by any signed-in caller.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/credentials:policy (the `GetGrantPolicyLimits` operationId).
+func (c *ClientWithResponses) GetGrantPolicyLimitsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetGrantPolicyLimitsHTTPResp, error) {
+	rsp, err := c.GetGrantPolicyLimits(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetGrantPolicyLimitsHTTPResp(rsp)
+}
+
 // ArchiveAgentWithResponse Archive an agent
 //
 // Archive an agent — or, with “purge=true“, hard-delete it.
@@ -56224,6 +56453,81 @@ func ParseListCredentialBindingsEndingSoonHTTPResp(rsp *http.Response) (*ListCre
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest EndingSoonBindingListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest UnexpectedError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetGrantPolicyLimitsHTTPResp parses an HTTP response from a GetGrantPolicyLimitsWithResponse call
+func ParseGetGrantPolicyLimitsHTTPResp(rsp *http.Response) (*GetGrantPolicyLimitsHTTPResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetGrantPolicyLimitsHTTPResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GrantPolicyLimitsResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

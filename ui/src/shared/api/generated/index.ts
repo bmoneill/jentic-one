@@ -102,6 +102,7 @@ export type { DenyRequest } from './models/DenyRequest';
 export type { DeviceAuthorizationConfirmSessionResponse } from './models/DeviceAuthorizationConfirmSessionResponse';
 export type { DeviceAuthorizationConnectChallengeResponse } from './models/DeviceAuthorizationConnectChallengeResponse';
 export type { DeviceAuthorizationRegistrationCreateRequest } from './models/DeviceAuthorizationRegistrationCreateRequest';
+export type { DurationLimitResponse } from './models/DurationLimitResponse';
 export type { EditAgentRef } from './models/EditAgentRef';
 export type { EditBindingRef } from './models/EditBindingRef';
 export type { EditConfirmSessionRequest } from './models/EditConfirmSessionRequest';
@@ -133,6 +134,7 @@ export type { ExistingCredentialConfirmSessionRequest } from './models/ExistingC
 export type { ExistingCredentialResponse } from './models/ExistingCredentialResponse';
 export type { GovernedHostsResponse } from './models/GovernedHostsResponse';
 export { GrantEndReason } from './models/GrantEndReason';
+export type { GrantPolicyLimitsResponse } from './models/GrantPolicyLimitsResponse';
 export type { GrantRenewalRequest } from './models/GrantRenewalRequest';
 export { GroupBy } from './models/GroupBy';
 export type { HealthResponse } from './models/HealthResponse';

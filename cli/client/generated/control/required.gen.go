@@ -204,6 +204,9 @@ func (ExistingCredentialResponse) RequiredFields() []string {
 	return []string{"can_bind", "credential_id", "name", "type"}
 }
 func (GovernedHostsResponse) RequiredFields() []string { return []string{"data", "digest"} }
+func (GrantPolicyLimitsResponse) RequiredFields() []string {
+	return []string{"agent_expires_in", "expires_in", "idle_period", "single_use_by_default"}
+}
 func (HealthResponse) RequiredFields() []string {
 	return []string{"setup_required", "status", "surface"}
 }
