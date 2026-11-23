@@ -39,6 +39,19 @@ import {
 } from '@/shared/credentials/lib/connectReview';
 import { sameRules } from '@/shared/credentials/lib/connectEdit';
 import { isHttpsVendorUrl, openVendorUrl } from '@/shared/credentials/lib/safe-navigation';
+import {
+	durationFromSeconds,
+	durationLabel,
+	expiresAtIso,
+	type BindingDuration,
+} from '@/shared/credentials/lib/bindingDuration';
+import {
+	NO_DURATION_HINT,
+	choosesNoExpiry,
+	durationChosen,
+} from '@/shared/credentials/lib/bindingExpiry';
+import { BindingDurationField } from './BindingDurationField';
+import { NoExpiryConfirmDialog, useNoExpiryConfirm } from './NoExpiryConfirmDialog';
 import { useSharedAppSurface } from '@/shared/credentials/lib/sharedAppSurface';
 import type {
 	ConfirmResponse,
@@ -120,6 +133,12 @@ export function VendorApproveFlow({
 	const [stepError, setStepError] = useState<StepError | null>(null);
 	const [outcome, setOutcome] = useState<LocalOutcome | null>(null);
 	const [rejectOpen, setRejectOpen] = useState(false);
+	// How long the new binding lasts. Seeded once from what the request asked
+	// for; the approver may change it. The end date is worked out on confirm.
+	const [duration, setDuration] = useState<BindingDuration | null>(null);
+	const durationSeeded = useRef(false);
+	const durationRef = useRef<HTMLSelectElement>(null);
+	const noExpiry = useNoExpiryConfirm();
 
 	const confirmMutation = useConfirmConnectSession(sessionId, pollToken);
 	const amendMutation = useAmendConnectSession(sessionId);
@@ -128,6 +147,21 @@ export function VendorApproveFlow({
 	const phaseRef = useRef<ApprovePhase>('configure');
 
 	const session: ReviewSession | undefined = sessionQuery.data;
+	// What the request asked for, as the duration control holds it.
+	const requestedDuration = useMemo(
+		() =>
+			session?.requested_expires_in
+				? durationFromSeconds(session.requested_expires_in)
+				: null,
+		[session?.requested_expires_in],
+	);
+	// Preselect it once, when the review first loads; later reloads (after a
+	// revision) keep whatever the approver chose since.
+	useEffect(() => {
+		if (durationSeeded.current || !session) return;
+		durationSeeded.current = true;
+		if (requestedDuration) setDuration(requestedDuration);
+	}, [session, requestedDuration]);
 	const scopes: ReviewScope[] = useMemo(() => session?.scopes ?? [], [session]);
 	const secretKind = session ? secretKindOf(session.resolved_flow) : null;
 	const awaitingApp = session ? isAwaitingApp(session) : false;
@@ -310,7 +344,10 @@ export function VendorApproveFlow({
 		goToPhase('rules');
 	};
 
-	/** The review the approver saw, echoed so the server can refuse a stale one. */
+	/**
+	 * The review the approver saw, echoed so the server can refuse a stale one,
+	 * and the new binding's end date, worked out now, as the approver confirms.
+	 */
 	const reviewed = (
 		finalRules: PermissionRule[],
 		review: ReviewSession | undefined = session,
@@ -319,6 +356,7 @@ export function VendorApproveFlow({
 		expected_agent_id: review?.agent?.agent_id ?? null,
 		digest: review?.digest ?? '',
 		revision_id: review?.revision?.id ?? null,
+		...(review?.agent ? { expires_at: expiresAtIso(duration) ?? null } : {}),
 	});
 
 	/**
@@ -651,8 +689,11 @@ export function VendorApproveFlow({
 	// approver's OAuth client rather than a plain sign-in.
 	const showChooser = canConfirm && (methodOptions.length > 1 || awaitingApp);
 	const showScopes = method.kind === 'primary' && !secretKind;
+	// A request that binds an agent waits for how long the access lasts.
+	const bindsAgent = Boolean(session?.agent);
 	const continueDisabled =
 		!canConfirm ||
+		(bindsAgent && !durationChosen(duration)) ||
 		method.kind === 'shared_app' ||
 		(method.kind === 'primary' &&
 			!secretKind &&
@@ -734,6 +775,30 @@ export function VendorApproveFlow({
 				</p>
 			)}
 
+			{canConfirm && bindsAgent && (
+				<div className="space-y-1" data-testid="approve-duration">
+					<BindingDurationField
+						value={duration}
+						onChange={(next): void => {
+							setStepError(null);
+							setDuration(next);
+						}}
+						label="Access expires after"
+						emptyHint={NO_DURATION_HINT}
+						selectRef={durationRef}
+						testIdPrefix="approve"
+					/>
+					{requestedDuration && (
+						<p
+							className="text-muted-foreground text-xs"
+							data-testid="approve-duration-requested"
+						>
+							The request asked for {durationLabel(requestedDuration)}.
+						</p>
+					)}
+				</div>
+			)}
+
 			<div className="bg-surface-sheet-foot border-hairline-field sticky -bottom-4 z-10 -mx-5 mt-auto -mb-4 flex items-center justify-between gap-2 border-t px-5 py-3.5">
 				<div className="flex items-center gap-1">
 					<Button type="button" variant="ghost" size="sm" onClick={handleNotNow}>
@@ -758,7 +823,9 @@ export function VendorApproveFlow({
 					<Button
 						type="button"
 						variant="primary"
-						onClick={goToRules}
+						onClick={(): void =>
+							noExpiry.request(bindsAgent && choosesNoExpiry(duration), goToRules)
+						}
 						// Scope-less vendors proceed with the vendor's defaults —
 						// only gate on an empty selection when there are scopes
 						// to choose from.
@@ -768,6 +835,13 @@ export function VendorApproveFlow({
 					</Button>
 				)}
 			</div>
+
+			<NoExpiryConfirmDialog
+				{...noExpiry.dialogProps}
+				subject={session.agent?.name ?? 'The agent'}
+				confirmLabel="Continue without expiry"
+				fieldRef={durationRef}
+			/>
 
 			<ConfirmDialog
 				open={rejectOpen}

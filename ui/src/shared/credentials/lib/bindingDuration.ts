@@ -129,3 +129,43 @@ export function expiresAtIso(
 	const end = expiresAtFromDuration(duration, now);
 	return end === 'never' ? null : end?.toISOString();
 }
+
+const CUSTOM_UNITS_LARGEST_FIRST: readonly BindingDurationUnit[] = [
+	'days',
+	'hours',
+	'minutes',
+	'seconds',
+];
+
+/**
+ * A duration in seconds (a connect request's ``requested_expires_in``) as the
+ * control's choice: its preset when one matches exactly, otherwise "Custom…"
+ * in the largest unit that divides it (90 minutes reads as 90 minutes, not
+ * 1.5 hours). ``null`` for a duration the control can't hold (over 999 of
+ * its unit, or not a positive whole number).
+ */
+export function durationFromSeconds(seconds: number): BindingDuration | null {
+	if (!Number.isInteger(seconds) || seconds <= 0) return null;
+	const preset = BINDING_DURATION_PRESETS.find((p) => p.ms === seconds * 1000);
+	if (preset) return { kind: 'preset', preset: preset.value };
+	for (const unit of CUSTOM_UNITS_LARGEST_FIRST) {
+		const perUnit = UNIT_MS[unit] / 1000;
+		if (seconds % perUnit === 0 && seconds / perUnit <= MAX_BINDING_DURATION_AMOUNT) {
+			return { kind: 'custom', amount: String(seconds / perUnit), unit };
+		}
+	}
+	return null;
+}
+
+/** "7 days", "90 minutes", "No expiry" — a choice in words; null while incomplete. */
+export function durationLabel(duration: BindingDuration | null): string | null {
+	if (duration === null || bindingDurationError(duration) !== null) return null;
+	if (duration.kind === 'preset') {
+		return BINDING_DURATION_PRESETS.find((p) => p.value === duration.preset)?.label ?? null;
+	}
+	if (duration.unit === 'never') return 'No expiry';
+	const amount = parseDurationAmount(duration.amount);
+	if (amount === null) return null;
+	const singular = duration.unit.slice(0, -1);
+	return `${amount} ${amount === 1 ? singular : duration.unit}`;
+}

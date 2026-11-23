@@ -26,6 +26,16 @@ import {
 } from '@/shared/credentials/mocks/handlers';
 import type { ExistingCredential, PermissionRule } from '@/shared/credentials/api/vendors-types';
 
+/** Choose how long the access lasts (7 days) when the step asks and nothing is chosen yet. */
+async function pickDurationIfAsked(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+	for (const testId of ['approve-duration-preset', 'self-connect-duration-preset']) {
+		const field = screen.queryByTestId(testId);
+		if (field instanceof HTMLSelectElement && field.value === '') {
+			await user.selectOptions(field, '7d');
+		}
+	}
+}
+
 /**
  * Approve mode for the connect-session kinds beyond a vendor OAuth sign-in:
  * `manual_*` sessions (the approver types the secret), `awaiting_app`
@@ -150,10 +160,61 @@ afterEach(() => {
 });
 
 async function continueFromReview(user: ReturnType<typeof userEvent.setup>): Promise<void> {
-	await user.click(await screen.findByRole('button', { name: /^continue$/i }));
+	const continueButton = await screen.findByRole('button', { name: /^continue$/i });
+	await pickDurationIfAsked(user);
+	await user.click(continueButton);
 	// The rules page, pre-filled with the agent's suggested rule.
 	await screen.findByText(/permission rules/i);
 }
+
+describe('VendorConnectFlow approve — how long the access lasts', () => {
+	const DAY = 86_400_000;
+
+	it('preselects what the request asked for and sends it as the end date on confirm', async () => {
+		const seeded = seedManualSession({ requested_expires_in: 7 * 86_400 });
+		renderApprove(seeded.session_id);
+		const user = userEvent.setup();
+
+		const preset = (await screen.findByTestId('approve-duration-preset')) as HTMLSelectElement;
+		expect(preset.value).toBe('7d');
+		expect(screen.getByTestId('approve-duration-requested')).toHaveTextContent(
+			'The request asked for 7 days.',
+		);
+		// The approver shortens it to a day.
+		await user.selectOptions(preset, '1d');
+		await continueFromReview(user);
+		await user.click(screen.getByRole('button', { name: /^continue$/i }));
+		await user.type(await screen.findByLabelText(/^API key/), 'sk_live_123');
+		const before = Date.now();
+		await user.click(screen.getByRole('button', { name: 'Connect' }));
+
+		expect(await screen.findByText('Connected to acme-com')).toBeInTheDocument();
+		const body = getMockConnectSessions()[0].confirmBodies[0] as { expires_at?: string };
+		const end = Date.parse(String(body.expires_at));
+		expect(end).toBeGreaterThanOrEqual(before + DAY);
+		expect(end).toBeLessThanOrEqual(Date.now() + DAY);
+	});
+
+	it('waits for a choice when nothing was asked, and asks before No expiry', async () => {
+		const seeded = seedManualSession();
+		renderApprove(seeded.session_id);
+		const user = userEvent.setup();
+
+		const preset = (await screen.findByTestId('approve-duration-preset')) as HTMLSelectElement;
+		expect(preset.value).toBe('');
+		expect(screen.queryByTestId('approve-duration-requested')).not.toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /^continue$/i })).toBeDisabled();
+
+		await user.selectOptions(preset, 'custom');
+		await user.selectOptions(screen.getByTestId('approve-duration-unit'), 'never');
+		await user.click(screen.getByRole('button', { name: /^continue$/i }));
+		expect(await screen.findByTestId('no-expiry-warning')).toHaveTextContent(
+			'Scout will keep this access until someone removes it.',
+		);
+		await user.click(screen.getByRole('button', { name: 'Continue without expiry' }));
+		expect(await screen.findByText(/permission rules/i)).toBeInTheDocument();
+	});
+});
 
 describe('VendorConnectFlow approve — manual_* sessions', () => {
 	it('shows provenance, agent and owner, scheme, pinned hosts and reason', async () => {
@@ -201,6 +262,7 @@ describe('VendorConnectFlow approve — manual_* sessions', () => {
 		const user = userEvent.setup();
 
 		await continueFromReview(user);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 
 		const field = await screen.findByLabelText(/^API key/);
@@ -219,6 +281,8 @@ describe('VendorConnectFlow approve — manual_* sessions', () => {
 			expected_agent_id: 'agnt_1',
 			digest: 'dig_manual',
 			revision_id: expect.stringMatching(/^csr_/),
+			// The end date chosen on the review, worked out on confirm.
+			expires_at: expect.any(String),
 		});
 		// Not persisted client-side anywhere the browser keeps across loads.
 		const persisted =
@@ -236,6 +300,7 @@ describe('VendorConnectFlow approve — manual_* sessions', () => {
 		const { onDone } = renderApprove(seeded.session_id);
 		const user = userEvent.setup();
 		await continueFromReview(user);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 		await user.type(await screen.findByLabelText(/^API key/), 'sk_live_secret_123');
 		await user.click(screen.getByRole('button', { name: 'Connect' }));
@@ -251,6 +316,7 @@ describe('VendorConnectFlow approve — manual_* sessions', () => {
 		const { onDone } = renderApprove(seeded.session_id);
 		const user = userEvent.setup();
 		await continueFromReview(user);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 		await user.type(await screen.findByLabelText(/^API key/), 'sk_live_secret_123');
 		await user.click(screen.getByRole('button', { name: 'Connect' }));
@@ -272,6 +338,7 @@ describe('VendorConnectFlow approve — manual_* sessions', () => {
 		const user = userEvent.setup();
 
 		await continueFromReview(user);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 		await user.type(await screen.findByLabelText(/^Username/), 'svc-report');
 		await user.type(screen.getByLabelText(/^Password/), 'hunter2');
@@ -294,6 +361,7 @@ describe('VendorConnectFlow approve — manual_* sessions', () => {
 		await user.click(screen.getByRole('button', { name: /add rule/i }));
 		await user.type(screen.getByLabelText('Path pattern'), '/v1/refunds');
 		await user.click(screen.getByRole('button', { name: /^add$/i }));
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 
 		await user.type(await screen.findByLabelText(/^API key/), 'sk_1');
@@ -316,6 +384,7 @@ describe('VendorConnectFlow approve — manual_* sessions', () => {
 		const user = userEvent.setup();
 
 		await continueFromReview(user);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 		await screen.findByLabelText(/^API key/);
 		expect(mutatingRequests().filter((r) => r.url.endsWith(':amend'))).toEqual([]);
@@ -350,6 +419,7 @@ describe('VendorConnectFlow approve — manual_* sessions', () => {
 		const user = userEvent.setup();
 
 		await continueFromReview(user);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 		await user.type(await screen.findByLabelText(/^API key/), 'sk_1');
 		await user.click(screen.getByRole('button', { name: 'Connect' }));
@@ -368,6 +438,7 @@ describe('VendorConnectFlow approve — manual_* sessions', () => {
 		const user = userEvent.setup();
 
 		await continueFromReview(user);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 		await user.type(await screen.findByLabelText(/^API key/), 'sk_first');
 		// What the approver reviewed changes under them.
@@ -379,7 +450,9 @@ describe('VendorConnectFlow approve — manual_* sessions', () => {
 		).toBeInTheDocument();
 		expect(screen.getByText(/an agent is asking to connect/i)).toBeInTheDocument();
 		// The secret was dropped with its step; the next confirm carries the new digest.
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
+		await pickDurationIfAsked(user);
 		await user.click(await screen.findByRole('button', { name: /^continue$/i }));
 		const field = await screen.findByLabelText(/^API key/);
 		expect(field).toHaveValue('');
@@ -401,6 +474,7 @@ describe('VendorConnectFlow approve — manual_* sessions', () => {
 		const user = userEvent.setup();
 
 		await continueFromReview(user);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 		await user.type(await screen.findByLabelText(/^API key/), 'sk_1');
 		await user.click(screen.getByRole('button', { name: 'Connect' }));
@@ -525,6 +599,7 @@ describe('VendorConnectFlow approve — awaiting_app', () => {
 		).not.toBeInTheDocument();
 
 		await continueFromReview(user);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 		await user.type(await screen.findByLabelText(/^Client ID/), 'client-123');
 		const secret = screen.getByLabelText(/^Client secret/);
@@ -553,6 +628,8 @@ describe('VendorConnectFlow approve — awaiting_app', () => {
 			expected_agent_id: 'agnt_1',
 			digest: 'dig_awaiting',
 			revision_id: expect.stringMatching(/^csr_/),
+			// The end date chosen on the review, worked out on confirm.
+			expires_at: expect.any(String),
 		});
 	});
 
@@ -570,6 +647,7 @@ describe('VendorConnectFlow approve — awaiting_app', () => {
 		const user = userEvent.setup();
 
 		await continueFromReview(user);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 		await user.type(await screen.findByLabelText(/^Client ID/), 'client-123');
 		await user.type(screen.getByLabelText(/^Client secret/), 'shh-client-secret');
@@ -605,6 +683,7 @@ describe('VendorConnectFlow approve — awaiting_app', () => {
 		const user = userEvent.setup();
 
 		await continueFromReview(user);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 		await user.type(await screen.findByLabelText(/^Client ID/), 'client-123');
 		await user.type(screen.getByLabelText(/^Client secret/), 'x');
@@ -625,6 +704,7 @@ describe('VendorConnectFlow approve — awaiting_app', () => {
 		expect(option).toHaveAccessibleDescription(/covers the requested scopes \(repo\)/);
 		await user.click(option);
 		await continueFromReview(user);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 
 		expect(await screen.findByText('Connected to github')).toBeInTheDocument();
@@ -638,6 +718,8 @@ describe('VendorConnectFlow approve — awaiting_app', () => {
 			expected_agent_id: 'agnt_1',
 			digest: 'dig_awaiting',
 			revision_id: expect.stringMatching(/^csr_/),
+			// The end date chosen on the review, worked out on confirm.
+			expires_at: expect.any(String),
 		});
 	});
 
@@ -691,6 +773,7 @@ describe('VendorConnectFlow approve — awaiting_app', () => {
 		expect(option).toHaveAccessibleDescription(/also gives admin:org to 1 other agent/);
 		await user.click(option);
 		await continueFromReview(user);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 
 		await waitFor(() =>
@@ -758,6 +841,7 @@ describe('VendorConnectFlow approve — existing credential on a vendor session'
 		const option = screen.getByRole('radio', { name: /Use Personal GitHub/ });
 		expect(option).toHaveAccessibleDescription(/upstream permissions aren't visible/);
 		await user.click(option);
+		await pickDurationIfAsked(user);
 		await user.click(screen.getByRole('button', { name: /^continue$/i }));
 		await user.click(await screen.findByRole('button', { name: /skip.*continue/i }));
 

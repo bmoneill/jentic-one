@@ -632,8 +632,10 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 
 	it('adds a catalog pick signed in through a shared app without importing or binding it again', async () => {
 		// The server imports the app's catalog API at connect and binds the new
-		// credential to the agent, so the queue only marks the row added.
+		// credential to the agent, so the queue only marks the row added. The
+		// end date chosen before sign-in goes with the confirm.
 		const posts: string[] = [];
+		const confirms: Record<string, unknown>[] = [];
 		worker.use(
 			http.get('/vendors', () =>
 				HttpResponse.json({
@@ -686,15 +688,16 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 					api_reference: null,
 				}),
 			),
-			http.post('/connect-sessions/sess_q\\:confirm', () =>
-				HttpResponse.json({
+			http.post('/connect-sessions/sess_q\\:confirm', async ({ request }) => {
+				confirms.push((await request.json()) as Record<string, unknown>);
+				return HttpResponse.json({
 					kind: 'device_authorization',
 					user_code: 'ABCD-1234',
 					verification_uri: 'https://google.com/device',
 					verification_uri_complete: null,
 					poll_interval_seconds: 5,
-				}),
-			),
+				});
+			}),
 			http.get('/connect-sessions/:id/status', () =>
 				HttpResponse.json({
 					status: 'connected',
@@ -736,12 +739,18 @@ describe('ApiSetupQueue — finishing a batch one API at a time', () => {
 			await waitFor(() => expect(screen.getByRole('button', { name })).not.toBeDisabled());
 			await user.click(screen.getByRole('button', { name }));
 		};
+		// Binding the agent waits for how long the access lasts.
+		await user.selectOptions(await screen.findByTestId('self-connect-duration-preset'), '7d');
 		await continueOn(/^continue$/i);
 		expect(await screen.findByText(/permission rules/i)).toBeInTheDocument();
+		const before = Date.now();
 		await continueOn(/(skip.*continue|^continue$)/i);
 
 		await waitFor(() => expect(rowFor('Gmail')).toHaveAttribute('data-status', 'added'));
 		expect(posts).toEqual([]);
+		const end = Date.parse(String(confirms[0]?.expires_at));
+		expect(end).toBeGreaterThanOrEqual(before + 7 * 86_400_000);
+		expect(end).toBeLessThanOrEqual(Date.now() + 7 * 86_400_000);
 	});
 
 	it('saves a credential for an umbrella catalog pick while its import is still running', async () => {

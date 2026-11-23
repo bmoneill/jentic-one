@@ -54,6 +54,12 @@ export interface ReviewSession {
 	target_kind?: 'vendor' | 'api';
 	/** OAuth scopes the session asks for — compared with an existing credential's grant. */
 	requested_scopes?: string[];
+	/**
+	 * How long the requester asked the access to last, in seconds from
+	 * approval; null when nothing was asked. Preselected on the review page;
+	 * the approver decides the binding's actual end date on confirm.
+	 */
+	requested_expires_in?: number | null;
 	/** Where an API target's live revision came from; null for vendor targets. */
 	provenance?: ReviewProvenance | null;
 	/** The agent the session binds and its owner (server data). */
@@ -253,6 +259,8 @@ export interface ConfirmRequest {
 	digest?: string | null;
 	/** The revision the approver saw; a newer one is 409 ``revision_changed``. */
 	revision_id?: string | null;
+	/** The new binding's end date (future); null or absent binds with no expiry. */
+	expires_at?: string | null;
 }
 
 /** Fields every non-OAuth confirm carries: the rules and the review it answers. */
@@ -262,6 +270,8 @@ interface ReviewedConfirm {
 	expected_agent_id: string | null;
 	digest: string;
 	revision_id: string | null;
+	/** The new binding's end date (future); null or absent binds with no expiry. */
+	expires_at?: string | null;
 }
 
 export interface ApiKeyConfirmRequest extends ReviewedConfirm {

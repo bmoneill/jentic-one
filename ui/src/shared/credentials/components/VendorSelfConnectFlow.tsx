@@ -32,6 +32,14 @@ import {
 	cancelConnectSessionOnUnload,
 } from '@/shared/credentials/api/vendors-client';
 import { isHttpsVendorUrl, openVendorUrl } from '@/shared/credentials/lib/safe-navigation';
+import { expiresAtIso, type BindingDuration } from '@/shared/credentials/lib/bindingDuration';
+import {
+	NO_DURATION_HINT,
+	choosesNoExpiry,
+	durationChosen,
+} from '@/shared/credentials/lib/bindingExpiry';
+import { BindingDurationField } from './BindingDurationField';
+import { NoExpiryConfirmDialog, useNoExpiryConfirm } from './NoExpiryConfirmDialog';
 import type {
 	ConfirmResponse,
 	PermissionRule,
@@ -95,6 +103,10 @@ export function VendorSelfConnectFlow({
 	// a specific agent), the picker starts locked to that id.
 	// Otherwise it starts empty and the user must pick before Continue.
 	const [agentId, setAgentId] = useState<string | null>(preselectedAgentId ?? null);
+	// How long the binding lasts, when an agent is picked; nothing preselected.
+	const [duration, setDuration] = useState<BindingDuration | null>(null);
+	const durationRef = useRef<HTMLSelectElement>(null);
+	const noExpiry = useNoExpiryConfirm();
 
 	const startMutation = useStartIntegrationConnect();
 	const confirmMutation = useConfirmConnectSession(session?.id ?? '', session?.pollToken ?? '');
@@ -318,6 +330,8 @@ export function VendorSelfConnectFlow({
 				permission_rules: finalRules,
 				agent_id: agentId,
 				revision_id: session.revisionId,
+				// Worked out now, as the user confirms: the duration runs from here.
+				...(agentId ? { expires_at: expiresAtIso(duration) ?? null } : {}),
 			});
 			// A vendor session's OAuth confirm always answers with a vendor
 			// challenge; the other result kinds belong to approve mode.
@@ -455,6 +469,17 @@ export function VendorSelfConnectFlow({
 				onToggle={toggleScope}
 			/>
 
+			{agentId && (
+				<BindingDurationField
+					value={duration}
+					onChange={setDuration}
+					label="Access expires after"
+					emptyHint={NO_DURATION_HINT}
+					selectRef={durationRef}
+					testIdPrefix="self-connect"
+				/>
+			)}
+
 			{flowError && <ErrorAlert message={flowError} />}
 
 			<div className="bg-surface-sheet-foot border-hairline-field sticky -bottom-4 z-10 -mx-5 mt-auto -mb-4 flex items-center justify-between border-t px-5 py-3.5">
@@ -465,7 +490,12 @@ export function VendorSelfConnectFlow({
 				<Button
 					type="button"
 					variant="primary"
-					onClick={(): void => void goToRules()}
+					onClick={(): void =>
+						noExpiry.request(
+							agentId != null && choosesNoExpiry(duration),
+							() => void goToRules(),
+						)
+					}
 					// ``:connect`` fires from this button (not on mount) so
 					// the user's credential-name pick is captured first.
 					// Scope-less vendors (empty catalog) proceed with the
@@ -475,13 +505,22 @@ export function VendorSelfConnectFlow({
 					// ``:confirm`` (connect unbound, bind later via the
 					// credentials API).
 					disabled={
-						(scopes.length > 0 && selectedScopes.size === 0) || startMutation.isPending
+						(scopes.length > 0 && selectedScopes.size === 0) ||
+						// Binding an agent waits for how long the access lasts.
+						(agentId != null && !durationChosen(duration)) ||
+						startMutation.isPending
 					}
 					loading={startMutation.isPending}
 				>
 					Continue
 				</Button>
 			</div>
+			<NoExpiryConfirmDialog
+				{...noExpiry.dialogProps}
+				subject={agents.data?.data.find((a) => a.id === agentId)?.name ?? 'The agent'}
+				confirmLabel="Continue without expiry"
+				fieldRef={durationRef}
+			/>
 		</div>
 	);
 }
