@@ -127,7 +127,9 @@ The outcomes:
   can renew it (`PATCH /agents/{agent_id}/credentials/{credential_id}`), a
   new connect answers `409 connect_session_binding_expired`, and the agent
   can no longer read the credential through the expired binding.
-  Suspension is reported first.
+  Suspension is reported first. Binding responses and `/me` report
+  `expired` with `expired_reason`, naming the limit that ended the binding
+  (`end_date` when `expires_at` passed).
 - **1 winner → use it.** The response carries `Jentic-Credential-Id` and
   `Jentic-Credential-Name` (absent when no stored credential was used), and
   the execution record carries the same attribution — every execution names

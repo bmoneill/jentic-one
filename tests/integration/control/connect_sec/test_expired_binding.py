@@ -326,6 +326,7 @@ async def test_show_access_reports_an_expired_binding_as_expired(env: Context) -
     body = await _show_access(env, credential_id)
 
     assert body["expired"] is True
+    assert body["expired_reason"] == "end_date"
     assert body["expires_at"] is not None
     assert body["suspended"] is False
 

@@ -12,6 +12,7 @@ from jentic_one.control.web.schemas.permission_rules import (
     PermissionRuleReadSchema,
     PermissionRuleSchema,
 )
+from jentic_one.shared.auth.grant_policy import GrantEndReason
 from jentic_one.shared.models.credentials import CredentialLocation, CredentialType
 from jentic_one.shared.schemas import APIReference as APIReferenceResponse
 from jentic_one.shared.schemas import APIReferenceRequest
@@ -1054,6 +1055,14 @@ class CredentialAgentResponse(BaseModel):
         description=(
             "Whether `expires_at` has passed: the agent cannot execute through this "
             "credential until the binding is renewed."
+        ),
+    )
+    expired_reason: GrantEndReason | None = Field(
+        default=None,
+        examples=[None],
+        description=(
+            "Which limit ended the binding while `expired` is true: `end_date`"
+            " (`expires_at` passed). Null while the binding holds."
         ),
     )
     last_used_at: datetime | None = Field(

@@ -17,6 +17,7 @@ from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
+from jentic_one.shared.auth.grant_policy import GrantEndReason
 from jentic_one.shared.permissions.matching import MatchMode, validate_path
 from jentic_one.shared.web import openapi_examples as ex
 
@@ -265,6 +266,14 @@ class BindingAccessResponse(PermissionRuleListResponse):
         description=(
             "True when `expires_at` has passed: the agent cannot use the binding, and "
             "no rule change brings it back. Only the operator can renew it."
+        ),
+    )
+    expired_reason: GrantEndReason | None = Field(
+        default=None,
+        examples=[None],
+        description=(
+            "Which limit ended the binding while `expired` is true: `end_date`"
+            " (`expires_at` passed). Null while the binding holds."
         ),
     )
     scopes_editable: bool = Field(

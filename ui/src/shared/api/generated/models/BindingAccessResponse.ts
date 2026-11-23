@@ -3,6 +3,7 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { BindingRuleSetSchema } from './BindingRuleSetSchema';
+import type { GrantEndReason } from './GrantEndReason';
 import type { PermissionRuleReadSchema } from './PermissionRuleReadSchema';
 import type { ScopeOptionSchema } from './ScopeOptionSchema';
 /**
@@ -17,6 +18,10 @@ export type BindingAccessResponse = {
      * True when `expires_at` has passed: the agent cannot use the binding, and no rule change brings it back. Only the operator can renew it.
      */
     expired?: boolean;
+    /**
+     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+     */
+    expired_reason?: (GrantEndReason | null);
     /**
      * When the binding stops authorizing calls (RFC 3339); null if it never expires. Independent of `suspended`.
      */

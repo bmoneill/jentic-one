@@ -747,6 +747,7 @@ def test_bind_with_expiry_and_renew_binding(
     assert resp.status_code == 201
     body = resp.json()
     assert body["expired"] is False
+    assert body["expired_reason"] is None
     assert datetime.fromisoformat(body["expires_at"]) == first
 
     later = (datetime.now(UTC) + timedelta(days=30)).replace(microsecond=0)

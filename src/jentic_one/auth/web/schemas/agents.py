@@ -7,6 +7,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from jentic_one.shared.auth.grant_policy import GrantEndReason
 from jentic_one.shared.schemas import ServedApiRef
 from jentic_one.shared.web import openapi_examples as ex
 from jentic_one.shared.web.sensitive import SENSITIVE
@@ -220,6 +221,14 @@ class CredentialBindingResponse(BaseModel):
         default=False,
         description="Whether `expires_at` has passed.",
         examples=[False],
+    )
+    expired_reason: GrantEndReason | None = Field(
+        default=None,
+        description=(
+            "Which limit ended the binding while `expired` is true: `end_date`"
+            " (`expires_at` passed). Null while the binding holds."
+        ),
+        examples=[None],
     )
     # Shared permission rule set the binding points at (None = inline rules).
     rule_set_id: str | None = Field(

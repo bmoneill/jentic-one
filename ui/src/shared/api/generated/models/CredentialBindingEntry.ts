@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { GrantEndReason } from './GrantEndReason';
 import type { ServedApiRef } from './ServedApiRef';
 /**
  * Direct agent↔credential binding summary for the /me response (theme 5 phase 1).
@@ -19,6 +20,10 @@ export type CredentialBindingEntry = {
      * Whether `expires_at` has passed; the agent cannot execute through an expired binding until its operator renews it.
      */
     expired?: boolean;
+    /**
+     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+     */
+    expired_reason?: (GrantEndReason | null);
     /**
      * When the binding stops authorizing calls (RFC 3339); null if it never expires.
      */

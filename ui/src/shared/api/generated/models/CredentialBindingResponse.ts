@@ -3,6 +3,7 @@
 /* tslint:disable */
 /* eslint-disable */
 import type { ApiLastUseResponse } from './ApiLastUseResponse';
+import type { GrantEndReason } from './GrantEndReason';
 import type { ServedApiRef } from './ServedApiRef';
 /**
  * Direct agent↔credential binding representation in API responses.
@@ -24,6 +25,10 @@ export type CredentialBindingResponse = {
      * Whether `expires_at` has passed.
      */
     expired?: boolean;
+    /**
+     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+     */
+    expired_reason?: (GrantEndReason | null);
     /**
      * When the binding stops authorizing calls (RFC 3339); null if it never expires.
      */

@@ -759,8 +759,10 @@ async def test_list_credential_agents_expiry(
     rows = {r["agent_id"]: r for r in resp.json()["data"]}
     assert datetime.fromisoformat(rows[expired_id]["expires_at"]) == past
     assert rows[expired_id]["expired"] is True
+    assert rows[expired_id]["expired_reason"] == "end_date"
     assert rows[open_id]["expires_at"] is None
     assert rows[open_id]["expired"] is False
+    assert rows[open_id]["expired_reason"] is None
 
 
 async def test_list_credential_agents_owner(
@@ -854,6 +856,7 @@ def test_agent_permissions_lifecycle(
         "suspended": False,
         "expires_at": None,
         "expired": False,
+        "expired_reason": None,
         "scopes_editable": False,
         "scope_catalog": None,
     }

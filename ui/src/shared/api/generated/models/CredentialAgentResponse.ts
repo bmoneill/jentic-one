@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { GrantEndReason } from './GrantEndReason';
 /**
  * Agent directly bound to a credential.
  */
@@ -22,6 +23,10 @@ export type CredentialAgentResponse = {
      * Whether `expires_at` has passed: the agent cannot execute through this credential until the binding is renewed.
      */
     expired?: boolean;
+    /**
+     * Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+     */
+    expired_reason?: (GrantEndReason | null);
     /**
      * When the binding stops authorizing calls (RFC 3339); null if it never expires. Independent of `suspended`.
      */

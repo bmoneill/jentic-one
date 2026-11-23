@@ -130,6 +130,7 @@ export { ExecutionStatus } from './models/ExecutionStatus';
 export type { ExistingCredentialConfirmSessionRequest } from './models/ExistingCredentialConfirmSessionRequest';
 export type { ExistingCredentialResponse } from './models/ExistingCredentialResponse';
 export type { GovernedHostsResponse } from './models/GovernedHostsResponse';
+export { GrantEndReason } from './models/GrantEndReason';
 export { GroupBy } from './models/GroupBy';
 export type { HealthResponse } from './models/HealthResponse';
 export type { HeldExecutionDetailResponse } from './models/HeldExecutionDetailResponse';

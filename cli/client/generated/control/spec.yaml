@@ -3147,6 +3147,7 @@ components:
           - listCharges
           path: /v1/charges
         expired: false
+        expired_reason: null
         expires_at: '2026-12-31T23:59:00Z'
         granted_scopes: &id050
         - repo
@@ -3184,6 +3185,13 @@ components:
           examples:
           - false
           type: boolean
+        expired_reason:
+          anyOf:
+          - $ref: '#/components/schemas/GrantEndReason'
+          - type: 'null'
+          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.'
+          examples:
+          - null
         expires_at:
           description: When the binding stops authorizing calls (RFC 3339); null if it never expires. Independent of `suspended`.
           examples:
@@ -3996,8 +4004,10 @@ components:
           agent_name: billing-assistant
           bound_at: '2026-01-15T09:30:00Z'
           expired: false
+          expired_reason: null
           expires_at: '2026-12-31T23:59:00Z'
           last_used_at: '2026-02-03T14:05:00Z'
+          owner_id: usr_6968b3987ee4c3ec0b4ee3b9
           rule_set_id: prs_6968b3987c22b63e87e79f05
           status: active
           suspended: false
@@ -4035,8 +4045,10 @@ components:
         agent_name: billing-assistant
         bound_at: '2026-01-15T09:30:00Z'
         expired: false
+        expired_reason: null
         expires_at: '2026-12-31T23:59:00Z'
         last_used_at: '2026-02-03T14:05:00Z'
+        owner_id: usr_6968b3987ee4c3ec0b4ee3b9
         rule_set_id: prs_6968b3987c22b63e87e79f05
         status: active
         suspended: false
@@ -4064,6 +4076,13 @@ components:
           examples:
           - false
           type: boolean
+        expired_reason:
+          anyOf:
+          - $ref: '#/components/schemas/GrantEndReason'
+          - type: 'null'
+          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.'
+          examples:
+          - null
         expires_at:
           description: When the binding stops authorizing calls (RFC 3339); null if it never expires. Independent of `suspended`.
           examples:
@@ -4077,6 +4096,13 @@ components:
           examples:
           - '2026-02-03T14:05:00Z'
           format: date-time
+          type:
+          - string
+          - 'null'
+        owner_id:
+          description: ID of the user who owns the bound agent; null for an unclaimed self-registration. Changing the binding (suspending, resuming or renewing it) takes the agent's owner or an `org:admin`, on top of the credential's own checks.
+          examples:
+          - usr_6968b3987ee4c3ec0b4ee3b9
           type:
           - string
           - 'null'
@@ -4143,6 +4169,7 @@ components:
         bound_at: '2026-01-15T09:30:00Z'
         credential_id: cred_6968b39855d91a3561684b32
         expired: false
+        expired_reason: null
         expires_at: '2026-12-31T23:59:00Z'
         name: Stripe production key
         rule_set_id: prs_6968b3987c22b63e87e79f05
@@ -4171,6 +4198,13 @@ components:
           examples:
           - false
           type: boolean
+        expired_reason:
+          anyOf:
+          - $ref: '#/components/schemas/GrantEndReason'
+          - type: 'null'
+          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.'
+          examples:
+          - null
         expires_at:
           description: When the binding stops authorizing calls (RFC 3339); null if it never expires.
           examples:
@@ -4234,6 +4268,7 @@ components:
           bound_at: '2026-01-15T09:30:00Z'
           credential_id: cred_6968b39855d91a3561684b32
           expired: false
+          expired_reason: null
           expires_at: '2026-12-31T23:59:00Z'
           id: acb_6968b3989a4f1c2e7d3b5a60
           last_used_at: '2026-02-03T14:05:00Z'
@@ -4287,6 +4322,7 @@ components:
         bound_at: '2026-01-15T09:30:00Z'
         credential_id: cred_6968b39855d91a3561684b32
         expired: false
+        expired_reason: null
         expires_at: '2026-12-31T23:59:00Z'
         id: acb_6968b3989a4f1c2e7d3b5a60
         last_used_at: '2026-02-03T14:05:00Z'
@@ -4323,6 +4359,13 @@ components:
           examples:
           - false
           type: boolean
+        expired_reason:
+          anyOf:
+          - $ref: '#/components/schemas/GrantEndReason'
+          - type: 'null'
+          description: 'Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.'
+          examples:
+          - null
         expires_at:
           description: When the binding stops authorizing calls (RFC 3339); null if it never expires.
           examples:
@@ -6354,6 +6397,11 @@ components:
       - data
       - digest
       type: object
+    GrantEndReason:
+      description: Which limit ended a grant, as binding responses and denials report it.
+      enum:
+      - end_date
+      type: string
     GroupBy:
       description: |-
         Grouping dimension for usage statistics.

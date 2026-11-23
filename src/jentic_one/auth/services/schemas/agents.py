@@ -6,7 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
-from jentic_one.shared.auth.agent_expiry import agent_expired, binding_expired
+from jentic_one.shared.auth.agent_expiry import agent_expired
+from jentic_one.shared.auth.grant_policy import GrantEndReason, GrantPolicy, grant_end_reason
 from jentic_one.shared.schemas import ServedApiRef
 
 
@@ -91,6 +92,11 @@ class CredentialBindingView(BaseModel):
     last_used_by_api: list[ApiLastUseView] = []
 
     @property
+    def expired_reason(self) -> GrantEndReason | None:
+        """Which limit ended the binding, or ``None`` while it holds."""
+        return grant_end_reason(GrantPolicy.from_row(self))
+
+    @property
     def expired(self) -> bool:
-        """Whether ``expires_at`` has passed."""
-        return binding_expired(self.expires_at)
+        """Whether any limit of the binding has been reached."""
+        return self.expired_reason is not None

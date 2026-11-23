@@ -749,6 +749,21 @@ func (e ExistingCredentialConfirmSessionRequestKind) Valid() bool {
 	}
 }
 
+// Defines values for GrantEndReason.
+const (
+	EndDate GrantEndReason = "end_date"
+)
+
+// Valid indicates whether the value is a known member of the GrantEndReason enum.
+func (e GrantEndReason) Valid() bool {
+	switch e {
+	case EndDate:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GroupBy.
 const (
 	GroupByAgent      GroupBy = "agent"
@@ -3326,7 +3341,7 @@ type BearerTokenUpdateRequestType string
 
 // BindingAccessResponse A binding's permission rules plus the rest of what it grants.
 //
-// Examples: {"data":[{"_comment":"Read-only access to charges.","_system":false,"effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"expired":false,"expires_at":"2026-12-31T23:59:00Z","granted_scopes":["repo","read:user"],"rule_set":{"curated":false,"id":"prs_6968b3987c22b63e87e79f05","name":"Stripe read-only","rules":[{"_comment":"Read-only access to charges.","_system":false,"effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}]},"scope_catalog":[{"classification":"write","description":"Send email as the user.","name":"gmail.send"}],"scopes_editable":true,"suspended":false}
+// Examples: {"data":[{"_comment":"Read-only access to charges.","_system":false,"effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","granted_scopes":["repo","read:user"],"rule_set":{"curated":false,"id":"prs_6968b3987c22b63e87e79f05","name":"Stripe read-only","rules":[{"_comment":"Read-only access to charges.","_system":false,"effect":"allow","id":"apr_6968b3987c22b63e87e79f06","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}]},"scope_catalog":[{"classification":"write","description":"Send email as the user.","name":"gmail.send"}],"scopes_editable":true,"suspended":false}
 type BindingAccessResponse struct {
 	// Data The binding's permission rules, in evaluation order.
 	//
@@ -3337,6 +3352,11 @@ type BindingAccessResponse struct {
 	//
 	// Examples: false
 	Expired *bool `json:"expired,omitempty"`
+
+	// ExpiredReason Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+	//
+	// Examples: null
+	ExpiredReason *GrantEndReason `json:"expired_reason,omitempty"`
 
 	// ExpiresAt When the binding stops authorizing calls (RFC 3339); null if it never expires. Independent of `suspended`.
 	//
@@ -3850,11 +3870,11 @@ type CreateAdminRequest struct {
 
 // CredentialAgentListResponse Paginated list of agents directly bound to a credential.
 //
-// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}],"has_more":true,"next_cursor":"eyJ0IjogIjIwMjYtMDEtMTVUMDk6MzA6MDArMDA6MDAiLCAiaWQiOiAiM2YyYjhjMWUtN2Q0YS00ZTliLWE2YzUtMWQyZTNmNGE1YjZjIn0="}
+// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}],"has_more":true,"next_cursor":"eyJ0IjogIjIwMjYtMDEtMTVUMDk6MzA6MDArMDA6MDAiLCAiaWQiOiAiM2YyYjhjMWUtN2Q0YS00ZTliLWE2YzUtMWQyZTNmNGE1YjZjIn0="}
 type CredentialAgentListResponse struct {
 	// Data The page of bound agents.
 	//
-	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}]
+	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}]
 	Data []CredentialAgentResponse `json:"data"`
 
 	// HasMore Whether more results exist after this page.
@@ -3870,7 +3890,7 @@ type CredentialAgentListResponse struct {
 
 // CredentialAgentResponse Agent directly bound to a credential.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}
 type CredentialAgentResponse struct {
 	// AgentId ID of the bound agent.
 	//
@@ -3892,6 +3912,11 @@ type CredentialAgentResponse struct {
 	// Examples: false
 	Expired *bool `json:"expired,omitempty"`
 
+	// ExpiredReason Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+	//
+	// Examples: null
+	ExpiredReason *GrantEndReason `json:"expired_reason,omitempty"`
+
 	// ExpiresAt When the binding stops authorizing calls (RFC 3339); null if it never expires. Independent of `suspended`.
 	//
 	// Examples: 2026-12-31T23:59:00Z
@@ -3901,6 +3926,11 @@ type CredentialAgentResponse struct {
 	//
 	// Examples: 2026-02-03T14:05:00Z
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+
+	// OwnerId ID of the user who owns the bound agent; null for an unclaimed self-registration. Changing the binding (suspending, resuming or renewing it) takes the agent's owner or an `org:admin`, on top of the credential's own checks.
+	//
+	// Examples: usr_6968b3987ee4c3ec0b4ee3b9
+	OwnerId *string `json:"owner_id,omitempty"`
 
 	// RuleSetId Shared permission rule set this binding points at, if any. While attached, the set's ordered list is the binding's effective policy; null means the binding's inline rules apply.
 	//
@@ -3940,7 +3970,7 @@ type CredentialBindRequest struct {
 
 // CredentialBindingEntry Direct agent↔credential binding summary for the /me response (theme 5 phase 1).
 //
-// Examples: {"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expires_at":"2026-12-31T23:59:00Z","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}
+// Examples: {"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}
 type CredentialBindingEntry struct {
 	// BoundAt When the credential was bound (RFC 3339).
 	//
@@ -3956,6 +3986,11 @@ type CredentialBindingEntry struct {
 	//
 	// Examples: false
 	Expired *bool `json:"expired,omitempty"`
+
+	// ExpiredReason Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+	//
+	// Examples: null
+	ExpiredReason *GrantEndReason `json:"expired_reason,omitempty"`
 
 	// ExpiresAt When the binding stops authorizing calls (RFC 3339); null if it never expires.
 	//
@@ -3995,11 +4030,11 @@ type CredentialBindingEntry struct {
 
 // CredentialBindingListResponse List of direct credential bindings.
 //
-// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]}
+// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]}
 type CredentialBindingListResponse struct {
 	// Data The agent's direct credential bindings.
 	//
-	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]
+	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]
 	Data []CredentialBindingResponse `json:"data"`
 }
 
@@ -4018,7 +4053,7 @@ type CredentialBindingPatchRequest struct {
 
 // CredentialBindingResponse Direct agent↔credential binding representation in API responses.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}
 type CredentialBindingResponse struct {
 	// AgentId ID of the agent the credential is bound to.
 	//
@@ -4039,6 +4074,11 @@ type CredentialBindingResponse struct {
 	//
 	// Examples: false
 	Expired *bool `json:"expired,omitempty"`
+
+	// ExpiredReason Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.
+	//
+	// Examples: null
+	ExpiredReason *GrantEndReason `json:"expired_reason,omitempty"`
 
 	// ExpiresAt When the binding stops authorizing calls (RFC 3339); null if it never expires.
 	//
@@ -5218,6 +5258,9 @@ type GovernedHostsResponse struct {
 	Digest string `json:"digest"`
 }
 
+// GrantEndReason Which limit ended a grant, as binding responses and denials report it.
+type GrantEndReason string
+
 // GroupBy Grouping dimension for usage statistics.
 //
 // “CREDENTIAL“ groups by the credential an execution ran with
@@ -5975,7 +6018,7 @@ type McpConfigRuntime string
 
 // MeAgent Identity response for an agent actor.
 //
-// Examples: {"approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","credential_bindings":[{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expires_at":"2026-12-31T23:59:00Z","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}],"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","permissions":["apis:read","capabilities:execute"],"status":"active","token_permissions":["apis:read","capabilities:execute"],"type":"agent"}
+// Examples: {"approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","credential_bindings":[{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}],"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","permissions":["apis:read","capabilities:execute"],"status":"active","token_permissions":["apis:read","capabilities:execute"],"type":"agent"}
 type MeAgent struct {
 	// ApprovedBy ID of the user who approved the agent; null if not approved.
 	//
@@ -5984,7 +6027,7 @@ type MeAgent struct {
 
 	// CredentialBindings Credentials bound directly to the agent.
 	//
-	// Examples: [{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expires_at":"2026-12-31T23:59:00Z","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}]
+	// Examples: [{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}]
 	CredentialBindings *[]CredentialBindingEntry `json:"credential_bindings,omitempty"`
 
 	// Id Unique ID of the agent.

@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Discriminator, Field
 
+from jentic_one.shared.auth.grant_policy import GrantEndReason
 from jentic_one.shared.schemas import ServedApiRef
 from jentic_one.shared.web import openapi_examples as ex
 
@@ -74,6 +75,14 @@ class CredentialBindingEntry(BaseModel):
             " binding until its operator renews it."
         ),
         examples=[False],
+    )
+    expired_reason: GrantEndReason | None = Field(
+        default=None,
+        description=(
+            "Which limit ended the binding while `expired` is true: `end_date`"
+            " (`expires_at` passed). Null while the binding holds."
+        ),
+        examples=[None],
     )
     # Shared permission rule set this binding points at (None = inline rules)
     # — tells the agent which policy object governs it (theme 5, Q-04).

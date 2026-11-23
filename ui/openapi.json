@@ -5318,6 +5318,7 @@
               }
             ],
             "expired": false,
+            "expired_reason": null,
             "expires_at": "2026-12-31T23:59:00Z",
             "granted_scopes": [
               "repo",
@@ -5388,6 +5389,20 @@
               false
             ],
             "type": "boolean"
+          },
+          "expired_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrantEndReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.",
+            "examples": [
+              null
+            ]
           },
           "expires_at": {
             "anyOf": [
@@ -6702,6 +6717,7 @@
                 "agent_name": "billing-assistant",
                 "bound_at": "2026-01-15T09:30:00Z",
                 "expired": false,
+                "expired_reason": null,
                 "expires_at": "2026-12-31T23:59:00Z",
                 "last_used_at": "2026-02-03T14:05:00Z",
                 "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
@@ -6725,6 +6741,7 @@
                   "agent_name": "billing-assistant",
                   "bound_at": "2026-01-15T09:30:00Z",
                   "expired": false,
+                  "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
@@ -6776,6 +6793,7 @@
             "agent_name": "billing-assistant",
             "bound_at": "2026-01-15T09:30:00Z",
             "expired": false,
+            "expired_reason": null,
             "expires_at": "2026-12-31T23:59:00Z",
             "last_used_at": "2026-02-03T14:05:00Z",
             "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
@@ -6815,6 +6833,20 @@
               false
             ],
             "type": "boolean"
+          },
+          "expired_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrantEndReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.",
+            "examples": [
+              null
+            ]
           },
           "expires_at": {
             "anyOf": [
@@ -6958,6 +6990,7 @@
             "bound_at": "2026-01-15T09:30:00Z",
             "credential_id": "cred_6968b39855d91a3561684b32",
             "expired": false,
+            "expired_reason": null,
             "expires_at": "2026-12-31T23:59:00Z",
             "name": "Stripe production key",
             "rule_set_id": "prs_6968b3987c22b63e87e79f05",
@@ -6996,6 +7029,20 @@
               false
             ],
             "type": "boolean"
+          },
+          "expired_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrantEndReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.",
+            "examples": [
+              null
+            ]
           },
           "expires_at": {
             "anyOf": [
@@ -7110,6 +7157,7 @@
                 "bound_at": "2026-01-15T09:30:00Z",
                 "credential_id": "cred_6968b39855d91a3561684b32",
                 "expired": false,
+                "expired_reason": null,
                 "expires_at": "2026-12-31T23:59:00Z",
                 "id": "acb_6968b3989a4f1c2e7d3b5a60",
                 "last_used_at": "2026-02-03T14:05:00Z",
@@ -7145,6 +7193,7 @@
                   "bound_at": "2026-01-15T09:30:00Z",
                   "credential_id": "cred_6968b39855d91a3561684b32",
                   "expired": false,
+                  "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
                   "last_used_at": "2026-02-03T14:05:00Z",
@@ -7217,6 +7266,7 @@
             "bound_at": "2026-01-15T09:30:00Z",
             "credential_id": "cred_6968b39855d91a3561684b32",
             "expired": false,
+            "expired_reason": null,
             "expires_at": "2026-12-31T23:59:00Z",
             "id": "acb_6968b3989a4f1c2e7d3b5a60",
             "last_used_at": "2026-02-03T14:05:00Z",
@@ -7270,6 +7320,20 @@
               false
             ],
             "type": "boolean"
+          },
+          "expired_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrantEndReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed). Null while the binding holds.",
+            "examples": [
+              null
+            ]
           },
           "expires_at": {
             "anyOf": [
@@ -10825,6 +10889,13 @@
         ],
         "type": "object"
       },
+      "GrantEndReason": {
+        "description": "Which limit ended a grant, as binding responses and denials report it.",
+        "enum": [
+          "end_date"
+        ],
+        "type": "string"
+      },
       "GroupBy": {
         "description": "Grouping dimension for usage statistics.\n\n``CREDENTIAL`` groups by the credential an execution ran with\n(``execution_records.credential_id``).",
         "enum": [
@@ -12782,6 +12853,7 @@
                 "bound_at": "2026-01-15T09:30:00Z",
                 "credential_id": "cred_6968b39855d91a3561684b32",
                 "expired": false,
+                "expired_reason": null,
                 "expires_at": "2026-12-31T23:59:00Z",
                 "name": "Stripe production key",
                 "rule_set_id": "prs_6968b3987c22b63e87e79f05",
@@ -12836,6 +12908,7 @@
                   "bound_at": "2026-01-15T09:30:00Z",
                   "credential_id": "cred_6968b39855d91a3561684b32",
                   "expired": false,
+                  "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "name": "Stripe production key",
                   "rule_set_id": "prs_6968b3987c22b63e87e79f05",
@@ -26776,6 +26849,7 @@
                       "bound_at": "2026-01-15T09:30:00Z",
                       "credential_id": "cred_6968b39855d91a3561684b32",
                       "expired": false,
+                      "expired_reason": null,
                       "expires_at": "2026-12-31T23:59:00Z",
                       "id": "acb_6968b3989a4f1c2e7d3b5a60",
                       "last_used_at": "2026-02-03T14:05:00Z",
@@ -26905,6 +26979,7 @@
                   "bound_at": "2026-01-15T09:30:00Z",
                   "credential_id": "cred_6968b39855d91a3561684b32",
                   "expired": false,
+                  "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
                   "last_used_at": "2026-02-03T14:05:00Z",
@@ -27191,6 +27266,7 @@
                   "bound_at": "2026-01-15T09:30:00Z",
                   "credential_id": "cred_6968b39855d91a3561684b32",
                   "expired": false,
+                  "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
                   "last_used_at": "2026-02-03T14:05:00Z",
@@ -27327,6 +27403,7 @@
                   "bound_at": "2026-01-15T09:30:00Z",
                   "credential_id": "cred_6968b39855d91a3561684b32",
                   "expired": false,
+                  "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
                   "last_used_at": "2026-02-03T14:05:00Z",
@@ -34109,6 +34186,7 @@
                       "agent_name": "billing-assistant",
                       "bound_at": "2026-01-15T09:30:00Z",
                       "expired": false,
+                      "expired_reason": null,
                       "expires_at": "2026-12-31T23:59:00Z",
                       "last_used_at": "2026-02-03T14:05:00Z",
                       "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
@@ -34217,6 +34295,7 @@
                     }
                   ],
                   "expired": false,
+                  "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "granted_scopes": [
                     "repo",

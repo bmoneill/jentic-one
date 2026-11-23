@@ -446,6 +446,7 @@ def _credential_binding_response(view: CredentialBindingView) -> CredentialBindi
         suspended_reason=view.suspended_reason,
         expires_at=view.expires_at,
         expired=view.expired,
+        expired_reason=view.expired_reason,
         rule_set_id=view.rule_set_id,
         serves=view.serves,
         last_used_at=view.last_used_at,
