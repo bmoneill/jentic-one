@@ -42,6 +42,19 @@ export function describeHeldCall(approval: HeldExecutionResponse): string {
 	return `${approval.method} ${approval.path} on ${approval.api_vendor}/${approval.api_name}`;
 }
 
+/** Whether the call is held because the agent's access ended, for fresh access. */
+export function isRenewalHold(approval: HeldExecutionResponse): boolean {
+	return approval.kind === 'grant_renewal';
+}
+
+/** "fresh access to api.stripe.com/payments", "fresh access to 2 APIs" — a renewal group's headline. */
+export function summariseRenewals(approvals: readonly HeldExecutionResponse[]): string {
+	const apis = new Set(approvals.map((a) => `${a.api_vendor}/${a.api_name}`));
+	return apis.size === 1
+		? `fresh access to ${[...apis][0]}`
+		: `fresh access to ${apis.size} APIs`;
+}
+
 /** "a call to api.stripe.com/payments", "3 calls" — a group's headline. */
 export function summariseHeldCalls(approvals: readonly HeldExecutionResponse[]): string {
 	if (approvals.length === 1) {

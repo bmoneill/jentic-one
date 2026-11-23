@@ -9,6 +9,8 @@
  *   - a held call — the agent's call matched an Ask rule and waits on its
  *     owner (or an org admin) to approve or deny it. Its Review links open the
  *     approval's review page, the address the broker returns as `review_url`.
+ *     A call held because the agent's access ended gets its own row ("needs
+ *     fresh access to …"), linking to the same review page.
  *   - access ending soon — a binding whose owner asked to be warned will
  *     reach its idle limit within two days unless the agent uses it. Review
  *     opens the agent, whose API tile renews it ("Still needed").
@@ -41,7 +43,9 @@ import {
 import {
 	describeHeldCall,
 	groupApprovalsByAgent,
+	isRenewalHold,
 	summariseHeldCalls,
+	summariseRenewals,
 	useCanDecideApprovals,
 	usePendingApprovals,
 	type AgentPendingApprovals,
@@ -58,7 +62,14 @@ export function WaitingForYouSection() {
 	const canDecide = useCanDecideApprovals();
 	const approvals = usePendingApprovals({ enabled: canDecide });
 	const approvalGroups = useMemo(
-		() => groupApprovalsByAgent(approvals.data?.approvals ?? []),
+		() =>
+			groupApprovalsByAgent(
+				(approvals.data?.approvals ?? []).filter((a) => !isRenewalHold(a)),
+			),
+		[approvals.data],
+	);
+	const renewalGroups = useMemo(
+		() => groupApprovalsByAgent((approvals.data?.approvals ?? []).filter(isRenewalHold)),
 		[approvals.data],
 	);
 	const canReadAgents = useCanAccess(AGENTS_READ);
@@ -67,6 +78,7 @@ export function WaitingForYouSection() {
 	const directory = useActorDirectory([
 		...connectGroups.map((g) => g.agentId),
 		...approvalGroups.map((g) => g.agentId),
+		...renewalGroups.map((g) => g.agentId),
 	]);
 
 	// The inbox reads the connect-request query for every credentials reader,
@@ -74,8 +86,14 @@ export function WaitingForYouSection() {
 	// render too. Likewise for held calls.
 	const shownConnect = canApprove ? connectGroups : [];
 	const shownApprovals = canDecide ? approvalGroups : [];
+	const shownRenewals = canDecide ? renewalGroups : [];
 	const shownEnding = canReadAgents ? endingGroups : [];
-	if (shownConnect.length === 0 && shownApprovals.length === 0 && shownEnding.length === 0)
+	if (
+		shownConnect.length === 0 &&
+		shownApprovals.length === 0 &&
+		shownRenewals.length === 0 &&
+		shownEnding.length === 0
+	)
 		return null;
 
 	return (
@@ -97,6 +115,13 @@ export function WaitingForYouSection() {
 				{shownConnect.map((group) => (
 					<ConnectRequestsRow
 						key={`connect:${group.agentId}`}
+						group={group}
+						name={directory.resolve(group.agentId) ?? group.agentId}
+					/>
+				))}
+				{shownRenewals.map((group) => (
+					<RenewalsRow
+						key={`renewal:${group.agentId}`}
 						group={group}
 						name={directory.resolve(group.agentId) ?? group.agentId}
 					/>
@@ -215,6 +240,44 @@ function HeldCallsRow({ group, name }: { group: AgentPendingApprovals; name: str
 							<span className="sr-only">
 								{' '}
 								{name}&apos;s held call {describeHeldCall(approval)}
+							</span>
+						</>
+					)}
+				</AppLink>
+			))}
+		</WaitingRow>
+	);
+}
+
+function RenewalsRow({ group, name }: { group: AgentPendingApprovals; name: string }) {
+	return (
+		<WaitingRow
+			name={name}
+			what={`needs ${summariseRenewals(group.approvals)}`}
+			since={group.since}
+			testId="waiting-renewal"
+		>
+			{group.approvals.map((approval) => (
+				<AppLink
+					key={approval.id}
+					href={ROUTE_PATHS.approval(approval.id)}
+					variant="tonal"
+					size="sm"
+					title={describeHeldCall(approval)}
+				>
+					{/* The accessible name starts with the visible label and
+					    says whose request it is. */}
+					{group.approvals.length > 1 ? (
+						<>
+							Review {approval.api_vendor}/{approval.api_name}
+							<span className="sr-only"> for {name}</span>
+						</>
+					) : (
+						<>
+							Review
+							<span className="sr-only">
+								{' '}
+								{name}&apos;s request for {summariseRenewals([approval])}
 							</span>
 						</>
 					)}

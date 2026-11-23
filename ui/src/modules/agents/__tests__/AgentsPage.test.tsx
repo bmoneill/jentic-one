@@ -3048,6 +3048,21 @@ describe('AgentsPage — access ending soon', () => {
 		await checkA11y(section);
 	});
 
+	it('lists a call held because access ended as its own row', async () => {
+		const held = seedMockApproval({ kind: 'grant_renewal' });
+		renderPage();
+		const section = await screen.findByRole('region', { name: 'Waiting for you' });
+		const row = await within(section).findByTestId('waiting-renewal');
+		expect(row).toHaveTextContent('needs fresh access to api.stripe.com/payments');
+		expect(
+			within(row)
+				.getByRole('link', { name: /^Review/ })
+				.getAttribute('href'),
+		).toBe(`/agents/approvals/${held.id}`);
+		// Not counted as a call wanting approval.
+		expect(section).not.toHaveTextContent('wants to make');
+	});
+
 	it("collapses an agent's bindings into one row", async () => {
 		worker.use(
 			http.get('/agents/credentials\\:ending-soon', () =>

@@ -42,6 +42,19 @@ interface ApprovalRow {
 	created_at: string;
 	updated_at: string | null;
 	request: { method: string; url: string; body: string | null; body_truncated: boolean } | null;
+	/** `execution` (an Ask rule) or `grant_renewal` (the agent's access ended). */
+	kind?: 'execution' | 'grant_renewal';
+	/** For a renewal hold: the binding it would renew. */
+	renewal?: {
+		expired_reason: string | null;
+		last_used_at: string | null;
+		expires_at: string | null;
+		max_idle_period: number | null;
+		idle_warning: boolean;
+		max_quota: number | null;
+		quota_remaining: number | null;
+		can_renew: boolean;
+	} | null;
 }
 
 const hours = (n: number) => new Date(Date.now() + n * 3_600_000).toISOString();
@@ -183,13 +196,21 @@ function detailView(row: ApprovalRow) {
 	const { job_id: _j, ...rest } = row;
 	return {
 		...rest,
+		kind: row.kind ?? 'execution',
+		renewal: row.kind === 'grant_renewal' ? (row.renewal ?? null) : null,
 		review_url: `${window.location.origin}/app/agents/approvals/${row.id}`,
 		_links: links(row),
 	};
 }
 
 function listView(row: ApprovalRow) {
-	const { agent_name: _n, agent_owner_id: _o, request: _r, ...rest } = detailView(row);
+	const {
+		agent_name: _n,
+		agent_owner_id: _o,
+		request: _r,
+		renewal: _rn,
+		...rest
+	} = detailView(row);
 	return rest;
 }
 
@@ -223,15 +244,34 @@ export const approvalsHandlers = [
 	http.post('/executions/holds/:id\\:decide', async ({ params, request }) => {
 		const row = store.find((r) => r.id === params.id);
 		if (!row) return HttpResponse.json({ status: 404 }, { status: 404 });
-		const body = (await request.json()) as { decision?: string; reason?: string | null };
+		const body = (await request.json()) as {
+			decision?: string;
+			reason?: string | null;
+			renewal?: unknown;
+			run?: boolean;
+		};
 		if (body.decision !== 'approve' && body.decision !== 'deny') {
 			return HttpResponse.json({ status: 422, detail: 'invalid decision' }, { status: 422 });
 		}
 		if (row.state !== 'pending') {
 			return alreadySettled(row);
 		}
+		const renewal = row.kind === 'grant_renewal';
+		if ((body.renewal != null) !== (renewal && body.decision === 'approve')) {
+			return HttpResponse.json(
+				{ type: 'held_execution_renewal_invalid', status: 422, detail: 'renewal' },
+				{ status: 422 },
+			);
+		}
+		if (renewal && body.decision === 'approve' && !row.renewal?.can_renew) {
+			return HttpResponse.json(
+				{ type: 'held_execution_renewal_forbidden', status: 403, detail: 'renewal' },
+				{ status: 403 },
+			);
+		}
+		const runs = body.decision === 'approve' && (!renewal || body.run !== false);
 		row.state = body.decision === 'approve' ? 'approved' : 'denied';
-		row.execution_status = body.decision === 'approve' ? 'queued' : 'failed';
+		row.execution_status = runs ? 'queued' : 'failed';
 		row.decided_at = new Date().toISOString();
 		row.decided_by = 'usr_owner';
 		row.decision_reason = body.reason ?? null;

@@ -17,6 +17,7 @@ import {
 	type ListApprovalsParams,
 } from '@/modules/agents/api/approvals-client';
 import { isCallUnderWay } from '@/modules/agents/lib/approvalState';
+import { invalidateBindingSurfaces } from '@/shared/credentials/api';
 import {
 	sharedQueryKeys,
 	type DecideHeldExecutionRequest,
@@ -82,9 +83,14 @@ export function useDecideApproval() {
 			qc.invalidateQueries({ queryKey: sharedQueryKeys.attentionRoot });
 			qc.invalidateQueries({ queryKey: sharedQueryKeys.monitorJobsRoot });
 			qc.invalidateQueries({ queryKey: sharedQueryKeys.monitorJobRoot });
+			const renewed = data.kind === 'grant_renewal' && data.state === 'approved';
+			// Fresh access changes the binding: every surface showing it refetches.
+			if (renewed) void invalidateBindingSurfaces(qc, data.credential_id, [data.agent_id]);
 			const verb = data.state === 'approved' ? 'Approved' : 'Denied';
 			toast({
-				title: `${verb} execution for ${data.api_vendor}/${data.api_name}`,
+				title: renewed
+					? `Granted fresh access to ${data.api_vendor}/${data.api_name}`
+					: `${verb} execution for ${data.api_vendor}/${data.api_name}`,
 				variant: 'success',
 			});
 		},

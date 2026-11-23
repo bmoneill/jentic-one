@@ -8,7 +8,9 @@ export {
 export {
 	describeHeldCall,
 	groupApprovalsByAgent,
+	isRenewalHold,
 	summariseHeldCalls,
+	summariseRenewals,
 	useCanDecideApprovals,
 	type AgentPendingApprovals,
 } from '@/shared/approvals/pendingApprovals';

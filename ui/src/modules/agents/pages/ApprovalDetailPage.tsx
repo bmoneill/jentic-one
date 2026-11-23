@@ -12,6 +12,11 @@
  * can see it; the server decides who may act (the agent's owner or an org
  * admin) and a refused decision (403) is explained in place. A decided one is
  * read-only. A signed-in user who cannot see it (404) is told who can.
+ *
+ * A call held because the agent's access ended (`kind: grant_renewal`) says
+ * why it ended and when the access was last used, and its decision is fresh
+ * access (`RenewalDecision`): only a reviewer who may renew the binding
+ * directly gets the renewal choices; anyone else may only deny.
  */
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
@@ -51,6 +56,11 @@ import {
 	ReviewSection,
 } from '@/modules/agents/components/approvals/ReviewLayout';
 import { isDecidable } from '@/modules/agents/lib/approvalState';
+import {
+	RenewalDecision,
+	type RenewalPolicyBody,
+} from '@/modules/agents/components/approvals/RenewalDecision';
+import { idleLabel } from '@/shared/credentials/lib/idleLimit';
 
 /** Pretty-print a JSON body; anything else is shown verbatim. */
 function formatBody(body: string): string {
@@ -92,6 +102,31 @@ function ago(iso: string): string {
 	return age === 'now' ? 'just now' : `${age} ago`;
 }
 
+/** Why an ended binding ended: "End date passed 3d ago", "Unused for 14 days", "Already used once". */
+function endedText(renewal: {
+	expired_reason?: string | null;
+	expires_at?: string | null;
+	max_idle_period?: number | null;
+	max_quota?: number | null;
+}): string {
+	switch (renewal.expired_reason) {
+		case 'end_date':
+			return renewal.expires_at
+				? `End date passed ${ago(renewal.expires_at)}`
+				: 'End date passed';
+		case 'idle':
+			return renewal.max_idle_period
+				? `Unused for ${idleLabel(renewal.max_idle_period)}`
+				: 'Unused too long';
+		case 'uses':
+			return renewal.max_quota === 1
+				? 'Already used once'
+				: `All ${renewal.max_quota ?? ''} uses taken`.replace('  ', ' ');
+		default:
+			return 'It has been renewed since, and holds again';
+	}
+}
+
 export default function ApprovalDetailPage() {
 	const { id } = useParams<{ id: string }>();
 	const navigate = useNavigate();
@@ -124,6 +159,23 @@ export default function ApprovalDetailPage() {
 		);
 	}
 
+	function handleRenewal(policy: RenewalPolicyBody | null, run: boolean, why: string) {
+		if (!id) return;
+		decide.mutate({
+			heldExecutionId: id,
+			body:
+				policy === null
+					? { decision: ApprovalDecision.DENY, reason: why || null }
+					: {
+							decision: ApprovalDecision.APPROVE,
+							reason: why || null,
+							renewal: policy,
+							run,
+						},
+		});
+	}
+	const renewalHold = approval?.kind === 'grant_renewal';
+
 	const shownState =
 		approval && approval.state === 'pending' && !decidable ? 'expired' : approval?.state;
 	const agentName = approval?.agent_name ?? nameOf(approval?.agent_id, 'An agent');
@@ -134,7 +186,9 @@ export default function ApprovalDetailPage() {
 				title="Review held call"
 				subtitle={
 					approval
-						? `${agentName} wants to make this call. It runs once if approved.`
+						? renewalHold
+							? `${agentName}'s access to ${approval.api_name} has ended. Grant fresh access to let this call run.`
+							: `${agentName} wants to make this call. It runs once if approved.`
 						: "An agent's call is waiting on a human decision."
 				}
 				actions={
@@ -215,6 +269,34 @@ export default function ApprovalDetailPage() {
 										credential.data?.name ?? 'A credential bound to this agent'
 									}
 								/>
+								{renewalHold && approval.renewal && (
+									<>
+										<ReviewRow
+											label="Why access ended"
+											value={
+												<span data-testid="renewal-ended">
+													{endedText(approval.renewal)}
+												</span>
+											}
+										/>
+										<ReviewRow
+											label="Last used"
+											value={
+												approval.renewal.last_used_at ? (
+													<Tooltip
+														content={formatTimestamp(
+															approval.renewal.last_used_at,
+														)}
+													>
+														{ago(approval.renewal.last_used_at)}
+													</Tooltip>
+												) : (
+													'Never'
+												)
+											}
+										/>
+									</>
+								)}
 								<ReviewRow
 									label="Requested"
 									value={
@@ -285,7 +367,19 @@ export default function ApprovalDetailPage() {
 						)}
 					</ReviewSection>
 
-					{decidable && decideForbidden ? (
+					{decidable && renewalHold && !decideForbidden ? (
+						<ReviewSection title="Your decision">
+							<ReviewPanel>
+								<RenewalDecision
+									agentName={agentName}
+									canRenew={approval.renewal?.can_renew ?? false}
+									pending={decide.isPending}
+									onDeny={(why) => handleRenewal(null, false, why)}
+									onRenew={(policy, run, why) => handleRenewal(policy, run, why)}
+								/>
+							</ReviewPanel>
+						</ReviewSection>
+					) : decidable && decideForbidden ? (
 						<ReviewSection title="Your decision">
 							<p role="alert" className="text-muted-foreground text-sm">
 								You can see this call but can&apos;t decide it. Only the
@@ -362,8 +456,9 @@ export default function ApprovalDetailPage() {
 
 					<footer className="text-muted-foreground flex flex-wrap items-center justify-between gap-2 text-xs">
 						<p>
-							An Ask rule on this agent&apos;s access to {approval.api_name} holds
-							calls like this one for review.{' '}
+							{renewalHold
+								? `This call is held because the agent's access to ${approval.api_name} ended.`
+								: `An Ask rule on this agent's access to ${approval.api_name} holds calls like this one for review.`}{' '}
 							<AppLink
 								href={ROUTE_PATHS.agentTab(approval.agent_id)}
 								className="text-primary inline-flex items-center gap-0.5 font-medium hover:underline"

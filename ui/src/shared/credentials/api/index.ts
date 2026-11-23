@@ -524,6 +524,7 @@ export {
 
 export {
 	bindingsEndingSoonKey,
+	invalidateBindingSurfaces,
 	connectRequestsKey,
 	useAgentsForPicker,
 	useBindingAccess,

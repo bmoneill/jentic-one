@@ -7,7 +7,7 @@
  */
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { ArrowLeft, CheckSquare } from 'lucide-react';
+import { ArrowLeft, CheckSquare, Hourglass } from 'lucide-react';
 import {
 	Button,
 	DataTable,
@@ -16,6 +16,7 @@ import {
 	PageShell,
 	Select,
 	SkeletonRows,
+	StatusChip,
 	type Column,
 } from '@/shared/ui';
 import { ROUTES, ROUTE_PATHS } from '@/shared/app/routes';
@@ -47,8 +48,15 @@ const COLUMNS: Column<HeldExecutionResponse>[] = [
 		key: 'method',
 		header: 'Operation',
 		render: (row) => (
-			<span className="font-mono text-sm">
-				{row.method} {row.path}
+			<span className="flex flex-wrap items-center gap-1.5">
+				<span className="font-mono text-sm">
+					{row.method} {row.path}
+				</span>
+				{row.kind === 'grant_renewal' && (
+					<StatusChip tone="caution" icon={Hourglass} data-testid="approval-renewal-chip">
+						Access ended
+					</StatusChip>
+				)}
 			</span>
 		),
 	},

@@ -265,6 +265,79 @@ describe('Approvals pages', () => {
 	});
 });
 
+describe('Renewal holds (access ended)', () => {
+	beforeEach(() => {
+		resetApprovalsStore();
+		setToken('mock-access-token');
+	});
+
+	function seedRenewal(canRenew: boolean) {
+		return seedMockApproval({
+			kind: 'grant_renewal',
+			renewal: {
+				expired_reason: 'idle',
+				last_used_at: new Date(Date.now() - 15 * 86_400_000).toISOString(),
+				expires_at: null,
+				max_idle_period: 14 * 86_400,
+				idle_warning: false,
+				max_quota: null,
+				quota_remaining: null,
+				can_renew: canRenew,
+			},
+		});
+	}
+
+	it('says why access ended and grants fresh access, then runs the call', async () => {
+		const row = seedRenewal(true);
+		const bodies: unknown[] = [];
+		worker.events.on('request:start', async ({ request }) => {
+			if (request.url.endsWith(':decide')) bodies.push(await request.clone().json());
+		});
+		const { container } = renderDetail(row.id);
+		expect(await screen.findByTestId('renewal-ended')).toHaveTextContent('Unused for 14 days');
+		const grant = screen.getByTestId('renewal-grant-and-run');
+		// Nothing preselected: fresh access waits for a choice.
+		expect(grant).toBeDisabled();
+		await userEvent.selectOptions(screen.getByTestId('renewal-duration-preset'), '7d');
+		await userEvent.click(screen.getByText('End after one use'));
+		await userEvent.click(grant);
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		worker.events.removeAllListeners();
+		const body = bodies[0] as {
+			decision: string;
+			run: boolean;
+			renewal: { expires_at: string; max_quota: number; max_idle_period: number | null };
+		};
+		expect(body.decision).toBe('approve');
+		expect(body.run).toBe(true);
+		expect(body.renewal.max_quota).toBe(1);
+		expect(body.renewal.max_idle_period).toBeNull();
+		const days = (Date.parse(body.renewal.expires_at) - Date.now()) / 86_400_000;
+		expect(days).toBeGreaterThan(6.9);
+		expect(await screen.findByText('Decided by')).toBeInTheDocument();
+		expect(getMockApproval(row.id)?.execution_status).toBe('queued');
+		await checkA11y(container);
+	});
+
+	it('offers only Deny to a reviewer who may not renew', async () => {
+		const row = seedRenewal(false);
+		renderDetail(row.id);
+		expect(await screen.findByTestId('renewal-cannot-renew')).toBeVisible();
+		expect(screen.queryByTestId('renewal-grant')).not.toBeInTheDocument();
+		await userEvent.click(screen.getByTestId('renewal-deny'));
+		expect(await screen.findByText('Decided by')).toBeInTheDocument();
+		expect(getMockApproval(row.id)?.state).toBe('denied');
+	});
+
+	it('marks a renewal in the list', async () => {
+		seedRenewal(true);
+		renderWithProviders(<ApprovalsPage />, { route: '/agents/approvals' });
+		expect(await screen.findByTestId('approval-renewal-chip')).toHaveTextContent(
+			'Access ended',
+		);
+	});
+});
+
 describe('isDecidable', () => {
 	it('is true only for a pending approval before its expiry', () => {
 		const now = new Date('2026-10-06T12:00:00Z');
