@@ -60,6 +60,7 @@ class CredentialBoundAgentRow(NamedTuple):
     max_idle_period: int | None = None
     idle_used_at: datetime | None = None
     renewed_at: datetime | None = None
+    idle_warning: bool = False
 
     def policy(self) -> GrantPolicy:
         """The binding's policy, against the idle clock's own use stamp."""
@@ -238,7 +239,7 @@ class PrerequisiteRepository:
         stmt = text(
             "SELECT b.id, a.id, a.name, a.status, b.bound_at, b.suspended, b.rule_set_id, "
             "b.suspended_reason, a.owner_id, b.expires_at, "
-            "b.max_idle_period, b.last_used_at, b.renewed_at "
+            "b.max_idle_period, b.last_used_at, b.renewed_at, b.idle_warning "
             "FROM agent_credential_bindings b "
             "JOIN agents a ON a.id = b.agent_id "
             f"WHERE {' AND '.join(conditions)} "
@@ -271,6 +272,7 @@ class PrerequisiteRepository:
                 max_idle_period=row[10],
                 idle_used_at=as_utc(row[11]) if row[11] is not None else None,
                 renewed_at=as_utc(row[12]) if row[12] is not None else None,
+                idle_warning=bool(row[13]),
             )
             for row in result.fetchall()
         ]

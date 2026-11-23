@@ -100,6 +100,7 @@ async def _resolve_agent(request: Request, identity: Identity, agent_svc: AgentS
                 expired=cb.expired,
                 expired_reason=cb.expired_reason,
                 max_idle_period=cb.max_idle_period,
+                idle_warning=cb.idle_warning,
                 idle_expires_at=cb.idle_expires_at,
                 last_used_at=cb.last_used_at,
                 rule_set_id=cb.rule_set_id,

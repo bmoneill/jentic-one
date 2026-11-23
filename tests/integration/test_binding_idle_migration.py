@@ -26,6 +26,7 @@ pytestmark = pytest.mark.integration
 
 _REVISION = "a7c3e9f1b2d4"  # pragma: allowlist secret
 _PARENT = "e5b1c7d3a9f2"  # pragma: allowlist secret
+_WARNING_REVISION = "b8d4f0a2c3e5"  # pragma: allowlist secret
 
 
 async def _cleanup(db: DatabaseSession) -> None:
@@ -164,3 +165,37 @@ async def test_downgrade_suspends_idle_ended_bindings(
     assert state["acb_bidle_idle"] == (True, "binding_expired")
     assert state["acb_bidle_live"] == (False, None)
     assert state["acb_bidle_none"] == (False, None)
+
+
+async def test_idle_warning_columns_default_off_and_drop_on_downgrade(
+    integration_config: AppConfig, admin_db: DatabaseSession, restore_head: None
+) -> None:
+    """``b8d4f0a2c3e5`` adds the warning flag (off for every existing binding)."""
+    cfg = alembic_config_for("admin", integration_config.databases.admin)
+    await asyncio.to_thread(command.downgrade, cfg, _REVISION)
+    assert "idle_warning" not in await _columns(admin_db)
+    async with admin_db.transaction() as session:
+        await session.execute(
+            text(
+                "INSERT INTO agent_credential_bindings "
+                "(id, agent_id, credential_id, suspended, max_idle_period, bound_at) "
+                "VALUES ('acb_bidle_warn', 'agnt_bidle_w', 'cred_bidle', false, 604800, :bound)"
+            ),
+            {"bound": datetime.now(UTC)},
+        )
+
+    await asyncio.to_thread(command.upgrade, cfg, _WARNING_REVISION)
+    assert {"idle_warning", "idle_warned_at"} <= await _columns(admin_db)
+    async with admin_db.session() as session:
+        warning, warned_at = (
+            await session.execute(
+                text(
+                    "SELECT idle_warning, idle_warned_at FROM agent_credential_bindings "
+                    "WHERE id = 'acb_bidle_warn'"
+                )
+            )
+        ).one()
+    assert (bool(warning), warned_at) == (False, None)
+
+    await asyncio.to_thread(command.downgrade, cfg, _REVISION)
+    assert not {"idle_warning", "idle_warned_at"} & await _columns(admin_db)

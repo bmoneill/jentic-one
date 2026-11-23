@@ -1082,6 +1082,11 @@ class CredentialAgentResponse(BaseModel):
             " null without an idle limit."
         ),
     )
+    idle_warning: bool = Field(
+        default=False,
+        examples=[False],
+        description="Whether the agent's owner is warned before the idle limit is reached.",
+    )
     last_used_at: datetime | None = Field(
         default=None,
         examples=["2026-02-03T14:05:00Z"],

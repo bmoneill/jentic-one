@@ -117,6 +117,8 @@ export type { EditRuleView } from './models/EditRuleView';
 export type { EditScopeNote } from './models/EditScopeNote';
 export type { EditScopesRequest } from './models/EditScopesRequest';
 export type { EffectivePermission } from './models/EffectivePermission';
+export type { EndingSoonBindingListResponse } from './models/EndingSoonBindingListResponse';
+export type { EndingSoonBindingResponse } from './models/EndingSoonBindingResponse';
 export type { ErrorItem } from './models/ErrorItem';
 export type { EventLinks } from './models/EventLinks';
 export type { EventListResponse } from './models/EventListResponse';

@@ -64,6 +64,8 @@ _BINDING_EXPIRES_AT_HEAD = "e5b1c7d3a9f2"  # pragma: allowlist secret
 _LAST_USED_INDEX_HEAD = "f6a2c8d4e1b7"  # pragma: allowlist secret
 #: The binding idle limit (``max_idle_period``, ``last_used_at``, ``renewed_at``).
 _BINDING_IDLE_LIMIT_HEAD = "a7c3e9f1b2d4"  # pragma: allowlist secret
+#: The binding idle warning (``idle_warning``, ``idle_warned_at``).
+_BINDING_IDLE_WARNING_HEAD = "b8d4f0a2c3e5"  # pragma: allowlist secret
 
 
 def _create_tables(op: Operations, *, pg: bool) -> None:
@@ -242,6 +244,7 @@ def restore_pre_sa_drop_admin(integration_config: AppConfig) -> None:
         [_BINDING_EXPIRES_AT_HEAD],
         [_LAST_USED_INDEX_HEAD],
         [_BINDING_IDLE_LIMIT_HEAD],
+        [_BINDING_IDLE_WARNING_HEAD],
     ), f"extend restore_pre_sa_drop_admin for new heads {heads}"
     if not asyncio.run(_has_service_account_tables(db_config)):
         command.downgrade(cfg, _SA_DROP)

@@ -12,6 +12,7 @@ from jentic_one.auth.services.schemas.agents import (
     AgentCreatePayload,
     AgentView,
     CredentialBindingView,
+    EndingSoonBindingView,
 )
 from jentic_one.auth.web.deps import get_agent_auth_service, get_agent_service
 from jentic_one.auth.web.schemas.agents import (
@@ -33,6 +34,8 @@ from jentic_one.auth.web.schemas.agents import (
     CredentialBindingResponse,
     CredentialBindRequest,
     DenyRequest,
+    EndingSoonBindingListResponse,
+    EndingSoonBindingResponse,
     JwksUpdateRequest,
 )
 from jentic_one.shared.auth.grant_policy import UNSET
@@ -147,6 +150,34 @@ async def list_agents(
         data=[_agent_response(a) for a in page.data],
         has_more=page.has_more,
         next_cursor=page.next_cursor,
+    )
+
+
+@router.get(
+    "/agents/credentials:ending-soon",
+    operation_id="listCredentialBindingsEndingSoon",
+    summary="List credential bindings ending soon",
+)
+async def list_credential_bindings_ending_soon(
+    identity: Identity = get_current_identity(required_permissions=["agents:read"]),
+    agent_svc: AgentService = Depends(get_agent_service),
+) -> EndingSoonBindingListResponse:
+    """List bindings that will reach their idle limit soon unless they are used.
+
+    Only bindings whose owner turned on the idle warning (`idle_warning`),
+    with an idle limit of 4 days or more, whose idle deadline (`idle_expires_at`)
+    is within the next 48 hours, and which have not been suspended or ended.
+    The same bindings get a `credential_grant.idle_expiring` event once per
+    idle period. Soonest first. Scoped like the agents list: `org:admin` sees
+    every agent's bindings, anyone else their own agents'.
+    """
+    views = await agent_svc.list_bindings_ending_soon(identity=identity)
+    return EndingSoonBindingListResponse(data=[_ending_soon_response(v) for v in views])
+
+
+def _ending_soon_response(view: EndingSoonBindingView) -> EndingSoonBindingResponse:
+    return EndingSoonBindingResponse(
+        **_credential_binding_response(view).model_dump(), agent_name=view.agent_name
     )
 
 
@@ -451,6 +482,7 @@ def _credential_binding_response(view: CredentialBindingView) -> CredentialBindi
         max_idle_period=view.max_idle_period,
         idle_expires_at=view.idle_expires_at,
         renewed_at=view.renewed_at,
+        idle_warning=view.idle_warning,
         rule_set_id=view.rule_set_id,
         serves=view.serves,
         last_used_at=view.last_used_at,
@@ -543,6 +575,7 @@ async def bind_credential(
         credential_id=body.credential_id,
         expires_at=body.expires_at,
         max_idle_period=body.max_idle_period,
+        idle_warning=body.idle_warning,
         identity=identity,
     )
     return _credential_binding_response(binding)
@@ -592,6 +625,7 @@ async def renew_credential_binding(
         max_idle_period=(
             body.max_idle_period if "max_idle_period" in body.model_fields_set else UNSET
         ),
+        idle_warning=body.idle_warning if body.idle_warning is not None else UNSET,
         identity=identity,
     )
     return _credential_binding_response(binding)

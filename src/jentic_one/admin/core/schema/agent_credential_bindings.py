@@ -94,3 +94,10 @@ class AgentCredentialBinding(AuditableMixin, AdminBase):
     # When the binding was granted or last renewed (PATCH): restarts the idle
     # clock without counting as a use.
     renewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # Opt-in warning to the agent's owner before the idle limit is reached
+    # (always off by default), and when the daily job last sent it — cleared
+    # by a use or a renewal, so each idle period warns at most once.
+    idle_warning: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    idle_warned_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)

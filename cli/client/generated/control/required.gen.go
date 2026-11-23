@@ -175,13 +175,17 @@ func (EditCurrentAccess) RequiredFields() []string { return []string{"rules", "s
 func (EditResultAccess) RequiredFields() []string {
 	return []string{"rules", "scopes", "suspended", "target"}
 }
-func (EditRuleAdd) RequiredFields() []string         { return []string{"rule"} }
-func (EditRuleSetView) RequiredFields() []string     { return []string{"curated", "id", "name", "rules"} }
-func (EditRuleView) RequiredFields() []string        { return []string{"effect", "id"} }
-func (EffectivePermission) RequiredFields() []string { return []string{"name"} }
-func (ErrorItem) RequiredFields() []string           { return []string{"detail"} }
-func (EventLinks) RequiredFields() []string          { return []string{"self"} }
-func (EventListResponse) RequiredFields() []string   { return []string{"data", "has_more"} }
+func (EditRuleAdd) RequiredFields() []string                   { return []string{"rule"} }
+func (EditRuleSetView) RequiredFields() []string               { return []string{"curated", "id", "name", "rules"} }
+func (EditRuleView) RequiredFields() []string                  { return []string{"effect", "id"} }
+func (EffectivePermission) RequiredFields() []string           { return []string{"name"} }
+func (EndingSoonBindingListResponse) RequiredFields() []string { return []string{"data"} }
+func (EndingSoonBindingResponse) RequiredFields() []string {
+	return []string{"agent_id", "agent_name", "bound_at", "credential_id", "id", "suspended"}
+}
+func (ErrorItem) RequiredFields() []string         { return []string{"detail"} }
+func (EventLinks) RequiredFields() []string        { return []string{"self"} }
+func (EventListResponse) RequiredFields() []string { return []string{"data", "has_more"} }
 func (EventResponse) RequiredFields() []string {
 	return []string{"_links", "created_at", "event_id", "requires_action", "severity", "summary", "type"}
 }

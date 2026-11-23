@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from jentic_one.admin.core.schema.agent_credential_bindings import AgentCredentialBinding
+from jentic_one.admin.core.schema.agents import Agent
 from jentic_one.shared.db.locks import lock_agent_bindings, lock_credential_bindings
 
 
@@ -24,6 +27,7 @@ class AgentCredentialBindingRepository:
         created_by: str,
         expires_at: datetime | None = None,
         max_idle_period: int | None = None,
+        idle_warning: bool = False,
     ) -> AgentCredentialBinding:
         await lock_agent_bindings(session, agent_id)
         await lock_credential_bindings(session, credential_id)
@@ -33,6 +37,7 @@ class AgentCredentialBindingRepository:
             created_by=created_by,
             expires_at=expires_at,
             max_idle_period=max_idle_period,
+            idle_warning=idle_warning,
             # Granting starts the idle clock.
             renewed_at=datetime.now(UTC),
         )
@@ -111,7 +116,8 @@ class AgentCredentialBindingRepository:
             update(AgentCredentialBinding)
             .where(AgentCredentialBinding.agent_id == agent_id)
             .where(AgentCredentialBinding.credential_id == credential_id)
-            .values(**policy, renewed_at=now)
+            # A renewal restarts the idle period, so it may warn again.
+            .values(**policy, renewed_at=now, idle_warned_at=None)
         )
         result = await session.execute(stmt)
         await session.flush()
@@ -138,6 +144,30 @@ class AgentCredentialBindingRepository:
         )
         result = await session.execute(stmt)
         return list(result.scalars().all())
+
+    @staticmethod
+    async def list_idle_warned(
+        session: AsyncSession,
+        *,
+        min_idle_period: int,
+        agent_filters: Sequence[ColumnElement[bool]] = (),
+    ) -> list[tuple[AgentCredentialBinding, str]]:
+        """Active bindings with the idle warning on, with their agent's name.
+
+        ``agent_filters`` scope the agents (``build_access_filters`` on
+        ``Agent``); whether each one is due is the caller's check.
+        """
+        stmt = (
+            select(AgentCredentialBinding, Agent.name)
+            .join(Agent, Agent.id == AgentCredentialBinding.agent_id)
+            .where(AgentCredentialBinding.idle_warning.is_(True))
+            .where(AgentCredentialBinding.suspended.is_(False))
+            .where(AgentCredentialBinding.max_idle_period >= min_idle_period)
+        )
+        for agent_filter in agent_filters:
+            stmt = stmt.where(agent_filter)
+        result = await session.execute(stmt)
+        return [(binding, name) for binding, name in result.all()]
 
     @staticmethod
     async def delete_for_agent(session: AsyncSession, agent_id: str) -> int:

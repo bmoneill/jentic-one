@@ -28,7 +28,7 @@ Every API endpoint grouped by its **typical caller**, then by surface, annotated
 
 > The grouping and the _Typical caller_ column are an **advisory hint** at who usually calls a route, inferred from the permission family. They are **not** an enforced restriction: access is gated by the **permission**, not the actor kind, so any actor holding the required permission can call the endpoint.
 
-_Total endpoints: **177**._
+_Total endpoints: **178**._
 
 
 ## Agent-facing (typically an agent) (32)
@@ -111,7 +111,7 @@ _Total endpoints: **177**._
 | GET | `/vendors` | `capabilities:read` | agent | List verified vendors |
 | GET | `/vendors/{vendor_key}/auth-capabilities` | `capabilities:read` | agent | Get a vendor's OAuth flows and scopes |
 
-## Operator-facing (typically a human operator / admin) (46)
+## Operator-facing (typically a human operator / admin) (47)
 
 
 ### `actors`
@@ -126,6 +126,7 @@ _Total endpoints: **177**._
 |---|---|---|---|---|
 | GET | `/agents` | `agents:read` | operator | List visible agents |
 | POST | `/agents` | `agents:write` | operator | Create an agent |
+| GET | `/agents/credentials:ending-soon` | `agents:read` | operator | List credential bindings ending soon |
 | DELETE | `/agents/{agent_id}` | `agents:write` | operator | Archive an agent |
 | PATCH | `/agents/{agent_id}` | `agents:write` | operator | Update an agent |
 | GET | `/agents/{agent_id}/api-key` | `agents:read` | operator | Get an agent's API key metadata |

@@ -1230,6 +1230,14 @@ class OAuthConfirmSessionRequest(BaseModel):
             "none. Ignored when the agent is already bound to the credential."
         ),
     )
+    idle_warning: bool = Field(
+        default=False,
+        examples=[False],
+        description=(
+            "Warn the agent's owner before the new binding's idle limit is reached (a daily "
+            "`credential_grant.idle_expiring` event, for idle limits of 4 days or more)."
+        ),
+    )
 
 
 class _ReviewedConfirm(BaseModel):
@@ -1282,6 +1290,14 @@ class _ReviewedConfirm(BaseModel):
             "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose "
             "it: the binding ends once it goes this long without a call. Null or absent sets "
             "none. Ignored when the agent is already bound to the credential."
+        ),
+    )
+    idle_warning: bool = Field(
+        default=False,
+        examples=[False],
+        description=(
+            "Warn the agent's owner before the new binding's idle limit is reached (a daily "
+            "`credential_grant.idle_expiring` event, for idle limits of 4 days or more)."
         ),
     )
 

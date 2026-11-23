@@ -413,6 +413,28 @@
       "authenticated": true,
       "group": "Operator-facing (typically a human operator / admin)",
       "implied_permissions": {
+        "agents:read": []
+      },
+      "method": "GET",
+      "operation_id": "listCredentialBindingsEndingSoon",
+      "path": "/agents/credentials:ending-soon",
+      "public": false,
+      "required_permissions": [
+        "agents:read"
+      ],
+      "summary": "List credential bindings ending soon",
+      "surface": "agents",
+      "typical_caller": "operator"
+    },
+    {
+      "actor_types": [
+        "user",
+        "agent"
+      ],
+      "auth_note": null,
+      "authenticated": true,
+      "group": "Operator-facing (typically a human operator / admin)",
+      "implied_permissions": {
         "agents:write": [
           "agents:read"
         ]
@@ -4932,5 +4954,5 @@
     "total": 27
   },
   "schema": "jentic.endpoint-permission-tree/v1",
-  "total": 177
+  "total": 178
 }

@@ -623,6 +623,8 @@ class ConfirmChecks:
     expires_at: datetime | None = None
     # The new binding's idle limit in seconds (None = none).
     max_idle_period: int | None = None
+    # Whether the owner is warned before that idle limit is reached.
+    idle_warning: bool = False
 
 
 @dataclass(slots=True, frozen=True)
@@ -4346,6 +4348,7 @@ class ConnectSessionService:
         expires_at: datetime | None = None,
         # The new binding's idle limit in seconds (None = none).
         max_idle_period: int | None = None,
+        idle_warning: bool = False,
     ) -> ConfirmResult:
         """Confirm scopes + permissions and kick off the vendor-side flow.
 
@@ -4531,6 +4534,7 @@ class ConnectSessionService:
                         created_by=identity.sub,
                         expires_at=expires_at,
                         max_idle_period=max_idle_period,
+                        idle_warning=idle_warning,
                     )
             except (BindingSuspendedError, BindingExpiredError) as exc:
                 await self._fail_cut_off_bind(row, exc)
@@ -4770,6 +4774,7 @@ class ConnectSessionService:
         control_session: Any | None = None,
         expires_at: datetime | None = None,
         max_idle_period: int | None = None,
+        idle_warning: bool = False,
     ) -> tuple[str, bool]:
         async with guard_binding_write(
             admin_session,
@@ -4788,6 +4793,7 @@ class ConnectSessionService:
                 created_by=created_by,
                 expires_at=expires_at,
                 max_idle_period=max_idle_period,
+                idle_warning=idle_warning,
             )
 
     async def _bind_for_confirm(
@@ -4798,6 +4804,7 @@ class ConnectSessionService:
         created_by: str,
         expires_at: datetime | None = None,
         max_idle_period: int | None = None,
+        idle_warning: bool = False,
     ) -> bool:
         """Bind the agent (idempotent) and re-check it is still usable; True if newly bound.
 
@@ -4813,6 +4820,7 @@ class ConnectSessionService:
                 created_by=created_by,
                 expires_at=expires_at,
                 max_idle_period=max_idle_period,
+                idle_warning=idle_warning,
             )
         async with self._ctx.admin_db.session() as admin_session:
             agent = await EffectsRepository.get_agent_owner(admin_session, agent_id)
@@ -4894,6 +4902,7 @@ class ConnectSessionService:
                 created_by=identity.sub,
                 expires_at=variant.checks.expires_at,
                 max_idle_period=variant.checks.max_idle_period,
+                idle_warning=variant.checks.idle_warning,
             )
         cas_fields: dict[str, Any] = {"agent_id": agent_id} if late_bound else {}
         try:
@@ -4999,6 +5008,7 @@ class ConnectSessionService:
             created_by=identity.sub,
             expires_at=variant.checks.expires_at,
             max_idle_period=variant.checks.max_idle_period,
+            idle_warning=variant.checks.idle_warning,
         )
         cas_fields: dict[str, Any] = {"agent_id": agent_id} if late_bound else {}
         try:
@@ -5092,6 +5102,7 @@ class ConnectSessionService:
                 else None
             ),
             "max_idle_period": variant.checks.max_idle_period,
+            "idle_warning": variant.checks.idle_warning,
         }
         cas_fields: dict[str, Any] = {"agent_id": agent_id} if late_bound else {}
         # Taking the edit intent means the review reads this session as an
@@ -5257,6 +5268,7 @@ class ConnectSessionService:
                         created_by=identity.sub,
                         expires_at=variant.checks.expires_at,
                         max_idle_period=variant.checks.max_idle_period,
+                        idle_warning=variant.checks.idle_warning,
                     )
             except (BindingSuspendedError, BindingExpiredError) as exc:
                 await self._fail_cut_off_bind(row, exc)
@@ -6011,6 +6023,7 @@ class ConnectSessionService:
                                 else None
                             ),
                             max_idle_period=change.get("max_idle_period"),
+                            idle_warning=bool(change.get("idle_warning", False)),
                         )
         except (BindingSuspendedError, BindingExpiredError) as exc:
             return await self._fail_cut_off_bind(row, exc)

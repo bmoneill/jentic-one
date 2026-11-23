@@ -50,6 +50,12 @@ _BINDING_EXPIRES_AT_DESCRIPTION = (
     " rules; an owner renews it by setting a later time or null."
 )
 
+_BINDING_IDLE_WARNING_DESCRIPTION = (
+    "Warn the agent's owner before the idle limit is reached: once a day a job raises a"
+    " `credential_grant.idle_expiring` event when the binding will go idle within 48"
+    " hours (for idle limits of 4 days or more), once per idle period. Off unless set."
+)
+
 _BINDING_IDLE_DESCRIPTION = (
     "Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends"
     " once it has gone this long without a call, and the broker then refuses calls"
@@ -264,6 +270,11 @@ class CredentialBindingResponse(BaseModel):
         ),
         examples=[_EX_EXPIRES_AT],
     )
+    idle_warning: bool = Field(
+        default=False,
+        description=_BINDING_IDLE_WARNING_DESCRIPTION,
+        examples=[False],
+    )
     # Shared permission rule set the binding points at (None = inline rules).
     rule_set_id: str | None = Field(
         default=None,
@@ -295,6 +306,22 @@ class CredentialBindingListResponse(BaseModel):
 
     data: list[CredentialBindingResponse] = Field(
         description="The agent's direct credential bindings."
+    )
+
+
+class EndingSoonBindingResponse(CredentialBindingResponse):
+    """A binding whose idle limit will end it soon unless the agent uses it."""
+
+    agent_name: str = Field(
+        description="Name of the agent the credential is bound to.", examples=[_EX_AGENT_NAME]
+    )
+
+
+class EndingSoonBindingListResponse(BaseModel):
+    """Bindings that will soon reach their idle limit."""
+
+    data: list[EndingSoonBindingResponse] = Field(
+        description="Bindings with the idle warning on that end soon if unused, soonest first."
     )
 
 
@@ -488,6 +515,11 @@ class CredentialBindingPatchRequest(BaseModel):
         ),
         examples=[1_209_600],
     )
+    idle_warning: bool | None = Field(
+        default=None,
+        description=_BINDING_IDLE_WARNING_DESCRIPTION + " Leave it out to keep it as it is.",
+        examples=[True],
+    )
 
     _check_expires_at = field_validator("expires_at")(_require_future)
 
@@ -512,6 +544,11 @@ class CredentialBindRequest(BaseModel):
         le=MAX_IDLE_PERIOD_SECONDS,
         description=_BINDING_IDLE_DESCRIPTION + " Omit for no idle limit.",
         examples=[1_209_600],
+    )
+    idle_warning: bool = Field(
+        default=False,
+        description=_BINDING_IDLE_WARNING_DESCRIPTION,
+        examples=[False],
     )
 
     _check_expires_at = field_validator("expires_at")(_require_future)

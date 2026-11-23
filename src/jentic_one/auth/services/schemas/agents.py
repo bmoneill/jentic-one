@@ -88,6 +88,8 @@ class CredentialBindingView(BaseModel):
     # column ``last_used_at`` (``idle_clock_used_at`` below).
     max_idle_period: int | None = None
     renewed_at: datetime | None = None
+    # Opt-in warning to the owner before the idle limit is reached.
+    idle_warning: bool = False
     # The binding's own ``last_used_at`` column, read from the row: the idle
     # clock's use stamp. ``last_used_at`` below is the display value.
     idle_clock_used_at: datetime | None = Field(
@@ -131,3 +133,9 @@ class CredentialBindingView(BaseModel):
     def expired(self) -> bool:
         """Whether any limit of the binding has been reached."""
         return self.expired_reason is not None
+
+
+class EndingSoonBindingView(CredentialBindingView):
+    """A binding with the idle warning on whose idle limit is close (step 10)."""
+
+    agent_name: str

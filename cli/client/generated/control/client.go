@@ -2160,7 +2160,7 @@ type ApiInfoResponse struct {
 
 // ApiKeyConfirmSessionRequest Confirm a “manual_api_key“ session with the API key to store.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","key":"example-secret","kind":"api_key","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"key":"example-secret","kind":"api_key","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
 type ApiKeyConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -2181,6 +2181,11 @@ type ApiKeyConfirmSessionRequest struct {
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// IdleWarning Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+	//
+	// Examples: false
+	IdleWarning *bool `json:"idle_warning,omitempty"`
 
 	// Key API key to store; write-only.
 	//
@@ -3174,7 +3179,7 @@ type BasicAuthUpdateRequestType string
 
 // BasicConfirmSessionRequest Confirm a “manual_basic“ session with the username and password to store.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"basic","max_idle_period":1209600,"password":"example-secret","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","username":"svc-reporting"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"kind":"basic","max_idle_period":1209600,"password":"example-secret","permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","username":"svc-reporting"}
 type BasicConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -3195,6 +3200,11 @@ type BasicConfirmSessionRequest struct {
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// IdleWarning Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+	//
+	// Examples: false
+	IdleWarning *bool `json:"idle_warning,omitempty"`
 
 	// Kind Confirm variant; always `basic`.
 	//
@@ -3234,7 +3244,7 @@ type BasicConfirmSessionRequestKind string
 
 // BearerConfirmSessionRequest Confirm a “manual_bearer“ session with the bearer token to store.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"bearer","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","token":"example-secret"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"kind":"bearer","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","token":"example-secret"}
 type BearerConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -3255,6 +3265,11 @@ type BearerConfirmSessionRequest struct {
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// IdleWarning Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+	//
+	// Examples: false
+	IdleWarning *bool `json:"idle_warning,omitempty"`
 
 	// Kind Confirm variant; always `bearer`.
 	//
@@ -3903,11 +3918,11 @@ type CreateAdminRequest struct {
 
 // CredentialAgentListResponse Paginated list of agents directly bound to a credential.
 //
-// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","max_idle_period":1209600,"owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}],"has_more":true,"next_cursor":"eyJ0IjogIjIwMjYtMDEtMTVUMDk6MzA6MDArMDA6MDAiLCAiaWQiOiAiM2YyYjhjMWUtN2Q0YS00ZTliLWE2YzUtMWQyZTNmNGE1YjZjIn0="}
+// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"last_used_at":"2026-02-03T14:05:00Z","max_idle_period":1209600,"owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}],"has_more":true,"next_cursor":"eyJ0IjogIjIwMjYtMDEtMTVUMDk6MzA6MDArMDA6MDAiLCAiaWQiOiAiM2YyYjhjMWUtN2Q0YS00ZTliLWE2YzUtMWQyZTNmNGE1YjZjIn0="}
 type CredentialAgentListResponse struct {
 	// Data The page of bound agents.
 	//
-	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","max_idle_period":1209600,"owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}]
+	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"last_used_at":"2026-02-03T14:05:00Z","max_idle_period":1209600,"owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}]
 	Data []CredentialAgentResponse `json:"data"`
 
 	// HasMore Whether more results exist after this page.
@@ -3923,7 +3938,7 @@ type CredentialAgentListResponse struct {
 
 // CredentialAgentResponse Agent directly bound to a credential.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","max_idle_period":1209600,"owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","bound_at":"2026-01-15T09:30:00Z","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"last_used_at":"2026-02-03T14:05:00Z","max_idle_period":1209600,"owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","rule_set_id":"prs_6968b3987c22b63e87e79f05","status":"active","suspended":false,"suspended_reason":"api_deleted"}
 type CredentialAgentResponse struct {
 	// AgentId ID of the bound agent.
 	//
@@ -3959,6 +3974,11 @@ type CredentialAgentResponse struct {
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	IdleExpiresAt *time.Time `json:"idle_expires_at,omitempty"`
+
+	// IdleWarning Whether the agent's owner is warned before the idle limit is reached.
+	//
+	// Examples: false
+	IdleWarning *bool `json:"idle_warning,omitempty"`
 
 	// LastUsedAt When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.
 	//
@@ -3998,7 +4018,7 @@ type CredentialAgentResponse struct {
 
 // CredentialBindRequest Request body for directly binding a credential to an agent.
 //
-// Examples: {"credential_id":"cred_6968b39855d91a3561684b32","expires_at":"2026-12-31T23:59:00Z","max_idle_period":1209600}
+// Examples: {"credential_id":"cred_6968b39855d91a3561684b32","expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"max_idle_period":1209600}
 type CredentialBindRequest struct {
 	// CredentialId ID of the credential to bind to the agent.
 	//
@@ -4010,6 +4030,11 @@ type CredentialBindRequest struct {
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 
+	// IdleWarning Warn the agent's owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set.
+	//
+	// Examples: false
+	IdleWarning *bool `json:"idle_warning,omitempty"`
+
 	// MaxIdlePeriod Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Omit for no idle limit.
 	//
 	// Examples: 1209600
@@ -4018,7 +4043,7 @@ type CredentialBindRequest struct {
 
 // CredentialBindingEntry Direct agent↔credential binding summary for the /me response (theme 5 phase 1).
 //
-// Examples: {"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-11-20T10:00:00Z","max_idle_period":1209600,"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}
+// Examples: {"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"last_used_at":"2026-11-20T10:00:00Z","max_idle_period":1209600,"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}
 type CredentialBindingEntry struct {
 	// BoundAt When the credential was bound (RFC 3339).
 	//
@@ -4049,6 +4074,11 @@ type CredentialBindingEntry struct {
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	IdleExpiresAt *time.Time `json:"idle_expires_at,omitempty"`
+
+	// IdleWarning Whether the owner is warned before the idle limit is reached.
+	//
+	// Examples: false
+	IdleWarning *bool `json:"idle_warning,omitempty"`
 
 	// LastUsedAt When this agent last made a call through the binding; null if never.
 	//
@@ -4093,11 +4123,11 @@ type CredentialBindingEntry struct {
 
 // CredentialBindingListResponse List of direct credential bindings.
 //
-// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"max_idle_period":1209600,"name":"Stripe production key","renewed_at":"2026-12-31T23:59:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]}
+// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","idle_expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"max_idle_period":1209600,"name":"Stripe production key","renewed_at":"2026-12-31T23:59:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]}
 type CredentialBindingListResponse struct {
 	// Data The agent's direct credential bindings.
 	//
-	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"max_idle_period":1209600,"name":"Stripe production key","renewed_at":"2026-12-31T23:59:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]
+	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","idle_expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"max_idle_period":1209600,"name":"Stripe production key","renewed_at":"2026-12-31T23:59:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]
 	Data []CredentialBindingResponse `json:"data"`
 }
 
@@ -4107,12 +4137,17 @@ type CredentialBindingListResponse struct {
 // null clears it; a limit left out stays as it is, so an absent field is never
 // read as clearing. An empty body only re-certifies ("still needed").
 //
-// Examples: {"expires_at":"2026-12-31T23:59:00Z","max_idle_period":1209600}
+// Examples: {"expires_at":"2026-12-31T23:59:00Z","idle_warning":true,"max_idle_period":1209600}
 type CredentialBindingPatchRequest struct {
 	// ExpiresAt When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the end date; leave it out to keep it.
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// IdleWarning Warn the agent's owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set. Leave it out to keep it as it is.
+	//
+	// Examples: true
+	IdleWarning *bool `json:"idle_warning,omitempty"`
 
 	// MaxIdlePeriod Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Send null to remove the idle limit; leave it out to keep it.
 	//
@@ -4122,7 +4157,7 @@ type CredentialBindingPatchRequest struct {
 
 // CredentialBindingResponse Direct agent↔credential binding representation in API responses.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"max_idle_period":1209600,"name":"Stripe production key","renewed_at":"2026-12-31T23:59:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","idle_expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"max_idle_period":1209600,"name":"Stripe production key","renewed_at":"2026-12-31T23:59:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}
 type CredentialBindingResponse struct {
 	// AgentId ID of the agent the credential is bound to.
 	//
@@ -4163,6 +4198,11 @@ type CredentialBindingResponse struct {
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	IdleExpiresAt *time.Time `json:"idle_expires_at,omitempty"`
+
+	// IdleWarning Warn the agent's owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set.
+	//
+	// Examples: false
+	IdleWarning *bool `json:"idle_warning,omitempty"`
 
 	// LastUsedAt When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.
 	//
@@ -4910,6 +4950,116 @@ type EffectivePermission struct {
 	Name string `json:"name"`
 }
 
+// EndingSoonBindingListResponse Bindings that will soon reach their idle limit.
+//
+// Examples: {"data":[{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"invoice-reconciler","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","idle_expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"max_idle_period":1209600,"name":"Stripe production key","renewed_at":"2026-12-31T23:59:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]}
+type EndingSoonBindingListResponse struct {
+	// Data Bindings with the idle warning on that end soon if unused, soonest first.
+	//
+	// Examples: [{"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"invoice-reconciler","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","idle_expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"max_idle_period":1209600,"name":"Stripe production key","renewed_at":"2026-12-31T23:59:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}]
+	Data []EndingSoonBindingResponse `json:"data"`
+}
+
+// EndingSoonBindingResponse A binding whose idle limit will end it soon unless the agent uses it.
+//
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"invoice-reconciler","bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","id":"acb_6968b3989a4f1c2e7d3b5a60","idle_expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"last_used_at":"2026-02-03T14:05:00Z","last_used_by_api":[{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}],"max_idle_period":1209600,"name":"Stripe production key","renewed_at":"2026-12-31T23:59:00Z","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"suspended":false,"suspended_reason":"api_deleted"}
+type EndingSoonBindingResponse struct {
+	// AgentId ID of the agent the credential is bound to.
+	//
+	// Examples: agnt_6968b3984d1c238dbe7e2e29
+	AgentId string `json:"agent_id"`
+
+	// AgentName Name of the agent the credential is bound to.
+	//
+	// Examples: invoice-reconciler
+	AgentName string `json:"agent_name"`
+
+	// BoundAt When the credential was bound (RFC 3339).
+	//
+	// Examples: 2026-01-15T09:30:00Z
+	BoundAt time.Time `json:"bound_at"`
+
+	// CredentialId ID of the bound credential.
+	//
+	// Examples: cred_6968b39855d91a3561684b32
+	CredentialId string `json:"credential_id"`
+
+	// Expired Whether `expires_at` has passed.
+	//
+	// Examples: false
+	Expired *bool `json:"expired,omitempty"`
+
+	// ExpiredReason Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.
+	//
+	// Examples: null
+	ExpiredReason *GrantEndReason `json:"expired_reason,omitempty"`
+
+	// ExpiresAt When the binding stops authorizing calls (RFC 3339); null if it never expires.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// Id Unique ID of the binding.
+	//
+	// Examples: acb_6968b3989a4f1c2e7d3b5a60
+	Id string `json:"id"`
+
+	// IdleExpiresAt When the idle limit ends the binding if it is not used before then (RFC 3339); null without an idle limit. Each use moves it later.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	IdleExpiresAt *time.Time `json:"idle_expires_at,omitempty"`
+
+	// IdleWarning Warn the agent's owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set.
+	//
+	// Examples: false
+	IdleWarning *bool `json:"idle_warning,omitempty"`
+
+	// LastUsedAt When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.
+	//
+	// Examples: 2026-02-03T14:05:00Z
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+
+	// LastUsedByApi `last_used_at` per API the agent called through this credential, most recent first; a vendor-wide credential has one entry per API used.
+	//
+	// Examples: [{"api_name":"github","api_vendor":"github.com","last_used_at":"2026-02-03T14:05:00Z"}]
+	LastUsedByApi *[]ApiLastUseResponse `json:"last_used_by_api,omitempty"`
+
+	// MaxIdlePeriod Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Null when it has no idle limit.
+	//
+	// Examples: 1209600
+	MaxIdlePeriod *int `json:"max_idle_period,omitempty"`
+
+	// Name Name of the bound credential; null if it cannot be resolved.
+	//
+	// Examples: Stripe production key
+	Name *string `json:"name,omitempty"`
+
+	// RenewedAt When the binding was granted or last renewed (RFC 3339); the idle clock restarts at the later of this and its last use.
+	//
+	// Examples: 2026-12-31T23:59:00Z
+	RenewedAt *time.Time `json:"renewed_at,omitempty"`
+
+	// RuleSetId ID of the shared permission rule set attached; null when inline rules apply.
+	//
+	// Examples: prs_6968b3987c22b63e87e79f05
+	RuleSetId *string `json:"rule_set_id,omitempty"`
+
+	// Serves The APIs the bound credential serves; empty if unresolvable.
+	//
+	// Examples: [{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}]
+	Serves *[]ServedApiRef `json:"serves,omitempty"`
+
+	// Suspended Whether the binding is suspended, cutting off the agent's access to it.
+	//
+	// Examples: false
+	Suspended bool `json:"suspended"`
+
+	// SuspendedReason Why the binding is suspended: null for a manual suspension, `api_deleted` when the API the credential serves was deleted; cleared on resume.
+	//
+	// Examples: api_deleted
+	SuspendedReason *string `json:"suspended_reason,omitempty"`
+}
+
 // ErrorItem A granular error detail entry within the errors[] array of a ProblemDetails response.
 //
 // At least one of pointer, parameter, or header SHOULD be present to identify the error source.
@@ -5228,7 +5378,7 @@ type ExecutionStatus string
 // When its OAuth grant lacks scopes the session asks for, the response is
 // the vendor challenge for them and the bind lands with the grant.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","credential_id":"cred_6968b39855d91a3561684b32","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"existing_credential","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","credential_id":"cred_6968b39855d91a3561684b32","digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"kind":"existing_credential","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
 type ExistingCredentialConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -5254,6 +5404,11 @@ type ExistingCredentialConfirmSessionRequest struct {
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// IdleWarning Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+	//
+	// Examples: false
+	IdleWarning *bool `json:"idle_warning,omitempty"`
 
 	// Kind Confirm variant; always `existing_credential`.
 	//
@@ -6122,7 +6277,7 @@ type McpConfigRuntime string
 
 // MeAgent Identity response for an agent actor.
 //
-// Examples: {"approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","credential_bindings":[{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-11-20T10:00:00Z","max_idle_period":1209600,"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}],"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","permissions":["apis:read","capabilities:execute"],"status":"active","token_permissions":["apis:read","capabilities:execute"],"type":"agent"}
+// Examples: {"approved_by":"usr_6968b3987ee4c3ec0b4ee3b9","credential_bindings":[{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"last_used_at":"2026-11-20T10:00:00Z","max_idle_period":1209600,"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}],"id":"agnt_6968b3984d1c238dbe7e2e29","name":"invoice-reconciler","parent_agent_id":"agnt_6968b3984d1c238dbe7e2e29","permissions":["apis:read","capabilities:execute"],"status":"active","token_permissions":["apis:read","capabilities:execute"],"type":"agent"}
 type MeAgent struct {
 	// ApprovedBy ID of the user who approved the agent; null if not approved.
 	//
@@ -6131,7 +6286,7 @@ type MeAgent struct {
 
 	// CredentialBindings Credentials bound directly to the agent.
 	//
-	// Examples: [{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","last_used_at":"2026-11-20T10:00:00Z","max_idle_period":1209600,"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}]
+	// Examples: [{"bound_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","expired":false,"expired_reason":null,"expires_at":"2026-12-31T23:59:00Z","idle_expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"last_used_at":"2026-11-20T10:00:00Z","max_idle_period":1209600,"name":"Stripe production key","rule_set_id":"prs_6968b3987c22b63e87e79f05","serves":[{"api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10"}],"state":"pending","suspended":false,"suspended_reason":"api_deleted"}]
 	CredentialBindings *[]CredentialBindingEntry `json:"credential_bindings,omitempty"`
 
 	// Id Unique ID of the agent.
@@ -7274,7 +7429,7 @@ type OAuthClientUpdateRequest struct {
 //
 // The default variant — a body without “kind“ is this one.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","confirmed_scopes":["repo","read:user"],"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"oauth","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","confirmed_scopes":["repo","read:user"],"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"kind":"oauth","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6"}
 type OAuthConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -7300,6 +7455,11 @@ type OAuthConfirmSessionRequest struct {
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// IdleWarning Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+	//
+	// Examples: false
+	IdleWarning *bool `json:"idle_warning,omitempty"`
 
 	// Kind Confirm variant; `oauth` (the default when omitted).
 	//
@@ -8025,7 +8185,7 @@ type OverlayUpdateRequest struct {
 // the spec may be agent-submitted and the token endpoint receives the
 // client secret.
 //
-// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","authorize_url":"https://github.com/login/oauth/authorize","client_id":"Iv1.a1b2c3d4","client_secret":"example-secret","confirmed_scopes":["repo","read:user"],"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","kind":"own_oauth_client","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","token_url":"https://github.com/login/oauth/access_token"}
+// Examples: {"agent_id":"agnt_6968b3984d1c238dbe7e2e29","authorize_url":"https://github.com/login/oauth/authorize","client_id":"Iv1.a1b2c3d4","client_secret":"example-secret","confirmed_scopes":["repo","read:user"],"digest":"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae","expected_agent_id":"agnt_6968b3984d1c238dbe7e2e29","expires_at":"2026-12-31T23:59:00Z","idle_warning":false,"kind":"own_oauth_client","max_idle_period":1209600,"permission_rules":[{"comment":"Lets the agent draft replies, never send them.","effect":"allow","match_mode":"prefix","methods":["GET"],"operations":["listCharges"],"path":"/v1/charges"}],"revision_id":"csr_6968b3983b8b91c75627bee6","token_url":"https://github.com/login/oauth/access_token"}
 type OwnOAuthClientConfirmSessionRequest struct {
 	// AgentId Agent to bind when the session has none; ignored if the session already has one.
 	//
@@ -8066,6 +8226,11 @@ type OwnOAuthClientConfirmSessionRequest struct {
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+
+	// IdleWarning Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+	//
+	// Examples: false
+	IdleWarning *bool `json:"idle_warning,omitempty"`
 
 	// Kind Confirm variant; always `own_oauth_client`.
 	//
@@ -12838,6 +13003,20 @@ type ClientInterface interface {
 	// Corresponds with POST /agents (the `CreateAgent` operationId).
 	CreateAgent(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListCredentialBindingsEndingSoon List credential bindings ending soon
+	//
+	// List bindings that will reach their idle limit soon unless they are used.
+	//
+	// Only bindings whose owner turned on the idle warning (`idle_warning`),
+	// with an idle limit of 4 days or more, whose idle deadline (`idle_expires_at`)
+	// is within the next 48 hours, and which have not been suspended or ended.
+	// The same bindings get a `credential_grant.idle_expiring` event once per
+	// idle period. Soonest first. Scoped like the agents list: `org:admin` sees
+	// every agent's bindings, anyone else their own agents'.
+	//
+	// Corresponds with GET /agents/credentials:ending-soon (the `ListCredentialBindingsEndingSoon` operationId).
+	ListCredentialBindingsEndingSoon(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ArchiveAgent Archive an agent
 	//
 	// Archive an agent — or, with ``purge=true``, hard-delete it.
@@ -16195,6 +16374,30 @@ func (c *Client) CreateAgentWithBody(ctx context.Context, contentType string, bo
 // Corresponds with POST /agents (the `CreateAgent` operationId).
 func (c *Client) CreateAgent(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateAgentRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListCredentialBindingsEndingSoon List credential bindings ending soon
+//
+// List bindings that will reach their idle limit soon unless they are used.
+//
+// Only bindings whose owner turned on the idle warning (`idle_warning`),
+// with an idle limit of 4 days or more, whose idle deadline (`idle_expires_at`)
+// is within the next 48 hours, and which have not been suspended or ended.
+// The same bindings get a `credential_grant.idle_expiring` event once per
+// idle period. Soonest first. Scoped like the agents list: `org:admin` sees
+// every agent's bindings, anyone else their own agents'.
+//
+// Corresponds with GET /agents/credentials:ending-soon (the `ListCredentialBindingsEndingSoon` operationId).
+func (c *Client) ListCredentialBindingsEndingSoon(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListCredentialBindingsEndingSoonRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -21964,6 +22167,33 @@ func NewCreateAgentRequestWithBody(server string, contentType string, body io.Re
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListCredentialBindingsEndingSoonRequest constructs an http.Request for the ListCredentialBindingsEndingSoon method
+func NewListCredentialBindingsEndingSoonRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/agents/credentials:ending-soon")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -30444,6 +30674,22 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /agents (the `CreateAgent` operationId).
 	CreateAgentWithResponse(ctx context.Context, body CreateAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentHTTPResp, error)
 
+	// ListCredentialBindingsEndingSoonWithResponse List credential bindings ending soon
+	//
+	// List bindings that will reach their idle limit soon unless they are used.
+	//
+	// Only bindings whose owner turned on the idle warning (`idle_warning`),
+	// with an idle limit of 4 days or more, whose idle deadline (`idle_expires_at`)
+	// is within the next 48 hours, and which have not been suspended or ended.
+	// The same bindings get a `credential_grant.idle_expiring` event once per
+	// idle period. Soonest first. Scoped like the agents list: `org:admin` sees
+	// every agent's bindings, anyone else their own agents'.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /agents/credentials:ending-soon (the `ListCredentialBindingsEndingSoon` operationId).
+	ListCredentialBindingsEndingSoonWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListCredentialBindingsEndingSoonHTTPResp, error)
+
 	// ArchiveAgentWithResponse Archive an agent
 	//
 	// Archive an agent — or, with ``purge=true``, hard-delete it.
@@ -35139,6 +35385,96 @@ func (r CreateAgentHTTPResp) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CreateAgentHTTPResp) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListCredentialBindingsEndingSoonHTTPResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *EndingSoonBindingListResponse
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *BadRequest
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Unauthorized
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Forbidden
+	// ApplicationproblemJSON422 the response for an HTTP 422 `application/problem+json` response
+	ApplicationproblemJSON422 *UnprocessableEntity
+	// ApplicationproblemJSON500 the response for an HTTP 500 `application/problem+json` response
+	ApplicationproblemJSON500 *InternalServerError
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *ServiceUnavailable
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *UnexpectedError
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListCredentialBindingsEndingSoonHTTPResp) GetJSON200() *EndingSoonBindingListResponse {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListCredentialBindingsEndingSoonHTTPResp) GetApplicationproblemJSON400() *BadRequest {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListCredentialBindingsEndingSoonHTTPResp) GetApplicationproblemJSON401() *Unauthorized {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListCredentialBindingsEndingSoonHTTPResp) GetApplicationproblemJSON403() *Forbidden {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON422 returns the response for an HTTP 422 `application/problem+json` response
+func (r ListCredentialBindingsEndingSoonHTTPResp) GetApplicationproblemJSON422() *UnprocessableEntity {
+	return r.ApplicationproblemJSON422
+}
+
+// GetApplicationproblemJSON500 returns the response for an HTTP 500 `application/problem+json` response
+func (r ListCredentialBindingsEndingSoonHTTPResp) GetApplicationproblemJSON500() *InternalServerError {
+	return r.ApplicationproblemJSON500
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r ListCredentialBindingsEndingSoonHTTPResp) GetApplicationproblemJSON503() *ServiceUnavailable {
+	return r.ApplicationproblemJSON503
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListCredentialBindingsEndingSoonHTTPResp) GetApplicationproblemJSONDefault() *UnexpectedError {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListCredentialBindingsEndingSoonHTTPResp) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListCredentialBindingsEndingSoonHTTPResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListCredentialBindingsEndingSoonHTTPResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListCredentialBindingsEndingSoonHTTPResp) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -49910,6 +50246,28 @@ func (c *ClientWithResponses) CreateAgentWithResponse(ctx context.Context, body 
 	return ParseCreateAgentHTTPResp(rsp)
 }
 
+// ListCredentialBindingsEndingSoonWithResponse List credential bindings ending soon
+//
+// List bindings that will reach their idle limit soon unless they are used.
+//
+// Only bindings whose owner turned on the idle warning (`idle_warning`),
+// with an idle limit of 4 days or more, whose idle deadline (`idle_expires_at`)
+// is within the next 48 hours, and which have not been suspended or ended.
+// The same bindings get a `credential_grant.idle_expiring` event once per
+// idle period. Soonest first. Scoped like the agents list: `org:admin` sees
+// every agent's bindings, anyone else their own agents'.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /agents/credentials:ending-soon (the `ListCredentialBindingsEndingSoon` operationId).
+func (c *ClientWithResponses) ListCredentialBindingsEndingSoonWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListCredentialBindingsEndingSoonHTTPResp, error) {
+	rsp, err := c.ListCredentialBindingsEndingSoon(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListCredentialBindingsEndingSoonHTTPResp(rsp)
+}
+
 // ArchiveAgentWithResponse Archive an agent
 //
 // Archive an agent — or, with “purge=true“, hard-delete it.
@@ -55527,6 +55885,81 @@ func ParseCreateAgentHTTPResp(rsp *http.Response) (*CreateAgentHTTPResp, error) 
 			return nil, err
 		}
 		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest BadRequest
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Unauthorized
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Forbidden
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 422:
+		var dest UnprocessableEntity
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON422 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest InternalServerError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ServiceUnavailable
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest UnexpectedError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListCredentialBindingsEndingSoonHTTPResp parses an HTTP response from a ListCredentialBindingsEndingSoonWithResponse call
+func ParseListCredentialBindingsEndingSoonHTTPResp(rsp *http.Response) (*ListCredentialBindingsEndingSoonHTTPResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListCredentialBindingsEndingSoonHTTPResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EndingSoonBindingListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest BadRequest

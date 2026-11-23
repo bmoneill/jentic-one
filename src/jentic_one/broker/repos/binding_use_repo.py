@@ -14,7 +14,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 _RECORD_USE = text(
-    "UPDATE agent_credential_bindings SET last_used_at = :now "
+    # A use also clears the idle warning's marker: the next idle period may warn again.
+    "UPDATE agent_credential_bindings SET last_used_at = :now, idle_warned_at = NULL "
     "WHERE agent_id = :agent_id AND credential_id = :credential_id "
     "AND (last_used_at IS NULL OR last_used_at <= :stale_before)"
 )

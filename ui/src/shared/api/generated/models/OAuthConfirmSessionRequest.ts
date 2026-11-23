@@ -30,6 +30,10 @@ export type OAuthConfirmSessionRequest = {
      */
     expires_at?: (string | null);
     /**
+     * Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+     */
+    idle_warning?: boolean;
+    /**
      * Confirm variant; `oauth` (the default when omitted).
      */
     kind?: string;

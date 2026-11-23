@@ -488,6 +488,16 @@ An execute call matching a permission rule with `effect="require-approval"` is e
 | `held_executions.max_pending_per_agent` | integer (>= 1) | `10` | `JENTIC__HELD_EXECUTIONS__MAX_PENDING_PER_AGENT` | Maximum pending approvals per agent. An execute call that would file another hold beyond this is denied with the `approval_pending_limit_reached` problem type. |
 | `held_executions.result_retention_seconds` | integer (> 0) | `86400` | `JENTIC__HELD_EXECUTIONS__RESULT_RETENTION_SECONDS` | Seconds the result of an approved execution stays readable via `GET /jobs/{id}/result` before the result sweep removes it. Defaults to 24 hours. |
 
+## `grant_expiry`
+
+Settings for credential grant (agent binding) expiry.
+
+| Key | Type | Default | Env var | Description |
+| --- | ---- | ------- | ------- | ----------- |
+| `grant_expiry.idle_warning_interval_s` | integer (>= 60) | `86400` | `JENTIC__GRANT_EXPIRY__IDLE_WARNING_INTERVAL_S` | Seconds between runs of the job that warns an agent's owner before a binding with the idle warning on reaches its idle limit. Defaults to once a day; the warning window should be at least twice this, so every binding is seen at least once inside it. |
+| `grant_expiry.idle_warning_window_h` | integer (>= 1) | `48` | `JENTIC__GRANT_EXPIRY__IDLE_WARNING_WINDOW_H` | Hours before a binding's idle deadline within which its owner is warned (once per idle period). Defaults to 48. |
+| `grant_expiry.idle_warning_min_idle_days` | integer (>= 1) | `4` | `JENTIC__GRANT_EXPIRY__IDLE_WARNING_MIN_IDLE_DAYS` | Shortest idle limit, in days, that is ever warned about. Below this a warning would cover half the idle window or more and arrive for bindings doing exactly what they were set up to do. Defaults to 4. |
+
 ## `apps`
 
 Surfaces this process serves: any of `registry`, `admin`, `control`, `auth`, or `broker` alone (the broker cannot be combined with other surfaces). Also decides which secrets production requires.

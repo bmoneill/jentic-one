@@ -18,6 +18,7 @@ import type { CredentialBindingPatchRequest } from '../models/CredentialBindingP
 import type { CredentialBindingResponse } from '../models/CredentialBindingResponse';
 import type { CredentialBindRequest } from '../models/CredentialBindRequest';
 import type { DenyRequest } from '../models/DenyRequest';
+import type { EndingSoonBindingListResponse } from '../models/EndingSoonBindingListResponse';
 import type { JwksUpdateRequest } from '../models/JwksUpdateRequest';
 import type { OAuthGrantListResponse } from '../models/OAuthGrantListResponse';
 import type { CancelablePromise } from '../core/CancelablePromise';
@@ -103,6 +104,33 @@ export class AgentsService {
             url: '/agents',
             body: requestBody,
             mediaType: 'application/json',
+            errors: {
+                400: `Bad Request`,
+                401: `Unauthorized`,
+                403: `Forbidden`,
+                422: `Unprocessable Entity`,
+                500: `Internal Server Error`,
+                503: `Service Unavailable`,
+            },
+        });
+    }
+    /**
+     * List credential bindings ending soon
+     * List bindings that will reach their idle limit soon unless they are used.
+     *
+     * Only bindings whose owner turned on the idle warning (`idle_warning`),
+     * with an idle limit of 4 days or more, whose idle deadline (`idle_expires_at`)
+     * is within the next 48 hours, and which have not been suspended or ended.
+     * The same bindings get a `credential_grant.idle_expiring` event once per
+     * idle period. Soonest first. Scoped like the agents list: `org:admin` sees
+     * every agent's bindings, anyone else their own agents'.
+     * @returns EndingSoonBindingListResponse Successful Response
+     * @throws ApiError
+     */
+    public static listCredentialBindingsEndingSoon(): CancelablePromise<EndingSoonBindingListResponse> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/agents/credentials:ending-soon',
             errors: {
                 400: `Bad Request`,
                 401: `Unauthorized`,

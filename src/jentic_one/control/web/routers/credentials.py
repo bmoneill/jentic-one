@@ -572,6 +572,7 @@ async def list_credential_agents(
                 expired_reason=reason,
                 max_idle_period=row.max_idle_period,
                 idle_expires_at=idle_deadline(row.policy()),
+                idle_warning=row.idle_warning,
                 last_used_at=row.last_used_at,
             )
             for row in data

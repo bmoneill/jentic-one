@@ -15,6 +15,10 @@ export type CredentialBindingPatchRequest = {
      */
     expires_at?: (string | null);
     /**
+     * Warn the agent's owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set. Leave it out to keep it as it is.
+     */
+    idle_warning?: (boolean | null);
+    /**
      * Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Send null to remove the idle limit; leave it out to keep it.
      */
     max_idle_period?: (number | null);

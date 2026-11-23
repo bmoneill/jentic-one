@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 from contextlib import nullcontext
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -62,6 +62,7 @@ from jentic_one.auth.services.schemas.agents import (
     AgentView,
     ApiLastUseView,
     CredentialBindingView,
+    EndingSoonBindingView,
 )
 from jentic_one.shared.audit import AuditAction, AuditTargetType, record_audit
 from jentic_one.shared.auth.agent_permission_ceiling import (
@@ -69,7 +70,12 @@ from jentic_one.shared.auth.agent_permission_ceiling import (
     cap_agent_permissions,
 )
 from jentic_one.shared.auth.binding_write import guard_binding_write
-from jentic_one.shared.auth.grant_policy import GRANT_POLICY_FIELDS, UNSET, Unset
+from jentic_one.shared.auth.grant_policy import (
+    GRANT_POLICY_FIELDS,
+    UNSET,
+    Unset,
+    idle_warning_due,
+)
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.permission_catalog import (
     AGENTS_READ,
@@ -904,6 +910,52 @@ class AgentService:
                 ]
         return views
 
+    async def list_bindings_ending_soon(
+        self, *, identity: Identity, now: datetime | None = None
+    ) -> list[EndingSoonBindingView]:
+        """Bindings of the caller's visible agents that will soon go idle.
+
+        The live state behind the owner's idle warning (and the console's
+        "Ending soon" row): the warning is on, the idle limit is long enough to
+        warn about, and the idle deadline falls within the warning window,
+        soonest first. Visibility is the agents list's: ``org:admin`` sees every
+        agent's, anyone else their own agents'.
+        """
+        now = now or datetime.now(UTC)
+        warn = self._ctx.config.grant_expiry
+        window = timedelta(hours=warn.idle_warning_window_h)
+        min_idle = warn.idle_warning_min_idle_days * 86_400
+        async with self._ctx.admin_db.session() as session:
+            rows = await AgentCredentialBindingRepository.list_idle_warned(
+                session,
+                min_idle_period=min_idle,
+                agent_filters=build_access_filters(identity, Agent),
+            )
+        views: list[tuple[datetime, EndingSoonBindingView]] = []
+        for binding, agent_name in rows:
+            view = EndingSoonBindingView.model_validate(
+                {
+                    **CredentialBindingView.model_validate(binding).model_dump(),
+                    "agent_name": agent_name,
+                }
+            )
+            deadline = idle_warning_due(
+                view.policy, now=now, window=window, min_idle_period=min_idle
+            )
+            if deadline is not None:
+                views.append((deadline, view))
+        ending = [view for _, view in sorted(views, key=lambda pair: pair[0])]
+        credential_ids = sorted({v.credential_id for v in ending})
+        if credential_ids and self._ctx.is_db_allowed("control"):
+            async with self._ctx.control_db.session() as session:
+                refs = await CredentialRefRepository.get_refs_for_ids(session, credential_ids)
+            for view in ending:
+                ref = refs.get(view.credential_id)
+                if ref is not None:
+                    view.name = ref.name
+                    view.state = ref.state
+        return ending
+
     async def _load_binding_agent(self, agent_id: str, *, identity: Identity) -> AgentView:
         """Load the agent whose credential bindings the caller is changing.
 
@@ -928,6 +980,7 @@ class AgentService:
         identity: Identity,
         expires_at: datetime | None = None,
         max_idle_period: int | None = None,
+        idle_warning: bool = False,
     ) -> CredentialBindingView:
         """Create a direct agent↔credential binding.
 
@@ -964,6 +1017,7 @@ class AgentService:
                     created_by=identity.sub,
                     expires_at=expires_at,
                     max_idle_period=max_idle_period,
+                    idle_warning=idle_warning,
                 )
             except IntegrityError:
                 raise CredentialBindingConflictError(agent_id, credential_id) from None
@@ -1172,6 +1226,7 @@ class AgentService:
         identity: Identity,
         expires_at: datetime | Unset | None = UNSET,
         max_idle_period: int | Unset | None = UNSET,
+        idle_warning: bool | Unset = UNSET,
     ) -> CredentialBindingView:
         """Re-certify a binding: set, move or clear its limits, and restart its idle clock.
 
@@ -1190,6 +1245,8 @@ class AgentService:
             policy["expires_at"] = expires_at
         if not isinstance(max_idle_period, Unset):
             policy["max_idle_period"] = max_idle_period
+        if not isinstance(idle_warning, Unset):
+            policy["idle_warning"] = idle_warning
         if identity.actor_type != ActorType.USER:
             raise CredentialNotVisibleError(credential_id)
         agent = await self._load_binding_agent(agent_id, identity=identity)

@@ -101,6 +101,11 @@ class CredentialBindingEntry(BaseModel):
         ),
         examples=["2026-12-31T23:59:00Z"],
     )
+    idle_warning: bool = Field(
+        default=False,
+        description="Whether the owner is warned before the idle limit is reached.",
+        examples=[False],
+    )
     last_used_at: datetime | None = Field(
         default=None,
         description="When this agent last made a call through the binding; null if never.",

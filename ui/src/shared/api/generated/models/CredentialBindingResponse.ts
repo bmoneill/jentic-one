@@ -42,6 +42,10 @@ export type CredentialBindingResponse = {
      */
     idle_expires_at?: (string | null);
     /**
+     * Warn the agent's owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set.
+     */
+    idle_warning?: boolean;
+    /**
      * When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.
      */
     last_used_at?: (string | null);

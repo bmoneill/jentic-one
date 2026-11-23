@@ -46,7 +46,7 @@ class Unset(Enum):
 UNSET = Unset.TOKEN
 
 #: The binding columns that make up its policy, as audits record them.
-GRANT_POLICY_FIELDS = ("expires_at", "max_idle_period")
+GRANT_POLICY_FIELDS = ("expires_at", "max_idle_period", "idle_warning")
 
 
 class GrantEndReason(StrEnum):
@@ -132,3 +132,26 @@ def grant_end_reason(policy: GrantPolicy, *, now: datetime | None = None) -> Gra
 def grant_ended(policy: GrantPolicy, *, now: datetime | None = None) -> bool:
     """Whether any limit of the grant has been reached as of ``now``."""
     return grant_end_reason(policy, now=now) is not None
+
+
+def idle_warning_due(
+    policy: GrantPolicy,
+    *,
+    now: datetime,
+    window: timedelta,
+    min_idle_period: int,
+) -> datetime | None:
+    """The idle deadline of a binding due an idle warning, else ``None``.
+
+    Due: the idle limit is at least ``min_idle_period`` seconds, its deadline
+    is ahead of ``now`` but within ``window``, and no limit has ended the
+    binding yet. The caller checks the binding's own ``idle_warning`` flag.
+    """
+    if policy.max_idle_period is None or policy.max_idle_period < min_idle_period:
+        return None
+    deadline = idle_deadline(policy)
+    if deadline is None or not now < deadline <= now + window:
+        return None
+    if grant_end_reason(policy, now=now) is not None:
+        return None
+    return deadline

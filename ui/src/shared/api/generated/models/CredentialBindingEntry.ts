@@ -33,6 +33,10 @@ export type CredentialBindingEntry = {
      */
     idle_expires_at?: (string | null);
     /**
+     * Whether the owner is warned before the idle limit is reached.
+     */
+    idle_warning?: boolean;
+    /**
      * When this agent last made a call through the binding; null if never.
      */
     last_used_at?: (string | null);

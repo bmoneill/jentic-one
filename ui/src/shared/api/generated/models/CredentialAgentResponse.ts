@@ -36,6 +36,10 @@ export type CredentialAgentResponse = {
      */
     idle_expires_at?: (string | null);
     /**
+     * Whether the agent's owner is warned before the idle limit is reached.
+     */
+    idle_warning?: boolean;
+    /**
      * When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.
      */
     last_used_at?: (string | null);

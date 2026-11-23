@@ -134,7 +134,11 @@ The outcomes:
   binding. Binding responses and `/me` report `expired` with
   `expired_reason`, naming the limit that ended it (`end_date` or `idle`),
   and `idle_expires_at` for when an unused binding would end. Renewing
-  (`PATCH`) restarts the idle clock even with an empty body.
+  (`PATCH`) restarts the idle clock even with an empty body. With
+  `idle_warning` turned on (off by default; it takes an idle limit of 4 days
+  or more), the agent's owner gets one `credential_grant.idle_expiring` event
+  in the 48 hours before the idle limit is reached, and
+  `GET /agents/credentials:ending-soon` lists those bindings.
 - **1 winner → use it.** The response carries `Jentic-Credential-Id` and
   `Jentic-Credential-Name` (absent when no stored credential was used), and
   the execution record carries the same attribution — every execution names

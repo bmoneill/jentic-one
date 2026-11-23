@@ -1886,6 +1886,7 @@
             "digest": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
             "expected_agent_id": "agnt_6968b3984d1c238dbe7e2e29",
             "expires_at": "2026-12-31T23:59:00Z",
+            "idle_warning": false,
             "key": "example-secret",
             "kind": "api_key",
             "max_idle_period": 1209600,
@@ -1958,6 +1959,14 @@
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
+          },
+          "idle_warning": {
+            "default": false,
+            "description": "Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
           },
           "key": {
             "description": "API key to store; write-only.",
@@ -4822,6 +4831,7 @@
             "digest": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
             "expected_agent_id": "agnt_6968b3984d1c238dbe7e2e29",
             "expires_at": "2026-12-31T23:59:00Z",
+            "idle_warning": false,
             "kind": "basic",
             "max_idle_period": 1209600,
             "password": "example-secret",
@@ -4895,6 +4905,14 @@
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
+          },
+          "idle_warning": {
+            "default": false,
+            "description": "Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
           },
           "kind": {
             "const": "basic",
@@ -4999,6 +5017,7 @@
             "digest": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
             "expected_agent_id": "agnt_6968b3984d1c238dbe7e2e29",
             "expires_at": "2026-12-31T23:59:00Z",
+            "idle_warning": false,
             "kind": "bearer",
             "max_idle_period": 1209600,
             "permission_rules": [
@@ -5071,6 +5090,14 @@
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
+          },
+          "idle_warning": {
+            "default": false,
+            "description": "Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
           },
           "kind": {
             "const": "bearer",
@@ -6819,6 +6846,7 @@
                 "expired_reason": null,
                 "expires_at": "2026-12-31T23:59:00Z",
                 "idle_expires_at": "2026-12-31T23:59:00Z",
+                "idle_warning": false,
                 "last_used_at": "2026-02-03T14:05:00Z",
                 "max_idle_period": 1209600,
                 "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
@@ -6845,6 +6873,7 @@
                   "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "idle_expires_at": "2026-12-31T23:59:00Z",
+                  "idle_warning": false,
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "max_idle_period": 1209600,
                   "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
@@ -6899,6 +6928,7 @@
             "expired_reason": null,
             "expires_at": "2026-12-31T23:59:00Z",
             "idle_expires_at": "2026-12-31T23:59:00Z",
+            "idle_warning": false,
             "last_used_at": "2026-02-03T14:05:00Z",
             "max_idle_period": 1209600,
             "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
@@ -6982,6 +7012,14 @@
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
+          },
+          "idle_warning": {
+            "default": false,
+            "description": "Whether the agent's owner is warned before the idle limit is reached.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
           },
           "last_used_at": {
             "anyOf": [
@@ -7084,6 +7122,7 @@
           {
             "credential_id": "cred_6968b39855d91a3561684b32",
             "expires_at": "2026-12-31T23:59:00Z",
+            "idle_warning": false,
             "max_idle_period": 1209600
           }
         ],
@@ -7111,6 +7150,14 @@
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
+          },
+          "idle_warning": {
+            "default": false,
+            "description": "Warn the agent's owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
           },
           "max_idle_period": {
             "anyOf": [
@@ -7144,6 +7191,7 @@
             "expired_reason": null,
             "expires_at": "2026-12-31T23:59:00Z",
             "idle_expires_at": "2026-12-31T23:59:00Z",
+            "idle_warning": false,
             "last_used_at": "2026-11-20T10:00:00Z",
             "max_idle_period": 1209600,
             "name": "Stripe production key",
@@ -7227,6 +7275,14 @@
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
+          },
+          "idle_warning": {
+            "default": false,
+            "description": "Whether the owner is warned before the idle limit is reached.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
           },
           "last_used_at": {
             "anyOf": [
@@ -7359,6 +7415,7 @@
                 "expires_at": "2026-12-31T23:59:00Z",
                 "id": "acb_6968b3989a4f1c2e7d3b5a60",
                 "idle_expires_at": "2026-12-31T23:59:00Z",
+                "idle_warning": false,
                 "last_used_at": "2026-02-03T14:05:00Z",
                 "last_used_by_api": [
                   {
@@ -7398,6 +7455,7 @@
                   "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
                   "idle_expires_at": "2026-12-31T23:59:00Z",
+                  "idle_warning": false,
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "last_used_by_api": [
                     {
@@ -7439,6 +7497,7 @@
         "examples": [
           {
             "expires_at": "2026-12-31T23:59:00Z",
+            "idle_warning": true,
             "max_idle_period": 1209600
           }
         ],
@@ -7456,6 +7515,20 @@
             "description": "When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the end date; leave it out to keep it.",
             "examples": [
               "2026-12-31T23:59:00Z"
+            ]
+          },
+          "idle_warning": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Warn the agent's owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set. Leave it out to keep it as it is.",
+            "examples": [
+              true
             ]
           },
           "max_idle_period": {
@@ -7489,6 +7562,7 @@
             "expires_at": "2026-12-31T23:59:00Z",
             "id": "acb_6968b3989a4f1c2e7d3b5a60",
             "idle_expires_at": "2026-12-31T23:59:00Z",
+            "idle_warning": false,
             "last_used_at": "2026-02-03T14:05:00Z",
             "last_used_by_api": [
               {
@@ -7593,6 +7667,14 @@
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
+          },
+          "idle_warning": {
+            "default": false,
+            "description": "Warn the agent's owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
           },
           "last_used_at": {
             "anyOf": [
@@ -9919,6 +10001,370 @@
         ],
         "type": "object"
       },
+      "EndingSoonBindingListResponse": {
+        "description": "Bindings that will soon reach their idle limit.",
+        "examples": [
+          {
+            "data": [
+              {
+                "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
+                "agent_name": "invoice-reconciler",
+                "bound_at": "2026-01-15T09:30:00Z",
+                "credential_id": "cred_6968b39855d91a3561684b32",
+                "expired": false,
+                "expired_reason": null,
+                "expires_at": "2026-12-31T23:59:00Z",
+                "id": "acb_6968b3989a4f1c2e7d3b5a60",
+                "idle_expires_at": "2026-12-31T23:59:00Z",
+                "idle_warning": false,
+                "last_used_at": "2026-02-03T14:05:00Z",
+                "last_used_by_api": [
+                  {
+                    "api_name": "github",
+                    "api_vendor": "github.com",
+                    "last_used_at": "2026-02-03T14:05:00Z"
+                  }
+                ],
+                "max_idle_period": 1209600,
+                "name": "Stripe production key",
+                "renewed_at": "2026-12-31T23:59:00Z",
+                "rule_set_id": "prs_6968b3987c22b63e87e79f05",
+                "serves": [
+                  {
+                    "api_name": "stripe",
+                    "api_vendor": "stripe.com",
+                    "api_version": "2024-04-10"
+                  }
+                ],
+                "suspended": false,
+                "suspended_reason": "api_deleted"
+              }
+            ]
+          }
+        ],
+        "properties": {
+          "data": {
+            "description": "Bindings with the idle warning on that end soon if unused, soonest first.",
+            "examples": [
+              [
+                {
+                  "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
+                  "agent_name": "invoice-reconciler",
+                  "bound_at": "2026-01-15T09:30:00Z",
+                  "credential_id": "cred_6968b39855d91a3561684b32",
+                  "expired": false,
+                  "expired_reason": null,
+                  "expires_at": "2026-12-31T23:59:00Z",
+                  "id": "acb_6968b3989a4f1c2e7d3b5a60",
+                  "idle_expires_at": "2026-12-31T23:59:00Z",
+                  "idle_warning": false,
+                  "last_used_at": "2026-02-03T14:05:00Z",
+                  "last_used_by_api": [
+                    {
+                      "api_name": "github",
+                      "api_vendor": "github.com",
+                      "last_used_at": "2026-02-03T14:05:00Z"
+                    }
+                  ],
+                  "max_idle_period": 1209600,
+                  "name": "Stripe production key",
+                  "renewed_at": "2026-12-31T23:59:00Z",
+                  "rule_set_id": "prs_6968b3987c22b63e87e79f05",
+                  "serves": [
+                    {
+                      "api_name": "stripe",
+                      "api_vendor": "stripe.com",
+                      "api_version": "2024-04-10"
+                    }
+                  ],
+                  "suspended": false,
+                  "suspended_reason": "api_deleted"
+                }
+              ]
+            ],
+            "items": {
+              "$ref": "#/components/schemas/EndingSoonBindingResponse"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "type": "object"
+      },
+      "EndingSoonBindingResponse": {
+        "description": "A binding whose idle limit will end it soon unless the agent uses it.",
+        "examples": [
+          {
+            "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
+            "agent_name": "invoice-reconciler",
+            "bound_at": "2026-01-15T09:30:00Z",
+            "credential_id": "cred_6968b39855d91a3561684b32",
+            "expired": false,
+            "expired_reason": null,
+            "expires_at": "2026-12-31T23:59:00Z",
+            "id": "acb_6968b3989a4f1c2e7d3b5a60",
+            "idle_expires_at": "2026-12-31T23:59:00Z",
+            "idle_warning": false,
+            "last_used_at": "2026-02-03T14:05:00Z",
+            "last_used_by_api": [
+              {
+                "api_name": "github",
+                "api_vendor": "github.com",
+                "last_used_at": "2026-02-03T14:05:00Z"
+              }
+            ],
+            "max_idle_period": 1209600,
+            "name": "Stripe production key",
+            "renewed_at": "2026-12-31T23:59:00Z",
+            "rule_set_id": "prs_6968b3987c22b63e87e79f05",
+            "serves": [
+              {
+                "api_name": "stripe",
+                "api_vendor": "stripe.com",
+                "api_version": "2024-04-10"
+              }
+            ],
+            "suspended": false,
+            "suspended_reason": "api_deleted"
+          }
+        ],
+        "properties": {
+          "agent_id": {
+            "description": "ID of the agent the credential is bound to.",
+            "examples": [
+              "agnt_6968b3984d1c238dbe7e2e29"
+            ],
+            "type": "string"
+          },
+          "agent_name": {
+            "description": "Name of the agent the credential is bound to.",
+            "examples": [
+              "invoice-reconciler"
+            ],
+            "type": "string"
+          },
+          "bound_at": {
+            "description": "When the credential was bound (RFC 3339).",
+            "examples": [
+              "2026-01-15T09:30:00Z"
+            ],
+            "format": "date-time",
+            "type": "string"
+          },
+          "credential_id": {
+            "description": "ID of the bound credential.",
+            "examples": [
+              "cred_6968b39855d91a3561684b32"
+            ],
+            "type": "string"
+          },
+          "expired": {
+            "default": false,
+            "description": "Whether `expires_at` has passed.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "expired_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GrantEndReason"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which limit ended the binding while `expired` is true: `end_date` (`expires_at` passed) or `idle` (unused for `max_idle_period`). Null while the binding holds.",
+            "examples": [
+              null
+            ]
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the binding stops authorizing calls (RFC 3339); null if it never expires.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
+            ]
+          },
+          "id": {
+            "description": "Unique ID of the binding.",
+            "examples": [
+              "acb_6968b3989a4f1c2e7d3b5a60"
+            ],
+            "type": "string"
+          },
+          "idle_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the idle limit ends the binding if it is not used before then (RFC 3339); null without an idle limit. Each use moves it later.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
+            ]
+          },
+          "idle_warning": {
+            "default": false,
+            "description": "Warn the agent's owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the agent last made a call through this credential, whatever its outcome (RFC 3339); null if it never has.",
+            "examples": [
+              "2026-02-03T14:05:00Z"
+            ]
+          },
+          "last_used_by_api": {
+            "default": [],
+            "description": "`last_used_at` per API the agent called through this credential, most recent first; a vendor-wide credential has one entry per API used.",
+            "examples": [
+              [
+                {
+                  "api_name": "github",
+                  "api_vendor": "github.com",
+                  "last_used_at": "2026-02-03T14:05:00Z"
+                }
+              ]
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ApiLastUseResponse"
+            },
+            "type": "array"
+          },
+          "max_idle_period": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Null when it has no idle limit.",
+            "examples": [
+              1209600
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Name of the bound credential; null if it cannot be resolved.",
+            "examples": [
+              "Stripe production key"
+            ]
+          },
+          "renewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the binding was granted or last renewed (RFC 3339); the idle clock restarts at the later of this and its last use.",
+            "examples": [
+              "2026-12-31T23:59:00Z"
+            ]
+          },
+          "rule_set_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ID of the shared permission rule set attached; null when inline rules apply.",
+            "examples": [
+              "prs_6968b3987c22b63e87e79f05"
+            ]
+          },
+          "serves": {
+            "default": [],
+            "description": "The APIs the bound credential serves; empty if unresolvable.",
+            "examples": [
+              [
+                {
+                  "api_name": "stripe",
+                  "api_vendor": "stripe.com",
+                  "api_version": "2024-04-10"
+                }
+              ]
+            ],
+            "items": {
+              "$ref": "#/components/schemas/ServedApiRef"
+            },
+            "type": "array"
+          },
+          "suspended": {
+            "description": "Whether the binding is suspended, cutting off the agent's access to it.",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
+          },
+          "suspended_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the binding is suspended: null for a manual suspension, `api_deleted` when the API the credential serves was deleted; cleared on resume.",
+            "examples": [
+              "api_deleted"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "agent_id",
+          "credential_id",
+          "bound_at",
+          "suspended",
+          "agent_name"
+        ],
+        "type": "object"
+      },
       "ErrorItem": {
         "description": "A granular error detail entry within the errors[] array of a ProblemDetails response.\n\nAt least one of pointer, parameter, or header SHOULD be present to identify the error source.",
         "examples": [
@@ -10870,6 +11316,7 @@
             "digest": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
             "expected_agent_id": "agnt_6968b3984d1c238dbe7e2e29",
             "expires_at": "2026-12-31T23:59:00Z",
+            "idle_warning": false,
             "kind": "existing_credential",
             "max_idle_period": 1209600,
             "permission_rules": [
@@ -10950,6 +11397,14 @@
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
+          },
+          "idle_warning": {
+            "default": false,
+            "description": "Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
           },
           "kind": {
             "const": "existing_credential",
@@ -13190,6 +13645,7 @@
                 "expired_reason": null,
                 "expires_at": "2026-12-31T23:59:00Z",
                 "idle_expires_at": "2026-12-31T23:59:00Z",
+                "idle_warning": false,
                 "last_used_at": "2026-11-20T10:00:00Z",
                 "max_idle_period": 1209600,
                 "name": "Stripe production key",
@@ -13248,6 +13704,7 @@
                   "expired_reason": null,
                   "expires_at": "2026-12-31T23:59:00Z",
                   "idle_expires_at": "2026-12-31T23:59:00Z",
+                  "idle_warning": false,
                   "last_used_at": "2026-11-20T10:00:00Z",
                   "max_idle_period": 1209600,
                   "name": "Stripe production key",
@@ -16364,6 +16821,7 @@
             "digest": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
             "expected_agent_id": "agnt_6968b3984d1c238dbe7e2e29",
             "expires_at": "2026-12-31T23:59:00Z",
+            "idle_warning": false,
             "kind": "oauth",
             "max_idle_period": 1209600,
             "permission_rules": [
@@ -16455,6 +16913,14 @@
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
+          },
+          "idle_warning": {
+            "default": false,
+            "description": "Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
           },
           "kind": {
             "const": "oauth",
@@ -18644,6 +19110,7 @@
             "digest": "2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae",
             "expected_agent_id": "agnt_6968b3984d1c238dbe7e2e29",
             "expires_at": "2026-12-31T23:59:00Z",
+            "idle_warning": false,
             "kind": "own_oauth_client",
             "max_idle_period": 1209600,
             "permission_rules": [
@@ -18760,6 +19227,14 @@
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
+          },
+          "idle_warning": {
+            "default": false,
+            "description": "Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).",
+            "examples": [
+              false
+            ],
+            "type": "boolean"
           },
           "kind": {
             "const": "own_oauth_client",
@@ -26791,6 +27266,93 @@
       },
       "summary": "Create an agent; List visible agents"
     },
+    "/agents/credentials:ending-soon": {
+      "description": "`GET`: List credential bindings ending soon.",
+      "get": {
+        "description": "List bindings that will reach their idle limit soon unless they are used.\n\nOnly bindings whose owner turned on the idle warning (`idle_warning`),\nwith an idle limit of 4 days or more, whose idle deadline (`idle_expires_at`)\nis within the next 48 hours, and which have not been suspended or ended.\nThe same bindings get a `credential_grant.idle_expiring` event once per\nidle period. Soonest first. Scoped like the agents list: `org:admin` sees\nevery agent's bindings, anyone else their own agents'.",
+        "operationId": "listCredentialBindingsEndingSoon",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "agent_id": "agnt_6968b3984d1c238dbe7e2e29",
+                      "agent_name": "invoice-reconciler",
+                      "bound_at": "2026-01-15T09:30:00Z",
+                      "credential_id": "cred_6968b39855d91a3561684b32",
+                      "expired": false,
+                      "expired_reason": null,
+                      "expires_at": "2026-12-31T23:59:00Z",
+                      "id": "acb_6968b3989a4f1c2e7d3b5a60",
+                      "idle_expires_at": "2026-12-31T23:59:00Z",
+                      "idle_warning": false,
+                      "last_used_at": "2026-02-03T14:05:00Z",
+                      "last_used_by_api": [
+                        {
+                          "api_name": "github",
+                          "api_vendor": "github.com",
+                          "last_used_at": "2026-02-03T14:05:00Z"
+                        }
+                      ],
+                      "max_idle_period": 1209600,
+                      "name": "Stripe production key",
+                      "renewed_at": "2026-12-31T23:59:00Z",
+                      "rule_set_id": "prs_6968b3987c22b63e87e79f05",
+                      "serves": [
+                        {
+                          "api_name": "stripe",
+                          "api_vendor": "stripe.com",
+                          "api_version": "2024-04-10"
+                        }
+                      ],
+                      "suspended": false,
+                      "suspended_reason": "api_deleted"
+                    }
+                  ]
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/EndingSoonBindingListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          },
+          {
+            "OAuth2": []
+          }
+        ],
+        "summary": "List credential bindings ending soon",
+        "tags": [
+          "Agents"
+        ]
+      },
+      "summary": "List credential bindings ending soon"
+    },
     "/agents/{agent_id}": {
       "delete": {
         "description": "Archive an agent — or, with ``purge=true``, hard-delete it.\n\nArchive keeps the row for history, but the action is not reversible and\nthe agent's authority is swept: permission grants, credential bindings, and\nOAuth consent grants are revoked. For the reversible kill switch use\n``:disable`` / ``:enable`` instead.\n\nPurge removes the agent and its authority and session rows; it archives\nfirst if needed, so the agent's authority is gone before any cleanup runs,\nand a failed purge leaves the agent archived and can be retried. Archive\nreturns 409 for an already-archived agent; purge accepts any status.",
@@ -27289,6 +27851,7 @@
                       "expires_at": "2026-12-31T23:59:00Z",
                       "id": "acb_6968b3989a4f1c2e7d3b5a60",
                       "idle_expires_at": "2026-12-31T23:59:00Z",
+                      "idle_warning": false,
                       "last_used_at": "2026-02-03T14:05:00Z",
                       "last_used_by_api": [
                         {
@@ -27400,6 +27963,7 @@
               "example": {
                 "credential_id": "cred_6968b39855d91a3561684b32",
                 "expires_at": "2026-12-31T23:59:00Z",
+                "idle_warning": false,
                 "max_idle_period": 1209600
               },
               "schema": {
@@ -27423,6 +27987,7 @@
                   "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
                   "idle_expires_at": "2026-12-31T23:59:00Z",
+                  "idle_warning": false,
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "last_used_by_api": [
                     {
@@ -27691,6 +28256,7 @@
             "application/json": {
               "example": {
                 "expires_at": "2026-12-31T23:59:00Z",
+                "idle_warning": true,
                 "max_idle_period": 1209600
               },
               "schema": {
@@ -27714,6 +28280,7 @@
                   "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
                   "idle_expires_at": "2026-12-31T23:59:00Z",
+                  "idle_warning": false,
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "last_used_by_api": [
                     {
@@ -27854,6 +28421,7 @@
                   "expires_at": "2026-12-31T23:59:00Z",
                   "id": "acb_6968b3989a4f1c2e7d3b5a60",
                   "idle_expires_at": "2026-12-31T23:59:00Z",
+                  "idle_warning": false,
                   "last_used_at": "2026-02-03T14:05:00Z",
                   "last_used_by_api": [
                     {
@@ -34641,6 +35209,7 @@
                       "expired_reason": null,
                       "expires_at": "2026-12-31T23:59:00Z",
                       "idle_expires_at": "2026-12-31T23:59:00Z",
+                      "idle_warning": false,
                       "last_used_at": "2026-02-03T14:05:00Z",
                       "max_idle_period": 1209600,
                       "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
