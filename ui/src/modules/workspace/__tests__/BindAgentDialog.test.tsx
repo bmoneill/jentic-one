@@ -5,6 +5,7 @@ import { renderWithProviders, screen, userEvent, waitFor, within } from '@/__tes
 import { setToken } from '@/shared/api';
 import { makeMockCredential } from '@/shared/credentials/mocks/handlers';
 import { BindAgentDialog } from '@/modules/workspace/components/BindAgentDialog';
+import { setMockGrantLimits } from '@/modules/agents/mocks/handlers';
 import { Toaster } from '@/shared/ui/Toaster';
 import { clearAllToasts } from '@/shared/ui/toastStore';
 
@@ -703,6 +704,44 @@ describe('BindAgentDialog — how long the access lasts', () => {
 			expires_at: null,
 			max_quota: 1,
 		});
+	});
+
+	it('starts on the org default and offers nothing above its maximum', async () => {
+		setMockGrantLimits({
+			expires_in: { default_seconds: 7 * 86_400, max_seconds: 30 * 86_400 },
+			idle_period: { default_seconds: 14 * 86_400, max_seconds: 30 * 86_400 },
+		});
+		try {
+			const user = userEvent.setup();
+			renderDialog();
+			await ready(user);
+			const preset = screen.getByTestId('bind-agent-duration-preset') as HTMLSelectElement;
+			await waitFor(() => expect(preset.value).toBe('7d'));
+			expect(within(preset).getByRole('option', { name: '90 days' })).toBeDisabled();
+			// The idle limit is on, on its default, and can't be turned off.
+			const idleBox = within(screen.getByTestId('bind-agent-idle-toggle')).getByRole(
+				'checkbox',
+			);
+			expect(idleBox).toBeChecked();
+			expect(idleBox).toBeDisabled();
+			expect((screen.getByTestId('bind-agent-idle-preset') as HTMLSelectElement).value).toBe(
+				'14d',
+			);
+
+			// No "No expiry" under a maximum, and a longer custom amount says so.
+			await user.selectOptions(preset, 'custom');
+			const unit = screen.getByTestId('bind-agent-duration-unit');
+			expect(within(unit).queryByRole('option', { name: 'No expiry' })).toBeNull();
+			const amount = screen.getByTestId('bind-agent-duration-amount');
+			await user.clear(amount);
+			await user.type(amount, '45');
+			expect(screen.getByTestId('bind-agent-duration-error')).toHaveTextContent(
+				'This org allows at most 30 days.',
+			);
+			expect(screen.getByTestId('bind-agent-confirm')).toBeDisabled();
+		} finally {
+			setMockGrantLimits(null);
+		}
 	});
 
 	it('refuses an idle limit under a day', async () => {

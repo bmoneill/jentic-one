@@ -9,9 +9,11 @@ import {
 	useCancelConnectSession,
 	useConfirmConnectSession,
 	useConnectSession,
+	useGrantPolicyLimits,
 	usePollConnectSessionStatus,
 	useRejectConnectSession,
 } from '@/shared/credentials/api/vendors-hooks';
+import { usePreselectGrantDefaults } from '@/shared/credentials/lib/grantDefaults';
 import {
 	cancelConnectSession,
 	cancelConnectSessionOnUnload,
@@ -151,6 +153,14 @@ export function VendorApproveFlow({
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	// The optional use count (1 = "End after one use"); null = off.
 	const [uses, setUses] = useState<number | null>(null);
+	// What the request asked for comes first (below); the org's defaults fill
+	// what it left out, and its maximums bound the controls.
+	const limits = useGrantPolicyLimits();
+	usePreselectGrantDefaults(limits, (d) => {
+		setDuration((cur) => cur ?? d.duration);
+		setIdle((cur) => cur ?? d.idle);
+		setUses((cur) => cur ?? d.uses);
+	});
 	const durationSeeded = useRef(false);
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
@@ -176,7 +186,8 @@ export function VendorApproveFlow({
 		if (durationSeeded.current || !session) return;
 		durationSeeded.current = true;
 		if (requestedDuration) setDuration(requestedDuration);
-		setIdle(idleLimitFromSeconds(session.requested_max_idle_period));
+		const requestedIdle = idleLimitFromSeconds(session.requested_max_idle_period);
+		if (requestedIdle) setIdle(requestedIdle);
 	}, [session, requestedDuration]);
 	const scopes: ReviewScope[] = useMemo(() => session?.scopes ?? [], [session]);
 	const secretKind = session ? secretKindOf(session.resolved_flow) : null;
@@ -716,7 +727,9 @@ export function VendorApproveFlow({
 	const bindsAgent = Boolean(session?.agent);
 	const continueDisabled =
 		!canConfirm ||
-		(bindsAgent && (!durationChosen(duration) || idleLimitError(idle) !== null)) ||
+		(bindsAgent &&
+			(!durationChosen(duration, limits.expires.maxSeconds) ||
+				idleLimitError(idle, limits.idle.maxSeconds) !== null)) ||
 		method.kind === 'shared_app' ||
 		(method.kind === 'primary' &&
 			!secretKind &&
@@ -801,6 +814,7 @@ export function VendorApproveFlow({
 			{canConfirm && bindsAgent && (
 				<div className="space-y-1" data-testid="approve-duration">
 					<BindingDurationField
+						maxSeconds={limits.expires.maxSeconds}
 						value={duration}
 						onChange={(next): void => {
 							setStepError(null);
@@ -812,6 +826,7 @@ export function VendorApproveFlow({
 						testIdPrefix="approve"
 					/>
 					<IdleLimitField
+						maxSeconds={limits.idle.maxSeconds}
 						value={idle}
 						onChange={(next): void => {
 							setStepError(null);

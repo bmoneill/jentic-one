@@ -18,6 +18,7 @@ import {
 	type BindingAccessResponse,
 	type ConnectSessionSummaryResponse,
 	type EndingSoonBindingResponse,
+	type GrantPolicyLimitsResponse,
 	type PermissionRuleReadSchema,
 	type PermissionRuleSchema,
 	type RuleSetResponse,
@@ -451,6 +452,11 @@ export async function listOpenConnectRequests(): Promise<ConnectSessionSummaryRe
 export async function listBindingsEndingSoon(): Promise<EndingSoonBindingResponse[]> {
 	const page = await AgentsService.listCredentialBindingsEndingSoon();
 	return page.data;
+}
+
+/** The org's defaults and maximums for new grants and agents (`GET /agents/credentials:policy`). */
+export function getGrantPolicyLimits(): Promise<GrantPolicyLimitsResponse> {
+	return AgentsService.getGrantPolicyLimits();
 }
 
 export function listVendors(): Promise<VendorListResponse> {

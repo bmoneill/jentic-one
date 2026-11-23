@@ -25,6 +25,8 @@ import { toast } from '@/shared/ui';
 import { ROUTE_PATHS } from '@/shared/app/routes';
 import { useApproveAgent } from '@/shared/attention/actions';
 import { BindingDurationField } from '@/shared/credentials/components';
+import { useGrantPolicyLimits } from '@/shared/credentials/api';
+import { agentExpiryPlaceholder } from '@/shared/credentials/lib/grantLimits';
 import {
 	bindingDurationError,
 	expiresAtIso,
@@ -281,15 +283,18 @@ function AgentActions({
 }) {
 	const approve = useApproveAgent();
 	const canApprove = useCanAccess(AGENTS_WRITE);
-	// Optional: approving without a choice leaves the agent without an expiry.
+	// Optional: approving without a choice leaves the agent without an expiry
+	// (or gives it the org's default, which the server applies).
 	const [expiry, setExpiry] = useState<BindingDuration | null>(null);
+	const limits = useGrantPolicyLimits();
 	return (
 		<>
 			{canApprove && (
 				<BindingDurationField
 					compact
 					clearable
-					placeholder="No expiry"
+					placeholder={agentExpiryPlaceholder(limits)}
+					maxSeconds={limits.agent.maxSeconds}
 					label={`${name} stops working after (optional)`}
 					value={expiry}
 					onChange={setExpiry}

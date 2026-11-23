@@ -29,6 +29,7 @@ import {
 	listAgentsForPicker,
 	listAllVendorOperations,
 	listConnectSessionRevisions,
+	getGrantPolicyLimits,
 	listBindingsEndingSoon,
 	listOpenConnectRequests,
 	listVendors,
@@ -51,6 +52,7 @@ import type {
 } from '@/shared/api';
 import { sharedQueryKeys } from '@/shared/api/queryKeys';
 import { credentialKeys } from './keys';
+import { NO_GRANT_LIMITS, type GrantLimits } from '@/shared/credentials/lib/grantLimits';
 import type {
 	AmendSessionBody,
 	AmendedSession,
@@ -638,6 +640,40 @@ export function useOpenConnectRequests(options?: { enabled?: boolean }) {
 		staleTime: 30_000,
 		refetchInterval: CONNECT_REQUESTS_REFETCH_MS,
 	});
+}
+
+const grantLimitsKey = ['grant-policy-limits'] as const;
+
+/**
+ * The org's defaults and maximums for new grants and agents. Deployment config,
+ * so read once a session; while loading, or if the read fails, there are none
+ * (the server still enforces its own).
+ */
+export function useGrantPolicyLimits(): GrantLimits {
+	const query = useQuery({
+		queryKey: grantLimitsKey,
+		queryFn: getGrantPolicyLimits,
+		staleTime: Infinity,
+		retry: false,
+	});
+	const data = query.data;
+	if (!data) return NO_GRANT_LIMITS;
+	return {
+		expires: {
+			defaultSeconds: data.expires_in.default_seconds ?? null,
+			maxSeconds: data.expires_in.max_seconds ?? null,
+		},
+		idle: {
+			defaultSeconds: data.idle_period.default_seconds ?? null,
+			maxSeconds: data.idle_period.max_seconds ?? null,
+		},
+		singleUseByDefault: data.single_use_by_default,
+		agent: {
+			defaultSeconds: data.agent_expires_in.default_seconds ?? null,
+			maxSeconds: data.agent_expires_in.max_seconds ?? null,
+		},
+		loaded: true,
+	};
 }
 
 /** The "Ending soon" list's key, under the attention root like the other inbox rows. */

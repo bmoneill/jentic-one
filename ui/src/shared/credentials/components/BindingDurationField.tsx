@@ -17,6 +17,9 @@
  * `emptyHint` is the line under the control while nothing is chosen, and
  * `selectRef` lets a caller move focus to the dropdown (the "No expiry"
  * warning's "Set an expiry").
+ *
+ * Under an org maximum (`maxSeconds`), presets above it are disabled, "No
+ * expiry" is not offered, and a longer custom amount says so.
  */
 import { useId, type Ref } from 'react';
 import { Input, Select } from '@/shared/ui';
@@ -53,6 +56,8 @@ export interface BindingDurationFieldProps {
 	selectRef?: Ref<HTMLSelectElement>;
 	/** Prefix for the field's test ids (`<prefix>-duration-*`). */
 	testIdPrefix?: string;
+	/** The org's maximum, in seconds; null when it sets none. */
+	maxSeconds?: number | null;
 }
 
 const EXPIRY_FORMAT = new Intl.DateTimeFormat(undefined, {
@@ -86,10 +91,11 @@ export function BindingDurationField({
 	emptyHint,
 	selectRef,
 	testIdPrefix = 'binding',
+	maxSeconds = null,
 }: BindingDurationFieldProps) {
 	const labelId = useId();
 	const hintId = useId();
-	const error = bindingDurationError(value);
+	const error = bindingDurationError(value, maxSeconds);
 	const end = error ? null : expiresAtFromDuration(value);
 	const custom = value?.kind === 'custom' ? value : null;
 	const selected = value === null ? NONE : value.kind === 'preset' ? value.preset : CUSTOM;
@@ -137,7 +143,11 @@ export function BindingDurationField({
 							</option>
 						)}
 						{BINDING_DURATION_PRESETS.map((p) => (
-							<option key={p.value} value={p.value}>
+							<option
+								key={p.value}
+								value={p.value}
+								disabled={maxSeconds !== null && p.ms / 1000 > maxSeconds}
+							>
 								{p.label}
 							</option>
 						))}
@@ -182,7 +192,10 @@ export function BindingDurationField({
 									})
 								}
 							>
-								{CUSTOM_DURATION_UNITS.map((u) => (
+								{CUSTOM_DURATION_UNITS.filter(
+									// Under an org maximum every grant must end.
+									(u) => maxSeconds === null || u.value !== 'never',
+								).map((u) => (
 									<option key={u.value} value={u.value}>
 										{u.label}
 									</option>

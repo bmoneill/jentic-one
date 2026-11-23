@@ -529,6 +529,7 @@ export {
 	useAgentsForPicker,
 	useBindingAccess,
 	useBindingsEndingSoon,
+	useGrantPolicyLimits,
 	useConfirmConnectSession,
 	useConnectSession,
 	useOpenConnectRequests,

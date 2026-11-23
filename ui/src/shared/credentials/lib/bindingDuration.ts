@@ -17,6 +17,8 @@
  * resulting expiry ambiguous; operators wanting about a month enter 30 days.
  */
 
+import { limitLabel } from '@/shared/credentials/lib/grantLimits';
+
 export type BindingDurationUnit = 'seconds' | 'minutes' | 'hours' | 'days';
 
 /** A custom picker's unit: a fixed length, or `never` (no expiry). */
@@ -87,13 +89,37 @@ export function parseDurationAmount(amount: string): number | null {
  * fine, when nothing is chosen yet, for a preset, and for "No expiry" (which
  * takes no amount).
  */
-export function bindingDurationError(duration: BindingDuration | null): string | null {
-	if (duration === null || duration.kind === 'preset' || duration.unit === 'never') return null;
-	if (duration.amount.trim() === '') return 'Enter how long access lasts.';
-	if (parseDurationAmount(duration.amount) === null) {
-		return `Enter a whole number from 1 to ${MAX_BINDING_DURATION_AMOUNT}.`;
+export function bindingDurationError(
+	duration: BindingDuration | null,
+	maxSeconds: number | null = null,
+): string | null {
+	if (duration === null) return null;
+	if (duration.kind === 'custom' && duration.unit !== 'never') {
+		if (duration.amount.trim() === '') return 'Enter how long access lasts.';
+		if (parseDurationAmount(duration.amount) === null) {
+			return `Enter a whole number from 1 to ${MAX_BINDING_DURATION_AMOUNT}.`;
+		}
+	}
+	if (maxSeconds === null) return null;
+	const seconds = durationSeconds(duration);
+	if (seconds === 'never')
+		return `This org requires access to end within ${limitLabel(maxSeconds)}.`;
+	if (seconds !== null && seconds > maxSeconds) {
+		return `This org allows at most ${limitLabel(maxSeconds)}.`;
 	}
 	return null;
+}
+
+/** The duration in whole seconds, `'never'` for no expiry, or null while incomplete. */
+export function durationSeconds(duration: BindingDuration | null): number | 'never' | null {
+	if (duration === null) return null;
+	if (duration.kind === 'preset') {
+		const preset = BINDING_DURATION_PRESETS.find((p) => p.value === duration.preset);
+		return preset ? preset.ms / 1000 : null;
+	}
+	if (duration.unit === 'never') return 'never';
+	const amount = parseDurationAmount(duration.amount);
+	return amount === null ? null : (amount * UNIT_MS[duration.unit]) / 1000;
 }
 
 /**

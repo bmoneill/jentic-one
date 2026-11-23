@@ -9,7 +9,10 @@
  * other "ago" in the console. Where the exact moment matters, it is shown too.
  */
 import type { BindingDuration } from '@/shared/credentials/lib/bindingDuration';
-import { expiresAtFromDuration } from '@/shared/credentials/lib/bindingDuration';
+import {
+	bindingDurationError,
+	expiresAtFromDuration,
+} from '@/shared/credentials/lib/bindingDuration';
 import { idleLabel } from '@/shared/credentials/lib/idleLimit';
 
 const MINUTE_MS = 60_000;
@@ -237,8 +240,14 @@ export function bindingExpiryShortLabel(
  * "No expiry". Creating or renewing a binding waits for one: there is no
  * default, so an end date (or deliberately none) is always the operator's call.
  */
-export function durationChosen(duration: BindingDuration | null): boolean {
-	return expiresAtFromDuration(duration) !== null;
+export function durationChosen(
+	duration: BindingDuration | null,
+	maxSeconds: number | null = null,
+): boolean {
+	return (
+		expiresAtFromDuration(duration) !== null &&
+		bindingDurationError(duration, maxSeconds) === null
+	);
 }
 
 /**

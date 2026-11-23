@@ -18,8 +18,12 @@ import { useRef, useState, type KeyboardEvent } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button, ErrorAlert, UserText, toast } from '@/shared/ui';
 import { isolateText } from '@/shared/lib/utils';
-import { useRenewCredentialBinding } from '@/shared/credentials/api/vendors-hooks';
 import {
+	useGrantPolicyLimits,
+	useRenewCredentialBinding,
+} from '@/shared/credentials/api/vendors-hooks';
+import {
+	bindingDurationError,
 	expiresAtFromDuration,
 	expiresAtIso,
 	type BindingDuration,
@@ -87,6 +91,8 @@ export function RenewBindingControl({
 	testIdPrefix = 'renew-binding',
 }: RenewBindingControlProps) {
 	const renew = useRenewCredentialBinding();
+	// The org's maximums bound a renewal's choices (the server refuses more).
+	const limits = useGrantPolicyLimits();
 	const confirm = useNoExpiryConfirm();
 	const fieldRef = useRef<HTMLSelectElement>(null);
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
@@ -104,13 +110,17 @@ export function RenewBindingControl({
 	const usesChanged = uses !== maxQuota;
 	// Any limit other than the end date changed.
 	const limitsChanged = idleChanged || usesChanged;
-	const idleInvalid = idleLimitError(idle) !== null;
+	const idleInvalid = idleLimitError(idle, limits.idle.maxSeconds) !== null;
+	// A choice the org's maximum refuses blocks saving rather than being dropped.
+	const durationInvalid =
+		duration !== null && bindingDurationError(duration, limits.expires.maxSeconds) !== null;
 	const clearing = choosesNoExpiry(duration);
 	// Clearing an end date the binding doesn't have changes nothing.
 	const nothingToClear = clearing && !expiresAt && !limitsChanged;
 	const blocked =
 		renew.isPending ||
 		idleInvalid ||
+		durationInvalid ||
 		(!durationChosen(duration) && !limitsChanged) ||
 		nothingToClear;
 	// With no end date, idle limit or use count left, the access never ends: warn first.
@@ -204,6 +214,7 @@ export function RenewBindingControl({
 	return (
 		<div className="space-y-2" data-testid={testIdPrefix} onKeyDown={onKeyDown}>
 			<BindingDurationField
+				maxSeconds={limits.expires.maxSeconds}
 				value={duration}
 				onChange={setDuration}
 				disabled={renew.isPending}
@@ -214,6 +225,7 @@ export function RenewBindingControl({
 				testIdPrefix={testIdPrefix}
 			/>
 			<IdleLimitField
+				maxSeconds={limits.idle.maxSeconds}
 				value={idle}
 				onChange={setIdle}
 				end={

@@ -3,7 +3,9 @@ import { Button, Checkbox, ErrorAlert, Label, Skeleton } from '@/shared/ui';
 import {
 	useAgentsForPicker,
 	useBindCredentialToAgents,
+	useGrantPolicyLimits,
 } from '@/shared/credentials/api/vendors-hooks';
+import { grantDefaults, usePreselectGrantDefaults } from '@/shared/credentials/lib/grantDefaults';
 import {
 	expiresAtFromDuration,
 	expiresAtIso,
@@ -59,6 +61,13 @@ export function PostConnectBindMore({
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	const [uses, setUses] = useState<number | null>(null);
+	// The org's defaults preselect the controls; its maximums bound them.
+	const limits = useGrantPolicyLimits();
+	usePreselectGrantDefaults(limits, (d) => {
+		setDuration((cur) => cur ?? d.duration);
+		setIdle((cur) => cur ?? d.idle);
+		setUses((cur) => cur ?? d.uses);
+	});
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
 
@@ -102,9 +111,10 @@ export function PostConnectBindMore({
 				onSuccess: () => {
 					setDone(true);
 					setSelected(new Set());
-					setDuration(null);
-					setIdle(null);
-					setUses(null);
+					const fresh = grantDefaults(limits);
+					setDuration(fresh.duration);
+					setIdle(fresh.idle);
+					setUses(fresh.uses);
 				},
 			},
 		);
@@ -132,6 +142,7 @@ export function PostConnectBindMore({
 				})}
 			</div>
 			<BindingDurationField
+				maxSeconds={limits.expires.maxSeconds}
 				value={duration}
 				onChange={setDuration}
 				disabled={bindMany.isPending}
@@ -141,6 +152,7 @@ export function PostConnectBindMore({
 				testIdPrefix="bind-more"
 			/>
 			<IdleLimitField
+				maxSeconds={limits.idle.maxSeconds}
 				value={idle}
 				onChange={setIdle}
 				end={expiresAtFromDuration(duration)}
@@ -172,8 +184,8 @@ export function PostConnectBindMore({
 				disabled={
 					selected.size === 0 ||
 					bindMany.isPending ||
-					!durationChosen(duration) ||
-					idleLimitError(idle) !== null
+					!durationChosen(duration, limits.expires.maxSeconds) ||
+					idleLimitError(idle, limits.idle.maxSeconds) !== null
 				}
 				loading={bindMany.isPending}
 			>

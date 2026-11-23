@@ -53,7 +53,13 @@ import {
 } from '@/shared/ui';
 import { apiIdentityTuple } from '@/shared/lib';
 import { cn } from '@/shared/lib/utils';
-import { useCredential, useImportCatalogEntry, type Credential } from '@/shared/credentials/api';
+import {
+	useCredential,
+	useGrantPolicyLimits,
+	useImportCatalogEntry,
+	type Credential,
+} from '@/shared/credentials/api';
+import { grantDefaults } from '@/shared/credentials/lib/grantDefaults';
 import {
 	useApplyBindingRules,
 	useBindCredentialToAgents,
@@ -278,11 +284,14 @@ export function ApiSetupQueue({
 		if (hadOne && activeStepKey) paneRef.current?.focus({ preventScroll: true });
 	}, [activeStepKey]);
 
-	const draftFor = (key: string): AccessDraft => drafts[key] ?? DEFAULT_DRAFT;
+	// A new draft starts on the org's defaults (none in open source).
+	const limits = useGrantPolicyLimits();
+	const freshDraft = (): AccessDraft => ({ ...DEFAULT_DRAFT, ...grantDefaults(limits) });
+	const draftFor = (key: string): AccessDraft => drafts[key] ?? freshDraft();
 	const setDraft = (key: string, patch: Partial<AccessDraft>): void =>
 		setDrafts((current) => ({
 			...current,
-			[key]: { ...(current[key] ?? DEFAULT_DRAFT), ...patch },
+			[key]: { ...(current[key] ?? freshDraft()), ...patch },
 		}));
 
 	/** The credential step's answer: on to the access step, nothing bound yet. */
@@ -994,9 +1003,12 @@ function AccessStep({
 	// "No expiry" is confirmed first.
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
+	const limits = useGrantPolicyLimits();
 	const askDuration = !entry.bound;
 	const durationMissing =
-		askDuration && (!durationChosen(draft.duration) || idleLimitError(draft.idle) !== null);
+		askDuration &&
+		(!durationChosen(draft.duration, limits.expires.maxSeconds) ||
+			idleLimitError(draft.idle, limits.idle.maxSeconds) !== null);
 	const guardExpiry = (run: () => void): void =>
 		noExpiry.request(
 			// An idle limit or a use count still ends the access, so only none warns.
@@ -1057,6 +1069,7 @@ function AccessStep({
 
 			{askDuration && (
 				<BindingDurationField
+					maxSeconds={limits.expires.maxSeconds}
 					value={draft.duration}
 					onChange={(duration): void => onDraftChange({ duration })}
 					disabled={working}
@@ -1068,6 +1081,7 @@ function AccessStep({
 			)}
 			{askDuration && (
 				<IdleLimitField
+					maxSeconds={limits.idle.maxSeconds}
 					value={draft.idle}
 					onChange={(idle): void => onDraftChange({ idle })}
 					end={expiresAtFromDuration(draft.duration)}

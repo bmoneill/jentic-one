@@ -16,6 +16,8 @@ import {
 	SingleUseField,
 	useNoExpiryConfirm,
 } from '@/shared/credentials/components';
+import { useGrantPolicyLimits } from '@/shared/credentials/api';
+import { usePreselectGrantDefaults } from '@/shared/credentials/lib/grantDefaults';
 import {
 	expiresAtFromDuration,
 	expiresAtIso,
@@ -62,10 +64,19 @@ export function RenewalDecision({
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	const [uses, setUses] = useState<number | null>(null);
+	// The org's defaults preselect fresh access (D14); its maximums bound it.
+	const limits = useGrantPolicyLimits();
+	usePreselectGrantDefaults(limits, (d) => {
+		setDuration((cur) => cur ?? d.duration);
+		setIdle((cur) => cur ?? d.idle);
+		setUses((cur) => cur ?? d.uses);
+	});
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
 
-	const incomplete = !durationChosen(duration) || idleLimitError(idle) !== null;
+	const incomplete =
+		!durationChosen(duration, limits.expires.maxSeconds) ||
+		idleLimitError(idle, limits.idle.maxSeconds) !== null;
 	const renew = (run: boolean): void =>
 		noExpiry.request(
 			// An idle limit or a use count still ends the access; only none warns.
@@ -89,6 +100,7 @@ export function RenewalDecision({
 			{canRenew ? (
 				<div className="space-y-3">
 					<BindingDurationField
+						maxSeconds={limits.expires.maxSeconds}
 						value={duration}
 						onChange={setDuration}
 						disabled={pending}
@@ -98,6 +110,7 @@ export function RenewalDecision({
 						testIdPrefix="renewal"
 					/>
 					<IdleLimitField
+						maxSeconds={limits.idle.maxSeconds}
 						value={idle}
 						onChange={setIdle}
 						end={expiresAtFromDuration(duration)}

@@ -58,9 +58,11 @@ import { apiScopeReach } from '@/shared/credentials/lib/apiIdentity';
 import { credentialSiblingHint } from '@/shared/credentials/lib/credentialIdentity';
 import {
 	useAllCredentialAgents,
+	useGrantPolicyLimits,
 	type Credential,
 	type CredentialAgentResponse,
 } from '@/shared/credentials/api';
+import { grantDefaults, usePreselectGrantDefaults } from '@/shared/credentials/lib/grantDefaults';
 import {
 	useAgentsForPicker,
 	useApplyBindingRules,
@@ -179,6 +181,13 @@ export function BindAgentDialog({
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	// The optional use count: 1 for "End after one use", null = off.
 	const [uses, setUses] = useState<number | null>(null);
+	// The org's defaults preselect the controls; its maximums bound them.
+	const limits = useGrantPolicyLimits();
+	usePreselectGrantDefaults(limits, (d) => {
+		setDuration((cur) => cur ?? d.duration);
+		setIdle((cur) => cur ?? d.idle);
+		setUses((cur) => cur ?? d.uses);
+	});
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
 	// A bind that landed but whose rules didn't, for some agents: kept so the
@@ -282,9 +291,10 @@ export function BindAgentDialog({
 		setSelected(new Set());
 		setPreset(null);
 		setCustomRules([]);
-		setDuration(null);
-		setIdle(null);
-		setUses(null);
+		const fresh = grantDefaults(limits);
+		setDuration(fresh.duration);
+		setIdle(fresh.idle);
+		setUses(fresh.uses);
 		setRulesFailure(null);
 		onClose();
 	};
@@ -524,6 +534,7 @@ export function BindAgentDialog({
 				)}
 				{!everyAgentBound && (
 					<BindingDurationField
+						maxSeconds={limits.expires.maxSeconds}
 						value={duration}
 						onChange={setDuration}
 						disabled={busy}
@@ -535,6 +546,7 @@ export function BindAgentDialog({
 				)}
 				{!everyAgentBound && (
 					<IdleLimitField
+						maxSeconds={limits.idle.maxSeconds}
 						value={idle}
 						onChange={setIdle}
 						end={expiresAtFromDuration(duration)}
@@ -593,8 +605,8 @@ export function BindAgentDialog({
 				disabled={
 					picked.length === 0 ||
 					rules == null ||
-					!durationChosen(duration) ||
-					idleLimitError(idle) !== null ||
+					!durationChosen(duration, limits.expires.maxSeconds) ||
+					idleLimitError(idle, limits.idle.maxSeconds) !== null ||
 					busy ||
 					(!credential && !pendingCreate) ||
 					!boundKnown

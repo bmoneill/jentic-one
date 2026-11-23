@@ -67,11 +67,20 @@ export function idleSeconds(limit: IdleLimit | null): number | null {
 }
 
 /** What is wrong with the limit, for the field's error; `null` when it is fine or off. */
-export function idleLimitError(limit: IdleLimit | null): string | null {
-	if (limit === null || limit.kind === 'preset') return null;
-	if (limit.amount.trim() === '') return 'Enter how long it may go unused.';
-	if (!/^\d+$/.test(limit.amount.trim())) return 'Enter a whole number.';
-	if (idleSeconds(limit) === null) return 'Choose between 1 day and 999 days.';
+export function idleLimitError(
+	limit: IdleLimit | null,
+	maxSeconds: number | null = null,
+): string | null {
+	if (limit === null) return null;
+	if (limit.kind === 'custom') {
+		if (limit.amount.trim() === '') return 'Enter how long it may go unused.';
+		if (!/^\d+$/.test(limit.amount.trim())) return 'Enter a whole number.';
+		if (idleSeconds(limit) === null) return 'Choose between 1 day and 999 days.';
+	}
+	const seconds = idleSeconds(limit);
+	if (maxSeconds !== null && seconds !== null && seconds > maxSeconds) {
+		return `This org allows an idle limit of at most ${idleLabel(maxSeconds)}.`;
+	}
 	return null;
 }
 

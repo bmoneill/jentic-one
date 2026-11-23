@@ -37,6 +37,11 @@ export interface IdleLimitFieldProps {
 	disabled?: boolean;
 	/** Prefix for test ids (`<prefix>-idle-*`). */
 	testIdPrefix?: string;
+	/**
+	 * The org's maximum idle limit, in seconds; null when it sets none. Under
+	 * one, longer presets are disabled and the row can't be turned off.
+	 */
+	maxSeconds?: number | null;
 }
 
 const CUSTOM = 'custom';
@@ -47,9 +52,12 @@ export function IdleLimitField({
 	end,
 	disabled = false,
 	testIdPrefix = 'binding',
+	maxSeconds = null,
 }: IdleLimitFieldProps) {
 	const hintId = useId();
-	const error = idleLimitError(value);
+	const error = idleLimitError(value, maxSeconds);
+	// An org maximum makes an idle limit required: once on, it stays on.
+	const required = maxSeconds !== null && value !== null;
 	const custom = value?.kind === 'custom' ? value : null;
 	const summary = error ? null : describePolicy(end, idleSeconds(value));
 	const warnable = idleWarnable(idleSeconds(value));
@@ -60,7 +68,7 @@ export function IdleLimitField({
 				<Checkbox
 					size="sm"
 					checked={value !== null}
-					disabled={disabled}
+					disabled={disabled || required}
 					onChange={(): void => onChange(value === null ? DEFAULT_IDLE_LIMIT : null)}
 				>
 					<span className="text-foreground text-sm">Also end if unused for</span>
@@ -96,7 +104,11 @@ export function IdleLimitField({
 							}}
 						>
 							{IDLE_PRESETS.map((p) => (
-								<option key={p.value} value={p.value}>
+								<option
+									key={p.value}
+									value={p.value}
+									disabled={maxSeconds !== null && p.seconds > maxSeconds}
+								>
 									{p.label}
 								</option>
 							))}

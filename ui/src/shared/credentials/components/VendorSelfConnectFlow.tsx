@@ -24,9 +24,11 @@ import {
 	useConfirmConnectSession,
 	useConnectSession,
 	usePollConnectSessionStatus,
+	useGrantPolicyLimits,
 	useStartIntegrationConnect,
 	useVendorAuthCapabilities,
 } from '@/shared/credentials/api/vendors-hooks';
+import { usePreselectGrantDefaults } from '@/shared/credentials/lib/grantDefaults';
 import {
 	cancelConnectSession,
 	cancelConnectSessionOnUnload,
@@ -119,6 +121,13 @@ export function VendorSelfConnectFlow({
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	const [uses, setUses] = useState<number | null>(null);
+	// The org's defaults preselect the controls; its maximums bound them.
+	const limits = useGrantPolicyLimits();
+	usePreselectGrantDefaults(limits, (d) => {
+		setDuration((cur) => cur ?? d.duration);
+		setIdle((cur) => cur ?? d.idle);
+		setUses((cur) => cur ?? d.uses);
+	});
 	const durationRef = useRef<HTMLSelectElement>(null);
 	const noExpiry = useNoExpiryConfirm();
 
@@ -492,6 +501,7 @@ export function VendorSelfConnectFlow({
 
 			{agentId && (
 				<BindingDurationField
+					maxSeconds={limits.expires.maxSeconds}
 					value={duration}
 					onChange={setDuration}
 					label="Access expires after"
@@ -502,6 +512,7 @@ export function VendorSelfConnectFlow({
 			)}
 			{agentId && (
 				<IdleLimitField
+					maxSeconds={limits.idle.maxSeconds}
 					value={idle}
 					onChange={setIdle}
 					end={expiresAtFromDuration(duration)}
@@ -549,7 +560,8 @@ export function VendorSelfConnectFlow({
 						(scopes.length > 0 && selectedScopes.size === 0) ||
 						// Binding an agent waits for how long the access lasts.
 						(agentId != null &&
-							(!durationChosen(duration) || idleLimitError(idle) !== null)) ||
+							(!durationChosen(duration, limits.expires.maxSeconds) ||
+								idleLimitError(idle, limits.idle.maxSeconds) !== null)) ||
 						startMutation.isPending
 					}
 					loading={startMutation.isPending}

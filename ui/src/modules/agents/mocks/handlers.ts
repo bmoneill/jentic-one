@@ -377,6 +377,20 @@ function bindingExpiryJson(row: CredentialBindingRow): {
 	};
 }
 
+/** `GET /agents/credentials:policy`: the org's grant limits (none, as in open source). */
+const NO_MOCK_GRANT_LIMITS = {
+	expires_in: { default_seconds: null, max_seconds: null },
+	idle_period: { default_seconds: null, max_seconds: null },
+	single_use_by_default: false,
+	agent_expires_in: { default_seconds: null, max_seconds: null },
+};
+let mockGrantLimits: typeof NO_MOCK_GRANT_LIMITS | Record<string, unknown> = NO_MOCK_GRANT_LIMITS;
+
+/** Set the org's grant limits the mock reports; `null` restores none. */
+export function setMockGrantLimits(limits: Record<string, unknown> | null): void {
+	mockGrantLimits = limits ? { ...NO_MOCK_GRANT_LIMITS, ...limits } : NO_MOCK_GRANT_LIMITS;
+}
+
 const IDLE_WARNING_WINDOW_MS = 48 * 3_600_000;
 const IDLE_WARNING_MIN_S = 4 * 86_400;
 
@@ -1808,7 +1822,9 @@ export const agentsHandlers = [
 
 	// ---- Agents ----
 	http.get('/agents', ({ request }) => paginate(agents, new URL(request.url))),
-	// Before `/agents/:id`, which would otherwise take `credentials:ending-soon` as an id.
+	// Before `/agents/:id`, which would otherwise take these custom methods as ids.
+	http.get('/agents/credentials\\:policy', () => HttpResponse.json(mockGrantLimits)),
+	// (`credentials:ending-soon` likewise.)
 	http.get('/agents/credentials\\:ending-soon', () =>
 		HttpResponse.json({ data: bindingsEndingSoon() }),
 	),

@@ -131,3 +131,20 @@ describe('expiresAtIso', () => {
 		expect(expiresAtIso(custom('', 'days'), NOW)).toBeUndefined();
 	});
 });
+
+describe('an org maximum', () => {
+	it('refuses no expiry and anything longer', () => {
+		const max = 30 * 86_400;
+		expect(bindingDurationError({ kind: 'preset', preset: '30d' }, max)).toBeNull();
+		expect(bindingDurationError({ kind: 'preset', preset: '90d' }, max)).toBe(
+			'This org allows at most 30 days.',
+		);
+		expect(bindingDurationError({ kind: 'custom', amount: '1', unit: 'never' }, max)).toBe(
+			'This org requires access to end within 30 days.',
+		);
+		expect(
+			bindingDurationError({ kind: 'custom', amount: '720', unit: 'hours' }, max),
+		).toBeNull();
+		expect(bindingDurationError({ kind: 'preset', preset: '90d' })).toBeNull();
+	});
+});

@@ -8,6 +8,8 @@
 import { useState } from 'react';
 import { Button, Card } from '@/shared/ui';
 import { BindingDurationField } from '@/shared/credentials/components';
+import { useGrantPolicyLimits } from '@/shared/credentials/api';
+import { durationChosen } from '@/shared/credentials/lib/bindingExpiry';
 import {
 	expiresAtFromDuration,
 	type BindingDuration,
@@ -20,6 +22,9 @@ const WHEN = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle
 export function AgentExpiryCard({ agent, canManage }: { agent: AgentEntity; canManage: boolean }) {
 	const update = useUpdateAgent();
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
+	// Under the org's maximum, "No expiry" is not offered and longer choices are disabled.
+	const limits = useGrantPolicyLimits();
+	const maxSeconds = limits.agent.maxSeconds;
 
 	const status = agent.expiresAt
 		? agent.expired
@@ -64,11 +69,12 @@ export function AgentExpiryCard({ agent, canManage }: { agent: AgentEntity; canM
 						label="Stops working after"
 						describe={describeAgentExpiry}
 						testIdPrefix="agent-expiry"
+						maxSeconds={maxSeconds}
 					/>
 					<Button
 						size="sm"
 						onClick={() => void save()}
-						disabled={update.isPending || expiresAtFromDuration(duration) === null}
+						disabled={update.isPending || !durationChosen(duration, maxSeconds)}
 						data-testid="agent-expiry-save"
 					>
 						{clearing ? 'Clear expiry' : 'Set expiry'}
