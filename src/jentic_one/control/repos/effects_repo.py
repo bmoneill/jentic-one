@@ -162,7 +162,9 @@ class EffectsRepository:
             text(
                 f"SELECT credential_id, {GRANT_POLICY_COLUMNS} FROM agent_credential_bindings "
                 "WHERE agent_id = :agent_id AND suspended = false "
-                "AND (expires_at IS NOT NULL OR max_idle_period IS NOT NULL)"
+                # Every limit that can end a binding, a used-up count included.
+                "AND (expires_at IS NOT NULL OR max_idle_period IS NOT NULL "
+                "OR max_quota IS NOT NULL)"
             ),
             {"agent_id": agent_id},
         )

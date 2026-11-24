@@ -134,6 +134,28 @@ async def test_agent_connect_is_refused_while_its_binding_is_expired(env: Contex
     assert await _counts(env) == before
 
 
+async def test_agent_connect_is_refused_while_its_only_limit_is_a_used_up_count(
+    env: Context,
+) -> None:
+    """A single-use grant (the default under ``single_use_by_default``) has no time limit."""
+    await import_spec(env, KEY_SCHEME)
+    credential_id = await _bound(env, expires_at=None)
+    async with env.admin_db.transaction() as session:
+        await session.execute(
+            text(
+                "UPDATE agent_credential_bindings SET max_quota = 1, quota_remaining = 0"
+                " WHERE agent_id = :a AND credential_id = :c"
+            ),
+            {"a": AGENT_ID, "c": credential_id},
+        )
+    before = await _counts(env)
+
+    with pytest.raises(BindingExpiredError):
+        await connect(env)
+
+    assert await _counts(env) == before
+
+
 async def test_expired_binding_connect_is_409_over_http(env: Context) -> None:
     await import_spec(env, KEY_SCHEME)
     await _bound(env)
