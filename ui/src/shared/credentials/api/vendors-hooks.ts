@@ -436,7 +436,12 @@ export function useBindCredentialToAgents() {
  */
 export function useRenewCredentialBinding() {
 	const client = useQueryClient();
-	return useMutation<void, Error, { agentId: string; credentialId: string } & BindingRenewal>({
+	// Resolves to the binding's end date after the renewal (null: none).
+	return useMutation<
+		string | null,
+		Error,
+		{ agentId: string; credentialId: string } & BindingRenewal
+	>({
 		mutationFn: ({ agentId, credentialId, ...renewal }) =>
 			renewCredentialBinding(agentId, credentialId, renewal),
 		onSettled: (_res, _err, { agentId, credentialId }) =>

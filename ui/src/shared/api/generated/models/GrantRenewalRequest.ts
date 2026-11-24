@@ -3,11 +3,15 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Fresh access for an ended binding. Every field left out sets no such limit.
+ * Fresh access for an ended binding.
+ *
+ * Every field left out sets no such limit, except the end date: left out, the
+ * binding runs again for as long as it was granted for, capped at the org's
+ * maximum (``null`` sets no end date).
  */
 export type GrantRenewalRequest = {
     /**
-     * New end date (RFC 3339, in the future); null for no end date.
+     * New end date (RFC 3339, in the future); null for no end date. Left out, the binding runs again for as long as it was granted for, capped at the org's maximum.
      */
     expires_at?: (string | null);
     /**

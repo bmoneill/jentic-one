@@ -4195,12 +4195,14 @@ type CredentialBindingListResponse struct {
 // CredentialBindingPatchRequest Request body for renewing a credential binding: re-certify it, and change its limits.
 //
 // Every renewal restarts the binding's idle clock. Each limit sent is set, and
-// null clears it; a limit left out stays as it is, so an absent field is never
-// read as clearing. An empty body only re-certifies ("still needed").
+// null clears it; an absent field is never read as clearing. An end date left
+// out runs the binding again for as long as it was granted for, capped at the
+// org's maximum; any other limit left out stays as it is. An empty body
+// re-certifies ("still needed").
 //
 // Examples: {"expires_at":"2026-12-31T23:59:00Z","idle_warning":true,"max_idle_period":1209600,"max_quota":1}
 type CredentialBindingPatchRequest struct {
-	// ExpiresAt When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the end date; leave it out to keep it.
+	// ExpiresAt When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the end date. Left out, the binding runs again for as long as it was granted for (its end date less when it was granted or last renewed), capped at the org's maximum; one with no end date takes the maximum, or keeps none without one.
 	//
 	// Examples: 2026-12-31T23:59:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
@@ -5651,11 +5653,15 @@ type GrantPolicyLimitsResponse struct {
 	SingleUseByDefault bool `json:"single_use_by_default"`
 }
 
-// GrantRenewalRequest Fresh access for an ended binding. Every field left out sets no such limit.
+// GrantRenewalRequest Fresh access for an ended binding.
+//
+// Every field left out sets no such limit, except the end date: left out, the
+// binding runs again for as long as it was granted for, capped at the org's
+// maximum (“null“ sets no end date).
 //
 // Examples: {"expires_at":"2026-02-15T09:30:00Z","idle_warning":false,"max_idle_period":1209600,"max_quota":1}
 type GrantRenewalRequest struct {
-	// ExpiresAt New end date (RFC 3339, in the future); null for no end date.
+	// ExpiresAt New end date (RFC 3339, in the future); null for no end date. Left out, the binding runs again for as long as it was granted for, capped at the org's maximum.
 	//
 	// Examples: 2026-02-15T09:30:00Z
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
@@ -5709,7 +5715,7 @@ type HealthResponse struct {
 
 // HeldExecutionDetailResponse A held execution with the agent context and the held request a reviewer decides on.
 //
-// Examples: {"_links":{"execution":"https://jentic.example.com/executions/exec_6968b3982706c619fe73f0cf","result":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6/result","self":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6","withdraw":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6:withdraw"},"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","agent_owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10","created_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","decided_at":"2026-01-15T09:42:00Z","decided_by":"usr_6968b3987ee4c3ec0b4ee3b9","decision_reason":"Not this account","execution_id":"exec_6968b3982706c619fe73f0cf","execution_status":"held","expires_at":"2026-01-15T10:30:00Z","id":"held_6968b398a1c4e2d07b5f93c6","kind":"execution","matched_rule_id":"apr_6968b398c4e1a2b3d5f60718","method":"POST","operation_id":"listCharges","path":"/v1/refunds","renewal":{"can_renew":true,"expired_reason":"idle","expires_at":"2026-01-10T00:00:00Z","idle_warning":false,"last_used_at":"2026-01-01T09:30:00Z","max_idle_period":1209600,"max_quota":1,"quota_remaining":0},"request":{"body":"charge=ch_3MmlLrLkdIwHu7ix0snN0B15","body_truncated":false,"method":"POST","url":"https://api.stripe.com/v1/refunds?expand[]=charge"},"review_url":"https://jentic.example.com/app/agents/approvals/held_6968b398a1c4e2d07b5f93c6","state":"pending","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","updated_at":"2026-01-15T09:42:00Z"}
+// Examples: {"_links":{"execution":"https://jentic.example.com/executions/exec_6968b3982706c619fe73f0cf","result":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6/result","self":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6","withdraw":"https://jentic.example.com/executions/holds/held_6968b398a1c4e2d07b5f93c6:withdraw"},"agent_id":"agnt_6968b3984d1c238dbe7e2e29","agent_name":"billing-assistant","agent_owner_id":"usr_6968b3987ee4c3ec0b4ee3b9","api_name":"stripe","api_vendor":"stripe.com","api_version":"2024-04-10","created_at":"2026-01-15T09:30:00Z","credential_id":"cred_6968b39855d91a3561684b32","decided_at":"2026-01-15T09:42:00Z","decided_by":"usr_6968b3987ee4c3ec0b4ee3b9","decision_reason":"Not this account","execution_id":"exec_6968b3982706c619fe73f0cf","execution_status":"held","expires_at":"2026-01-15T10:30:00Z","id":"held_6968b398a1c4e2d07b5f93c6","kind":"execution","matched_rule_id":"apr_6968b398c4e1a2b3d5f60718","method":"POST","operation_id":"listCharges","path":"/v1/refunds","renewal":{"can_renew":true,"expired_reason":"idle","expires_at":"2026-01-10T00:00:00Z","idle_warning":false,"last_used_at":"2026-01-01T09:30:00Z","max_idle_period":1209600,"max_quota":1,"quota_remaining":0,"renew_on_decide":true},"request":{"body":"charge=ch_3MmlLrLkdIwHu7ix0snN0B15","body_truncated":false,"method":"POST","url":"https://api.stripe.com/v1/refunds?expand[]=charge"},"review_url":"https://jentic.example.com/app/agents/approvals/held_6968b398a1c4e2d07b5f93c6","state":"pending","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","updated_at":"2026-01-15T09:42:00Z"}
 type HeldExecutionDetailResponse struct {
 	// UnderscoreLinks HAL-style links for a held execution.
 	//
@@ -5818,7 +5824,7 @@ type HeldExecutionDetailResponse struct {
 
 	// Renewal For a `grant_renewal` hold: the binding it would renew.
 	//
-	// Examples: {"can_renew":true,"expired_reason":"idle","expires_at":"2026-01-10T00:00:00Z","idle_warning":false,"last_used_at":"2026-01-01T09:30:00Z","max_idle_period":1209600,"max_quota":1,"quota_remaining":0}
+	// Examples: {"can_renew":true,"expired_reason":"idle","expires_at":"2026-01-10T00:00:00Z","idle_warning":false,"last_used_at":"2026-01-01T09:30:00Z","max_idle_period":1209600,"max_quota":1,"quota_remaining":0,"renew_on_decide":true}
 	Renewal *HeldRenewalContextResponse `json:"renewal,omitempty"`
 
 	// Request The held call.
@@ -6071,7 +6077,7 @@ type HeldExecutionState string
 
 // HeldRenewalContextResponse The binding a `grant_renewal` hold would renew, as it stands now.
 //
-// Examples: {"can_renew":true,"expired_reason":"idle","expires_at":"2026-01-10T00:00:00Z","idle_warning":false,"last_used_at":"2026-01-01T09:30:00Z","max_idle_period":1209600,"max_quota":1,"quota_remaining":0}
+// Examples: {"can_renew":true,"expired_reason":"idle","expires_at":"2026-01-10T00:00:00Z","idle_warning":false,"last_used_at":"2026-01-01T09:30:00Z","max_idle_period":1209600,"max_quota":1,"quota_remaining":0,"renew_on_decide":true}
 type HeldRenewalContextResponse struct {
 	// CanRenew Whether the caller may grant fresh access (else it can only deny): a person who owns the agent and the credential, or an `org:admin`.
 	//
@@ -6112,6 +6118,11 @@ type HeldRenewalContextResponse struct {
 	//
 	// Examples: 0
 	QuotaRemaining *int `json:"quota_remaining,omitempty"`
+
+	// RenewOnDecide Whether approving with `renewal` renews the binding here. False where this deployment's admin surface cannot renew (it runs apart from the control database), and `can_renew` is then unknown: renew the binding through `PATCH /agents/{agent_id}/credentials/{credential_id}`, then approve without `renewal`.
+	//
+	// Examples: true
+	RenewOnDecide *bool `json:"renew_on_decide,omitempty"`
 }
 
 // HeldRequestResponse The held call exactly as it runs if approved (credentials are injected at run time).
@@ -13453,10 +13464,12 @@ type ClientInterface interface {
 	// Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 	//
 	// `expires_at` (future only, otherwise 422) sets or moves the end date; null
-	// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
-	// limit; null removes it. A field left out stays as it is, and every renewal
-	// restarts the idle clock, so an empty body re-certifies a binding that is
-	// still needed. This is how an expired binding is
+	// clears it. Left out, the binding runs again for as long as it was granted
+	// for, capped at the org's maximum (one with no end date takes the maximum,
+	// or keeps none without one). `max_idle_period` (1 to 999 days, in seconds)
+	// sets the idle limit; null removes it. Any other field left out stays as it
+	// is, and every renewal restarts the idle clock, so an empty body
+	// re-certifies a binding that is still needed. This is how an expired binding is
 	// renewed, and it never changes `suspended`: renewing does not resume a
 	// suspension, and resuming does not extend an expiry. Renewing re-grants the
 	// credential, so it takes the same checks as `:resume`: the caller must own
@@ -13475,10 +13488,12 @@ type ClientInterface interface {
 	// Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 	//
 	// `expires_at` (future only, otherwise 422) sets or moves the end date; null
-	// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
-	// limit; null removes it. A field left out stays as it is, and every renewal
-	// restarts the idle clock, so an empty body re-certifies a binding that is
-	// still needed. This is how an expired binding is
+	// clears it. Left out, the binding runs again for as long as it was granted
+	// for, capped at the org's maximum (one with no end date takes the maximum,
+	// or keeps none without one). `max_idle_period` (1 to 999 days, in seconds)
+	// sets the idle limit; null removes it. Any other field left out stays as it
+	// is, and every renewal restarts the idle clock, so an empty body
+	// re-certifies a binding that is still needed. This is how an expired binding is
 	// renewed, and it never changes `suspended`: renewing does not resume a
 	// suspension, and resuming does not extend an expiry. Renewing re-grants the
 	// credential, so it takes the same checks as `:resume`: the caller must own
@@ -14790,7 +14805,10 @@ type ClientInterface interface {
 	// running. Only a reviewer who may renew the binding directly (a person who
 	// owns the agent and the credential, or an ``org:admin``) can approve one
 	// (``403 held_execution_renewal_forbidden`` otherwise); anyone who can
-	// decide may deny it. ``renewal`` on any other hold is a ``422``.
+	// decide may deny it. ``renewal`` on any other hold is a ``422``. Where this
+	// deployment cannot renew from a hold (``renewal.renew_on_decide`` is false on
+	// the hold), renew the binding through its own endpoint first, then approve
+	// without ``renewal``; that is accepted once the binding is live again.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -14812,7 +14830,10 @@ type ClientInterface interface {
 	// running. Only a reviewer who may renew the binding directly (a person who
 	// owns the agent and the credential, or an ``org:admin``) can approve one
 	// (``403 held_execution_renewal_forbidden`` otherwise); anyone who can
-	// decide may deny it. ``renewal`` on any other hold is a ``422``.
+	// decide may deny it. ``renewal`` on any other hold is a ``422``. Where this
+	// deployment cannot renew from a hold (``renewal.renew_on_decide`` is false on
+	// the hold), renew the binding through its own endpoint first, then approve
+	// without ``renewal``; that is accepted once the binding is live again.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -16983,10 +17004,12 @@ func (c *Client) UnbindAgentCredential(ctx context.Context, agentId string, cred
 // Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 //
 // `expires_at` (future only, otherwise 422) sets or moves the end date; null
-// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
-// limit; null removes it. A field left out stays as it is, and every renewal
-// restarts the idle clock, so an empty body re-certifies a binding that is
-// still needed. This is how an expired binding is
+// clears it. Left out, the binding runs again for as long as it was granted
+// for, capped at the org's maximum (one with no end date takes the maximum,
+// or keeps none without one). `max_idle_period` (1 to 999 days, in seconds)
+// sets the idle limit; null removes it. Any other field left out stays as it
+// is, and every renewal restarts the idle clock, so an empty body
+// re-certifies a binding that is still needed. This is how an expired binding is
 // renewed, and it never changes `suspended`: renewing does not resume a
 // suspension, and resuming does not extend an expiry. Renewing re-grants the
 // credential, so it takes the same checks as `:resume`: the caller must own
@@ -17015,10 +17038,12 @@ func (c *Client) RenewAgentCredentialBindingWithBody(ctx context.Context, agentI
 // Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 //
 // `expires_at` (future only, otherwise 422) sets or moves the end date; null
-// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
-// limit; null removes it. A field left out stays as it is, and every renewal
-// restarts the idle clock, so an empty body re-certifies a binding that is
-// still needed. This is how an expired binding is
+// clears it. Left out, the binding runs again for as long as it was granted
+// for, capped at the org's maximum (one with no end date takes the maximum,
+// or keeps none without one). `max_idle_period` (1 to 999 days, in seconds)
+// sets the idle limit; null removes it. Any other field left out stays as it
+// is, and every renewal restarts the idle clock, so an empty body
+// re-certifies a binding that is still needed. This is how an expired binding is
 // renewed, and it never changes `suspended`: renewing does not resume a
 // suspension, and resuming does not extend an expiry. Renewing re-grants the
 // credential, so it takes the same checks as `:resume`: the caller must own
@@ -19330,7 +19355,10 @@ func (c *Client) GetHeldExecutionResult(ctx context.Context, heldExecutionId Pat
 // running. Only a reviewer who may renew the binding directly (a person who
 // owns the agent and the credential, or an “org:admin“) can approve one
 // (“403 held_execution_renewal_forbidden“ otherwise); anyone who can
-// decide may deny it. “renewal“ on any other hold is a “422“.
+// decide may deny it. “renewal“ on any other hold is a “422“. Where this
+// deployment cannot renew from a hold (“renewal.renew_on_decide“ is false on
+// the hold), renew the binding through its own endpoint first, then approve
+// without “renewal“; that is accepted once the binding is live again.
 //
 // Takes any type of body and a specified content type.
 //
@@ -19362,7 +19390,10 @@ func (c *Client) DecideHeldExecutionWithBody(ctx context.Context, heldExecutionI
 // running. Only a reviewer who may renew the binding directly (a person who
 // owns the agent and the credential, or an “org:admin“) can approve one
 // (“403 held_execution_renewal_forbidden“ otherwise); anyone who can
-// decide may deny it. “renewal“ on any other hold is a “422“.
+// decide may deny it. “renewal“ on any other hold is a “422“. Where this
+// deployment cannot renew from a hold (“renewal.renew_on_decide“ is false on
+// the hold), renew the binding through its own endpoint first, then approve
+// without “renewal“; that is accepted once the binding is live again.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -31235,10 +31266,12 @@ type ClientWithResponsesInterface interface {
 	// Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 	//
 	// `expires_at` (future only, otherwise 422) sets or moves the end date; null
-	// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
-	// limit; null removes it. A field left out stays as it is, and every renewal
-	// restarts the idle clock, so an empty body re-certifies a binding that is
-	// still needed. This is how an expired binding is
+	// clears it. Left out, the binding runs again for as long as it was granted
+	// for, capped at the org's maximum (one with no end date takes the maximum,
+	// or keeps none without one). `max_idle_period` (1 to 999 days, in seconds)
+	// sets the idle limit; null removes it. Any other field left out stays as it
+	// is, and every renewal restarts the idle clock, so an empty body
+	// re-certifies a binding that is still needed. This is how an expired binding is
 	// renewed, and it never changes `suspended`: renewing does not resume a
 	// suspension, and resuming does not extend an expiry. Renewing re-grants the
 	// credential, so it takes the same checks as `:resume`: the caller must own
@@ -31257,10 +31290,12 @@ type ClientWithResponsesInterface interface {
 	// Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 	//
 	// `expires_at` (future only, otherwise 422) sets or moves the end date; null
-	// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
-	// limit; null removes it. A field left out stays as it is, and every renewal
-	// restarts the idle clock, so an empty body re-certifies a binding that is
-	// still needed. This is how an expired binding is
+	// clears it. Left out, the binding runs again for as long as it was granted
+	// for, capped at the org's maximum (one with no end date takes the maximum,
+	// or keeps none without one). `max_idle_period` (1 to 999 days, in seconds)
+	// sets the idle limit; null removes it. Any other field left out stays as it
+	// is, and every renewal restarts the idle clock, so an empty body
+	// re-certifies a binding that is still needed. This is how an expired binding is
 	// renewed, and it never changes `suspended`: renewing does not resume a
 	// suspension, and resuming does not extend an expiry. Renewing re-grants the
 	// credential, so it takes the same checks as `:resume`: the caller must own
@@ -32686,7 +32721,10 @@ type ClientWithResponsesInterface interface {
 	// running. Only a reviewer who may renew the binding directly (a person who
 	// owns the agent and the credential, or an ``org:admin``) can approve one
 	// (``403 held_execution_renewal_forbidden`` otherwise); anyone who can
-	// decide may deny it. ``renewal`` on any other hold is a ``422``.
+	// decide may deny it. ``renewal`` on any other hold is a ``422``. Where this
+	// deployment cannot renew from a hold (``renewal.renew_on_decide`` is false on
+	// the hold), renew the binding through its own endpoint first, then approve
+	// without ``renewal``; that is accepted once the binding is live again.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -32708,7 +32746,10 @@ type ClientWithResponsesInterface interface {
 	// running. Only a reviewer who may renew the binding directly (a person who
 	// owns the agent and the credential, or an ``org:admin``) can approve one
 	// (``403 held_execution_renewal_forbidden`` otherwise); anyone who can
-	// decide may deny it. ``renewal`` on any other hold is a ``422``.
+	// decide may deny it. ``renewal`` on any other hold is a ``422``. Where this
+	// deployment cannot renew from a hold (``renewal.renew_on_decide`` is false on
+	// the hold), renew the binding through its own endpoint first, then approve
+	// without ``renewal``; that is accepted once the binding is live again.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -51000,10 +51041,12 @@ func (c *ClientWithResponses) UnbindAgentCredentialWithResponse(ctx context.Cont
 // Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 //
 // `expires_at` (future only, otherwise 422) sets or moves the end date; null
-// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
-// limit; null removes it. A field left out stays as it is, and every renewal
-// restarts the idle clock, so an empty body re-certifies a binding that is
-// still needed. This is how an expired binding is
+// clears it. Left out, the binding runs again for as long as it was granted
+// for, capped at the org's maximum (one with no end date takes the maximum,
+// or keeps none without one). `max_idle_period` (1 to 999 days, in seconds)
+// sets the idle limit; null removes it. Any other field left out stays as it
+// is, and every renewal restarts the idle clock, so an empty body
+// re-certifies a binding that is still needed. This is how an expired binding is
 // renewed, and it never changes `suspended`: renewing does not resume a
 // suspension, and resuming does not extend an expiry. Renewing re-grants the
 // credential, so it takes the same checks as `:resume`: the caller must own
@@ -51028,10 +51071,12 @@ func (c *ClientWithResponses) RenewAgentCredentialBindingWithBodyWithResponse(ct
 // Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 //
 // `expires_at` (future only, otherwise 422) sets or moves the end date; null
-// clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
-// limit; null removes it. A field left out stays as it is, and every renewal
-// restarts the idle clock, so an empty body re-certifies a binding that is
-// still needed. This is how an expired binding is
+// clears it. Left out, the binding runs again for as long as it was granted
+// for, capped at the org's maximum (one with no end date takes the maximum,
+// or keeps none without one). `max_idle_period` (1 to 999 days, in seconds)
+// sets the idle limit; null removes it. Any other field left out stays as it
+// is, and every renewal restarts the idle clock, so an empty body
+// re-certifies a binding that is still needed. This is how an expired binding is
 // renewed, and it never changes `suspended`: renewing does not resume a
 // suspension, and resuming does not extend an expiry. Renewing re-grants the
 // credential, so it takes the same checks as `:resume`: the caller must own
@@ -53057,7 +53102,10 @@ func (c *ClientWithResponses) GetHeldExecutionResultWithResponse(ctx context.Con
 // running. Only a reviewer who may renew the binding directly (a person who
 // owns the agent and the credential, or an “org:admin“) can approve one
 // (“403 held_execution_renewal_forbidden“ otherwise); anyone who can
-// decide may deny it. “renewal“ on any other hold is a “422“.
+// decide may deny it. “renewal“ on any other hold is a “422“. Where this
+// deployment cannot renew from a hold (“renewal.renew_on_decide“ is false on
+// the hold), renew the binding through its own endpoint first, then approve
+// without “renewal“; that is accepted once the binding is live again.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -53085,7 +53133,10 @@ func (c *ClientWithResponses) DecideHeldExecutionWithBodyWithResponse(ctx contex
 // running. Only a reviewer who may renew the binding directly (a person who
 // owns the agent and the credential, or an “org:admin“) can approve one
 // (“403 held_execution_renewal_forbidden“ otherwise); anyone who can
-// decide may deny it. “renewal“ on any other hold is a “422“.
+// decide may deny it. “renewal“ on any other hold is a “422“. Where this
+// deployment cannot renew from a hold (“renewal.renew_on_decide“ is false on
+// the hold), renew the binding through its own endpoint first, then approve
+// without “renewal“; that is accepted once the binding is live again.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

@@ -198,17 +198,20 @@ export interface BindingRenewal {
 /**
  * Renew a binding (`PATCH /agents/{id}/credentials/{cid}`): re-certify it,
  * restarting its idle clock, and set, move or clear its limits (an empty
- * renewal is "still needed"). Renewing restores an expired binding; it never
- * resumes a suspended one. The caller must own the credential (or hold
- * ``org:admin``), as for ``:resume``.
+ * renewal is "still needed"). A renewal that sends no end date runs the
+ * binding again for as long as it was granted for, capped at the org's
+ * maximum, so it resolves to the binding's new end date (null: none).
+ * Renewing restores an expired binding; it never resumes a suspended one.
+ * The caller must own the credential (or hold ``org:admin``), as for
+ * ``:resume``.
  */
 export async function renewCredentialBinding(
 	agentId: string,
 	credentialId: string,
 	renewal: BindingRenewal,
-): Promise<void> {
+): Promise<string | null> {
 	try {
-		await AgentsService.renewAgentCredentialBinding({
+		const binding = await AgentsService.renewAgentCredentialBinding({
 			agentId,
 			credentialId,
 			requestBody: {
@@ -220,6 +223,7 @@ export async function renewCredentialBinding(
 				...(renewal.maxQuota !== undefined ? { max_quota: renewal.maxQuota } : {}),
 			},
 		});
+		return binding.expires_at ?? null;
 	} catch (err) {
 		// The server's own words (a credential the viewer may not renew, say), or
 		// what an end date it refused means: either reads better than a status line.

@@ -271,7 +271,7 @@ describe('Renewal holds (access ended)', () => {
 		setToken('mock-access-token');
 	});
 
-	function seedRenewal(canRenew: boolean) {
+	function seedRenewal(canRenew: boolean, renewOnDecide = true) {
 		return seedMockApproval({
 			kind: 'grant_renewal',
 			renewal: {
@@ -283,6 +283,7 @@ describe('Renewal holds (access ended)', () => {
 				max_quota: null,
 				quota_remaining: null,
 				can_renew: canRenew,
+				renew_on_decide: renewOnDecide,
 			},
 		});
 	}
@@ -327,6 +328,46 @@ describe('Renewal holds (access ended)', () => {
 		await userEvent.click(screen.getByTestId('renewal-deny'));
 		expect(await screen.findByText('Decided by')).toBeInTheDocument();
 		expect(getMockApproval(row.id)?.state).toBe('denied');
+	});
+
+	it('renews through the binding, then approves, where the hold cannot renew', async () => {
+		const row = seedRenewal(false, false);
+		const renewals: unknown[] = [];
+		const decisions: unknown[] = [];
+		worker.use(
+			http.patch('/agents/:aid/credentials/:cid', async ({ params, request }) => {
+				const body = (await request.json()) as { expires_at: string | null };
+				renewals.push(body);
+				return HttpResponse.json({
+					id: 'acb_1',
+					agent_id: params.aid,
+					credential_id: params.cid,
+					bound_at: '2026-05-02T09:00:00Z',
+					suspended: false,
+					expires_at: body.expires_at,
+					expired: false,
+				});
+			}),
+		);
+		worker.events.on('request:start', async ({ request }) => {
+			if (request.url.endsWith(':decide')) decisions.push(await request.clone().json());
+		});
+		renderDetail(row.id);
+		expect(await screen.findByTestId('renewal-elsewhere')).toBeVisible();
+		await userEvent.selectOptions(screen.getByTestId('renewal-duration-preset'), '7d');
+		await userEvent.click(screen.getByTestId('renewal-grant-and-run'));
+		await waitFor(() => expect(decisions).toHaveLength(1));
+		worker.events.removeAllListeners();
+		expect(renewals).toHaveLength(1);
+		const days =
+			(Date.parse((renewals[0] as { expires_at: string }).expires_at) - Date.now()) /
+			86_400_000;
+		expect(days).toBeGreaterThan(6.9);
+		const decision = decisions[0] as { decision: string; run: boolean; renewal?: unknown };
+		expect(decision).toMatchObject({ decision: 'approve', run: true });
+		expect(decision.renewal).toBeUndefined();
+		expect(await screen.findByText('Decided by')).toBeInTheDocument();
+		expect(getMockApproval(row.id)?.execution_status).toBe('queued');
 	});
 
 	it('marks a renewal in the list', async () => {

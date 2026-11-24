@@ -6,9 +6,11 @@
  * "No expiry" warning (unless an idle limit still ends it). The idle row
  * below it starts on the binding's current idle limit and is sent when it
  * changes, and so does "End after one use" below that. A binding with an idle
- * limit or a use count also offers "Still needed": a renewal that changes
- * nothing but restarts its idle clock and restores its uses. Renewing
- * restores an expired binding; it never resumes a suspended one.
+ * limit or a use count also offers "Still needed": a renewal that restarts its
+ * idle clock and restores its uses. A renewal that chooses no end date runs
+ * the binding again for as long as it was granted for, capped at the org's
+ * maximum (the server works it out), so the confirmation names the new end.
+ * Renewing restores an expired binding; it never resumes a suspended one.
  *
  * Shown only to a viewer who may renew: `agents:write` and the credential's
  * owner, or an `org:admin` (the same checks as resuming a binding). The host
@@ -68,6 +70,11 @@ export interface RenewBindingControlProps {
 	onRenewed?: () => void;
 	/** Prefix for test ids (`<prefix>-duration-*`, `<prefix>-save`). */
 	testIdPrefix?: string;
+}
+
+/** ", until <end>" for a renewal's new end date, or nothing when it has none. */
+function renewedUntil(end: string | null | undefined): string {
+	return end ? `, until ${formatDurationEnd(new Date(end))}` : '';
 }
 
 function describeRenewal(end: Date | 'never'): string {
@@ -145,7 +152,7 @@ export function RenewBindingControl({
 				...(usesChanged ? { maxQuota: uses } : {}),
 			},
 			{
-				onSuccess: () => {
+				onSuccess: (end) => {
 					if (at === null) {
 						done(
 							'Expiry removed',
@@ -161,7 +168,7 @@ export function RenewBindingControl({
 					} else {
 						done(
 							usesChanged ? 'Access limits saved' : 'Idle limit saved',
-							`${isolateText(agentName)}'s access was re-certified.`,
+							`${isolateText(agentName)}'s access was re-certified${renewedUntil(end)}.`,
 						);
 					}
 				},
@@ -169,18 +176,19 @@ export function RenewBindingControl({
 		);
 	};
 
-	// Re-certify without changing anything: restarts the idle clock and
-	// restores the uses.
+	// Re-certify with no new choices: restarts the idle clock, restores the
+	// uses, and runs the end date again for as long as it was granted for.
 	const stillNeeded = (): void => {
 		renew.mutate(
 			{ agentId, credentialId },
 			{
-				onSuccess: () =>
+				onSuccess: (end) =>
 					done(
 						'Access re-certified',
-						maxQuota != null
-							? `${isolateText(agentName)} can use this access again.`
-							: `${isolateText(agentName)}'s idle limit starts again from now.`,
+						(maxQuota != null
+							? `${isolateText(agentName)} can use this access again`
+							: `${isolateText(agentName)}'s idle limit starts again from now`) +
+							`${renewedUntil(end)}.`,
 					),
 			},
 		);

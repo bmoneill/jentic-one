@@ -54,6 +54,8 @@ interface ApprovalRow {
 		max_quota: number | null;
 		quota_remaining: number | null;
 		can_renew: boolean;
+		/** False in a split deployment: renew via the binding, then approve bare. */
+		renew_on_decide?: boolean;
 	} | null;
 }
 
@@ -257,13 +259,23 @@ export const approvalsHandlers = [
 			return alreadySettled(row);
 		}
 		const renewal = row.kind === 'grant_renewal';
-		if ((body.renewal != null) !== (renewal && body.decision === 'approve')) {
+		// Where the deployment renews through the binding's endpoint first, a
+		// renewal hold is approved without `renewal` (the mock trusts it renewed).
+		const renewedElsewhere = renewal && row.renewal?.renew_on_decide === false;
+		if (renewedElsewhere && body.decision === 'approve' && body.renewal == null) {
+			// fall through to the decision
+		} else if ((body.renewal != null) !== (renewal && body.decision === 'approve')) {
 			return HttpResponse.json(
 				{ type: 'held_execution_renewal_invalid', status: 422, detail: 'renewal' },
 				{ status: 422 },
 			);
 		}
-		if (renewal && body.decision === 'approve' && !row.renewal?.can_renew) {
+		if (
+			renewal &&
+			body.decision === 'approve' &&
+			!renewedElsewhere &&
+			!row.renewal?.can_renew
+		) {
 			return HttpResponse.json(
 				{ type: 'held_execution_renewal_forbidden', status: 403, detail: 'renewal' },
 				{ status: 403 },

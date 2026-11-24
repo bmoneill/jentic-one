@@ -175,8 +175,9 @@ class HeldExecutionService:
         can_renew = self._grant_renewer is not None and await self._grant_renewer.may_renew(
             identity=identity, agent_id=row.agent_id, credential_id=row.credential_id
         )
+        renew_on_decide = self._grant_renewer is not None
         if binding is None:
-            return RenewalContextView(can_renew=False)
+            return RenewalContextView(can_renew=False, renew_on_decide=renew_on_decide)
         reason = grant_end_reason(GrantPolicy.from_row(binding))
         return RenewalContextView(
             expired_reason=reason.value if reason is not None else None,
@@ -187,6 +188,7 @@ class HeldExecutionService:
             max_quota=binding.max_quota,
             quota_remaining=binding.quota_remaining,
             can_renew=can_renew,
+            renew_on_decide=renew_on_decide,
         )
 
     async def get_result(self, approval_id: str, *, identity: Identity) -> JobResultView:
@@ -376,6 +378,18 @@ class HeldExecutionService:
         )
         return view
 
+    async def _binding_live(self, agent_id: str, credential_id: str) -> bool:
+        """Whether the binding exists, is not suspended, and no limit has ended it."""
+        async with self._ctx.admin_db.session() as session:
+            binding = await AgentCredentialBindingRepository.get(
+                session, agent_id=agent_id, credential_id=credential_id
+            )
+        return (
+            binding is not None
+            and not binding.suspended
+            and grant_end_reason(GrantPolicy.from_row(binding)) is None
+        )
+
     async def _renew_for_approval(
         self,
         approval_id: str,
@@ -392,6 +406,11 @@ class HeldExecutionService:
         renewal commits before the decision: if the decision then loses its
         compare-and-set, the binding stays renewed, which is what the reviewer
         asked for; if the renewal fails, nothing is decided.
+
+        Approving without ``renewal`` is accepted once the binding is live
+        again, renewed through its own endpoint (the only way where this
+        process has no renewer): it releases the call, or with ``run: false``
+        fails it, and reports the hold as renewed.
         """
         async with self._ctx.admin_db.session() as session:
             row = await HeldExecutionRepository.get_by_id(session, approval_id, filters=filters)
@@ -406,13 +425,19 @@ class HeldExecutionService:
             return False
         if body.decision != ApprovalDecision.APPROVE:
             return False
-        if body.renewal is None:
-            raise HeldExecutionRenewalInvalidError(
-                "Approving a renewal needs the binding's fresh policy (`renewal`)"
-            )
         if row.state != HeldExecutionState.PENDING.value:
             raise HeldExecutionAlreadyDecidedError(
                 f"Execution approval '{approval_id}' is already {row.state}"
+            )
+        if body.renewal is None:
+            # Renewed through the binding's own endpoint (where this process
+            # cannot renew, say): approving only releases the call, which the
+            # worker re-authorizes when it runs.
+            if await self._binding_live(row.agent_id, row.credential_id):
+                return True
+            raise HeldExecutionRenewalInvalidError(
+                "Approving a renewal needs the binding's fresh policy (`renewal`), "
+                "or the binding renewed first"
             )
         if self._grant_renewer is None:
             raise HeldExecutionRenewalUnavailableError(

@@ -24,6 +24,7 @@ from jentic_one.admin.services.schemas.held_executions import (
 from jentic_one.admin.web.deps import get_held_execution_service
 from jentic_one.admin.web.schemas.held_executions import (
     DecideHeldExecutionRequest,
+    GrantRenewalRequest,
     HeldExecutionDetailResponse,
     HeldExecutionLinksResponse,
     HeldExecutionListResponse,
@@ -85,6 +86,14 @@ def _fields(view: HeldExecutionView, request: Request) -> dict[str, object]:
             ),
         ),
     }
+
+
+def _renewal_policy(renewal: GrantRenewalRequest) -> GrantRenewalPolicy:
+    """The fresh policy, with an end date left out read as the renewal default."""
+    fields = renewal.model_dump()
+    if "expires_at" not in renewal.model_fields_set:
+        fields.pop("expires_at")
+    return GrantRenewalPolicy(**fields)
 
 
 def _response(view: HeldExecutionView, request: Request) -> HeldExecutionResponse:
@@ -259,18 +268,17 @@ async def decide_held_execution(
     running. Only a reviewer who may renew the binding directly (a person who
     owns the agent and the credential, or an ``org:admin``) can approve one
     (``403 held_execution_renewal_forbidden`` otherwise); anyone who can
-    decide may deny it. ``renewal`` on any other hold is a ``422``.
+    decide may deny it. ``renewal`` on any other hold is a ``422``. Where this
+    deployment cannot renew from a hold (``renewal.renew_on_decide`` is false on
+    the hold), renew the binding through its own endpoint first, then approve
+    without ``renewal``; that is accepted once the binding is live again.
     """
     view = await svc.decide(
         held_execution_id,
         DecideInput(
             decision=body.decision,
             reason=body.reason,
-            renewal=(
-                GrantRenewalPolicy(**body.renewal.model_dump())
-                if body.renewal is not None
-                else None
-            ),
+            renewal=(_renewal_policy(body.renewal) if body.renewal is not None else None),
             run=body.run,
         ),
         identity=identity,

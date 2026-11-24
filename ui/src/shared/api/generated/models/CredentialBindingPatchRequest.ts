@@ -6,12 +6,14 @@
  * Request body for renewing a credential binding: re-certify it, and change its limits.
  *
  * Every renewal restarts the binding's idle clock. Each limit sent is set, and
- * null clears it; a limit left out stays as it is, so an absent field is never
- * read as clearing. An empty body only re-certifies ("still needed").
+ * null clears it; an absent field is never read as clearing. An end date left
+ * out runs the binding again for as long as it was granted for, capped at the
+ * org's maximum; any other limit left out stays as it is. An empty body
+ * re-certifies ("still needed").
  */
 export type CredentialBindingPatchRequest = {
     /**
-     * When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the end date; leave it out to keep it.
+     * When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the end date. Left out, the binding runs again for as long as it was granted for (its end date less when it was granted or last renewed), capped at the org's maximum; one with no end date takes the maximum, or keeps none without one.
      */
     expires_at?: (string | null);
     /**

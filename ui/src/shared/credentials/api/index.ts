@@ -535,6 +535,7 @@ export {
 	useOpenConnectRequests,
 	usePollConnectSessionStatus,
 	useRejectConnectSession,
+	useRenewCredentialBinding,
 	useStartIntegrationConnect,
 	useVendorAuthCapabilities,
 	useVendors,

@@ -7,6 +7,8 @@
  * denies. Fresh access replaces the binding's old policy; its rules stay.
  *
  * Anyone else who may review sees only Deny, with who can grant fresh access.
+ * Where the deployment can't tell who may renew from here (`renewElsewhere`),
+ * everyone sees the choices, and the renewal itself says if they may not.
  */
 import { useRef, useState } from 'react';
 import {
@@ -48,6 +50,12 @@ export interface RenewalDecisionProps {
 	agentName: string;
 	/** Whether the viewer may grant fresh access (the server's `renewal.can_renew`). */
 	canRenew: boolean;
+	/**
+	 * The renewal goes through the binding's own renew endpoint before the
+	 * approval (`renewal.renew_on_decide` is false), so who may renew is only
+	 * known once it is tried.
+	 */
+	renewElsewhere?: boolean;
 	pending: boolean;
 	onDeny: (reason: string) => void;
 	onRenew: (policy: RenewalPolicyBody, run: boolean, reason: string) => void;
@@ -55,11 +63,13 @@ export interface RenewalDecisionProps {
 
 export function RenewalDecision({
 	agentName,
-	canRenew,
+	canRenew: viewerMayRenew,
+	renewElsewhere = false,
 	pending,
 	onDeny,
 	onRenew,
 }: RenewalDecisionProps) {
+	const canRenew = viewerMayRenew || renewElsewhere;
 	const [reason, setReason] = useState('');
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
@@ -99,6 +109,15 @@ export function RenewalDecision({
 		<div className="flex flex-col gap-4" data-testid="renewal-decision">
 			{canRenew ? (
 				<div className="space-y-3">
+					{renewElsewhere && (
+						<p
+							className="text-muted-foreground text-sm"
+							data-testid="renewal-elsewhere"
+						>
+							Granting fresh access renews the agent&apos;s access first. Only someone
+							who owns both the agent and the credential, or an org admin, can.
+						</p>
+					)}
 					<BindingDurationField
 						maxSeconds={limits.expires.maxSeconds}
 						value={duration}

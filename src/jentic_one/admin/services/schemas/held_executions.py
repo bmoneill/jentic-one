@@ -66,6 +66,11 @@ class RenewalContextView(BaseModel):
     quota_remaining: int | None = None
     #: Whether the reader may grant fresh access (else only deny).
     can_renew: bool = False
+    #: Whether approving can renew the binding itself (``renewal`` on the
+    #: decision). False where this process cannot read the control database (a
+    #: split deployment): the reviewer renews the binding through its own renew
+    #: endpoint, then approves without ``renewal``.
+    renew_on_decide: bool = True
 
 
 class HeldExecutionDetailView(HeldExecutionView):

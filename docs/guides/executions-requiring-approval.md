@@ -161,7 +161,9 @@ access ended and its owner has been asked to renew it.
   not count against `held_executions.max_pending_per_agent`.
 - **Deciding.** Approve with the binding's fresh policy:
   `{"decision": "approve", "renewal": {"expires_at": "…", "max_idle_period": …,
-  "idle_warning": false, "max_quota": 1}}` (each limit left out sets none).
+  "idle_warning": false, "max_quota": 1}}` (each limit left out sets none,
+  except the end date: left out, the binding runs again for as long as it was
+  granted for, capped at the org's maximum; `null` sets no end date).
   The binding's policy is replaced in place (its rules stay), its idle clock
   restarts and its uses are restored, then the call runs. Add `"run": false`
   to renew without running a stale call (it fails with
@@ -170,6 +172,13 @@ access ended and its owner has been asked to renew it.
   with `agents:write` who owns the agent and the credential, or an org admin
   (`403 held_execution_renewal_forbidden` otherwise; the review read says so
   in `renewal.can_renew`). Anyone who may review may deny.
+- **Split deployments.** Where the admin surface runs apart from the control
+  database, it cannot renew from a hold: the review read reports
+  `renewal.renew_on_decide: false`, and approving with `renewal` is a
+  `503 held_execution_renewal_unavailable`. Renew the binding through
+  `PATCH /agents/{agent_id}/credentials/{credential_id}` (the console's review
+  page does this for you), then approve without `renewal`; that is accepted
+  once the binding holds again.
 - **After a denial**, later calls get the `403` saying when it was denied,
   and no new renewal is filed until the binding is renewed from the console.
 - A call whose agent no longer holds the binding at run time, or whose

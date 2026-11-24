@@ -2174,7 +2174,8 @@ export const agentsHandlers = [
 			(b) => b.agent_id === params.id && b.credential_id === params.cid,
 		);
 		if (!row) return new HttpResponse(null, { status: 404 });
-		// A field left out stays as it is; null clears it. Every renewal restarts
+		// A field left out stays as it is (an end date left out runs again for
+		// as long as it was granted for); null clears it. Every renewal restarts
 		// the idle clock, so an empty body is "still needed".
 		const body = (await request.json().catch(() => ({}))) as {
 			expires_at?: string | null;
@@ -2186,6 +2187,9 @@ export const agentsHandlers = [
 			const pastExpiry = pastExpiryError(body.expires_at);
 			if (pastExpiry) return pastExpiry;
 			row.expires_at = body.expires_at ?? null;
+		} else if (row.expires_at) {
+			const length = Date.parse(row.expires_at) - Date.parse(row.renewed_at ?? row.bound_at);
+			if (length > 0) row.expires_at = new Date(Date.now() + length).toISOString();
 		}
 		if ('max_idle_period' in body) row.max_idle_period = body.max_idle_period ?? null;
 		if (body.idle_warning !== undefined) row.idle_warning = body.idle_warning;

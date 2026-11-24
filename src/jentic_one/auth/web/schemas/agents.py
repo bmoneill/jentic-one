@@ -538,8 +538,10 @@ class CredentialBindingPatchRequest(BaseModel):
     """Request body for renewing a credential binding: re-certify it, and change its limits.
 
     Every renewal restarts the binding's idle clock. Each limit sent is set, and
-    null clears it; a limit left out stays as it is, so an absent field is never
-    read as clearing. An empty body only re-certifies ("still needed").
+    null clears it; an absent field is never read as clearing. An end date left
+    out runs the binding again for as long as it was granted for, capped at the
+    org's maximum; any other limit left out stays as it is. An empty body
+    re-certifies ("still needed").
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -548,7 +550,10 @@ class CredentialBindingPatchRequest(BaseModel):
         default=None,
         description=(
             _BINDING_EXPIRES_AT_DESCRIPTION
-            + " Send null to clear the end date; leave it out to keep it."
+            + " Send null to clear the end date. Left out, the binding runs again for as long"
+            " as it was granted for (its end date less when it was granted or last renewed),"
+            " capped at the org's maximum; one with no end date takes the maximum, or keeps"
+            " none without one."
         ),
         examples=[_EX_EXPIRES_AT],
     )

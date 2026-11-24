@@ -75,6 +75,7 @@ from jentic_one.shared.auth.grant_limits import (
     check_grant_limits,
     default_agent_expiry,
     new_grant_policy,
+    renewal_expiry,
 )
 from jentic_one.shared.auth.grant_policy import (
     GRANT_POLICY_FIELDS,
@@ -1289,10 +1290,13 @@ class AgentService:
     ) -> CredentialBindingView:
         """Re-certify a binding: set, move or clear its limits, and restart its idle clock.
 
-        Each limit passed is set (``None`` clears it); a limit left out stays
-        as it is. Every renewal restarts the idle clock (``renewed_at``) and
-        restores the use count, so renewing with no change is the "still
-        needed" re-certification.
+        Each limit passed is set (``None`` clears it). An end date left out
+        runs the binding again for as long as it was granted for, capped at
+        the org's maximum (a binding with no end date takes the maximum, or
+        keeps none without one); any other limit left out stays as it is.
+        Every renewal restarts the idle clock (``renewed_at``) and restores
+        the use count, so renewing with no change is the "still needed"
+        re-certification.
 
         Renewing re-grants the credential, so it takes exactly the checks of
         :meth:`resume_credential`: the agent check, the credential-ownership
@@ -1326,12 +1330,22 @@ class AgentService:
             if before is None:
                 raise CredentialBindingNotFoundError(agent_id, credential_id)
             before_policy = _audit_policy(before)
+            now = datetime.now(UTC)
+            if isinstance(expires_at, Unset):
+                default_end = renewal_expiry(
+                    self._ctx.config.grant_expiry,
+                    now=now,
+                    expires_at=before.expires_at,
+                    granted_at=before.renewed_at or before.bound_at,
+                )
+                if not isinstance(default_end, Unset):
+                    policy["expires_at"] = default_end
             await AgentCredentialBindingRepository.renew(
                 session,
                 agent_id=agent_id,
                 credential_id=credential_id,
                 policy=policy,
-                now=datetime.now(UTC),
+                now=now,
             )
             await session.refresh(before)
             binding = before

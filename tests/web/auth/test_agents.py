@@ -792,10 +792,10 @@ def test_renew_missing_binding_is_404(
     assert resp.json()["type"] == "credential_binding_not_found"
 
 
-def test_renew_without_expires_at_keeps_the_expiry_and_restarts_the_idle_clock(
+def test_renew_without_expires_at_reruns_the_grant_and_restarts_the_idle_clock(
     admin_client: TestClient, binding_agent_id: str, control_credential_id: str
 ) -> None:
-    """Leaving ``expires_at`` out keeps it: an empty body only re-certifies ("still needed")."""
+    """Leaving ``expires_at`` out runs the binding again for as long as it was granted for."""
     url = f"/agents/{binding_agent_id}/credentials"
     expires = datetime.now(UTC) + timedelta(days=1)
     resp = admin_client.post(
@@ -808,19 +808,31 @@ def test_renew_without_expires_at_keeps_the_expiry_and_restarts_the_idle_clock(
     )
     assert resp.status_code == 201
     granted = datetime.fromisoformat(resp.json()["renewed_at"])
+    length = datetime.fromisoformat(resp.json()["expires_at"]) - granted
 
     resp = admin_client.patch(f"{url}/{control_credential_id}", json={})
     assert resp.status_code == 200
     body = resp.json()
-    assert datetime.fromisoformat(body["expires_at"]) == expires
+    renewed = datetime.fromisoformat(body["renewed_at"])
+    assert renewed >= granted
+    assert abs(datetime.fromisoformat(body["expires_at"]) - (renewed + length)) < timedelta(
+        seconds=1
+    )
     assert body["max_idle_period"] == 7 * 86_400
-    assert datetime.fromisoformat(body["renewed_at"]) >= granted
-    assert datetime.fromisoformat(body["idle_expires_at"]) == datetime.fromisoformat(
-        body["renewed_at"]
-    ) + timedelta(days=7)
+    assert datetime.fromisoformat(body["idle_expires_at"]) == renewed + timedelta(days=7)
 
     resp = admin_client.patch(f"{url}/{control_credential_id}", json={"unknown": 1})
     assert resp.status_code == 422
+
+
+def test_renew_without_expires_at_keeps_no_end_date_without_a_maximum(
+    admin_client: TestClient, binding_agent_id: str, control_credential_id: str
+) -> None:
+    url = f"/agents/{binding_agent_id}/credentials"
+    assert admin_client.post(url, json={"credential_id": control_credential_id}).status_code == 201
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["expires_at"] is None
 
 
 def test_bind_with_idle_limit_then_change_and_remove_it(
@@ -1037,10 +1049,12 @@ def test_an_org_maximum_refuses_no_end_date_and_longer_ones(
     assert admin_client.post(url, json={"credential_id": control_credential_id}).status_code == 201
     monkeypatch.setattr(web_context.config.grant_expiry, "max_expires_in_s", 30 * 86_400)
 
-    # A renewal that leaves the end date alone is not refused for it.
+    # A renewal that chooses no end date brings it under the maximum.
     resp = admin_client.patch(f"{url}/{control_credential_id}", json={"idle_warning": True})
     assert resp.status_code == 200, resp.text
-    # One that clears it, or sets it past the maximum, is.
+    left = datetime.fromisoformat(resp.json()["expires_at"]) - datetime.now(UTC)
+    assert timedelta(days=29, hours=23) < left <= timedelta(days=30)
+    # One that clears it, or sets it past the maximum, is refused.
     for expires_at in (None, (datetime.now(UTC) + timedelta(days=31)).isoformat()):
         resp = admin_client.patch(f"{url}/{control_credential_id}", json={"expires_at": expires_at})
         assert resp.status_code == 422, resp.text
@@ -1048,6 +1062,27 @@ def test_an_org_maximum_refuses_no_end_date_and_longer_ones(
     within = (datetime.now(UTC) + timedelta(days=30)).isoformat()
     resp = admin_client.patch(f"{url}/{control_credential_id}", json={"expires_at": within})
     assert resp.status_code == 200, resp.text
+
+
+def test_a_renewal_with_no_end_date_takes_the_shorter_of_its_grant_and_the_maximum(
+    admin_client: TestClient,
+    web_context: Context,
+    binding_agent_id: str,
+    control_credential_id: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = f"/agents/{binding_agent_id}/credentials"
+    ninety = (datetime.now(UTC) + timedelta(days=90)).isoformat()
+    resp = admin_client.post(
+        url, json={"credential_id": control_credential_id, "expires_at": ninety}
+    )
+    assert resp.status_code == 201, resp.text
+    monkeypatch.setattr(web_context.config.grant_expiry, "max_expires_in_s", 30 * 86_400)
+
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={})
+    assert resp.status_code == 200, resp.text
+    left = datetime.fromisoformat(resp.json()["expires_at"]) - datetime.now(UTC)
+    assert timedelta(days=29, hours=23) < left <= timedelta(days=30)
 
 
 def test_an_org_agent_maximum_applies_to_new_and_changed_agents(

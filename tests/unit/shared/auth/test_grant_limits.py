@@ -14,7 +14,9 @@ from jentic_one.shared.auth.grant_limits import (
     default_agent_expiry,
     duration_label,
     new_grant_policy,
+    renewal_expiry,
 )
+from jentic_one.shared.auth.grant_policy import UNSET
 from jentic_one.shared.config import GrantExpiryConfig
 
 NOW = datetime(2026, 11, 23, 12, 0, tzinfo=UTC)
@@ -93,3 +95,23 @@ def test_a_default_above_its_maximum_is_a_config_error() -> None:
 )
 def test_duration_label(seconds: int, label: str) -> None:
     assert duration_label(seconds) == label
+
+
+def test_a_renewal_reruns_the_grant_length_capped_at_the_maximum() -> None:
+    now = datetime(2026, 6, 1, tzinfo=UTC)
+    granted = now - timedelta(days=40)
+    ninety_days = granted + timedelta(days=90)
+    open_config = GrantExpiryConfig()
+    capped = GrantExpiryConfig(max_expires_in_s=30 * 86_400)
+
+    assert renewal_expiry(
+        open_config, now=now, expires_at=ninety_days, granted_at=granted
+    ) == now + timedelta(days=90)
+    assert renewal_expiry(
+        capped, now=now, expires_at=ninety_days, granted_at=granted
+    ) == now + timedelta(days=30)
+    # No end date: the maximum, or still none without one.
+    assert renewal_expiry(capped, now=now, expires_at=None, granted_at=granted) == now + timedelta(
+        days=30
+    )
+    assert renewal_expiry(open_config, now=now, expires_at=None, granted_at=granted) is UNSET

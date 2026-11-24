@@ -39,5 +39,9 @@ export type HeldRenewalContextResponse = {
      * Uses left under its count.
      */
     quota_remaining?: (number | null);
+    /**
+     * Whether approving with `renewal` renews the binding here. False where this deployment's admin surface cannot renew (it runs apart from the control database), and `can_renew` is then unknown: renew the binding through `PATCH /agents/{agent_id}/credentials/{credential_id}`, then approve without `renewal`.
+     */
+    renew_on_decide?: boolean;
 };
 

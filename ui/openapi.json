@@ -7629,7 +7629,7 @@
       },
       "CredentialBindingPatchRequest": {
         "additionalProperties": false,
-        "description": "Request body for renewing a credential binding: re-certify it, and change its limits.\n\nEvery renewal restarts the binding's idle clock. Each limit sent is set, and\nnull clears it; a limit left out stays as it is, so an absent field is never\nread as clearing. An empty body only re-certifies (\"still needed\").",
+        "description": "Request body for renewing a credential binding: re-certify it, and change its limits.\n\nEvery renewal restarts the binding's idle clock. Each limit sent is set, and\nnull clears it; an absent field is never read as clearing. An end date left\nout runs the binding again for as long as it was granted for, capped at the\norg's maximum; any other limit left out stays as it is. An empty body\nre-certifies (\"still needed\").",
         "examples": [
           {
             "expires_at": "2026-12-31T23:59:00Z",
@@ -7649,7 +7649,7 @@
                 "type": "null"
               }
             ],
-            "description": "When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the end date; leave it out to keep it.",
+            "description": "When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the end date. Left out, the binding runs again for as long as it was granted for (its end date less when it was granted or last renewed), capped at the org's maximum; one with no end date takes the maximum, or keeps none without one.",
             "examples": [
               "2026-12-31T23:59:00Z"
             ]
@@ -12021,7 +12021,7 @@
       },
       "GrantRenewalRequest": {
         "additionalProperties": false,
-        "description": "Fresh access for an ended binding. Every field left out sets no such limit.",
+        "description": "Fresh access for an ended binding.\n\nEvery field left out sets no such limit, except the end date: left out, the\nbinding runs again for as long as it was granted for, capped at the org's\nmaximum (``null`` sets no end date).",
         "examples": [
           {
             "expires_at": "2026-02-15T09:30:00Z",
@@ -12041,7 +12041,7 @@
                 "type": "null"
               }
             ],
-            "description": "New end date (RFC 3339, in the future); null for no end date.",
+            "description": "New end date (RFC 3339, in the future); null for no end date. Left out, the binding runs again for as long as it was granted for, capped at the org's maximum.",
             "examples": [
               "2026-02-15T09:30:00Z"
             ]
@@ -12190,7 +12190,8 @@
               "last_used_at": "2026-01-01T09:30:00Z",
               "max_idle_period": 1209600,
               "max_quota": 1,
-              "quota_remaining": 0
+              "quota_remaining": 0,
+              "renew_on_decide": true
             },
             "request": {
               "body": "charge=ch_3MmlLrLkdIwHu7ix0snN0B15",
@@ -12450,7 +12451,8 @@
                 "last_used_at": "2026-01-01T09:30:00Z",
                 "max_idle_period": 1209600,
                 "max_quota": 1,
-                "quota_remaining": 0
+                "quota_remaining": 0,
+                "renew_on_decide": true
               }
             ]
           },
@@ -13115,7 +13117,8 @@
             "last_used_at": "2026-01-01T09:30:00Z",
             "max_idle_period": 1209600,
             "max_quota": 1,
-            "quota_remaining": 0
+            "quota_remaining": 0,
+            "renew_on_decide": true
           }
         ],
         "properties": {
@@ -13220,6 +13223,14 @@
             "examples": [
               0
             ]
+          },
+          "renew_on_decide": {
+            "default": true,
+            "description": "Whether approving with `renewal` renews the binding here. False where this deployment's admin surface cannot renew (it runs apart from the control database), and `can_renew` is then unknown: renew the binding through `PATCH /agents/{agent_id}/credentials/{credential_id}`, then approve without `renewal`.",
+            "examples": [
+              true
+            ],
+            "type": "boolean"
           }
         },
         "type": "object"
@@ -28936,7 +28947,7 @@
       },
       "description": "`PATCH`: Renew a credential binding. `DELETE`: Suspend or remove a credential binding.",
       "patch": {
-        "description": "Re-certify a binding: restart its idle clock, and set, extend or clear its limits.\n\n`expires_at` (future only, otherwise 422) sets or moves the end date; null\nclears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle\nlimit; null removes it. A field left out stays as it is, and every renewal\nrestarts the idle clock, so an empty body re-certifies a binding that is\nstill needed. This is how an expired binding is\nrenewed, and it never changes `suspended`: renewing does not resume a\nsuspension, and resuming does not extend an expiry. Renewing re-grants the\ncredential, so it takes the same checks as `:resume`: the caller must own\nthe credential (or hold `org:admin`) as well as see the agent, and an agent\ncannot renew its own binding. Audited; broker caches are invalidated, so\na shortened deadline is checked on every broker. A separate broker may cache a denial\nuntil its binding-cache TTL elapses. Returns the binding.",
+        "description": "Re-certify a binding: restart its idle clock, and set, extend or clear its limits.\n\n`expires_at` (future only, otherwise 422) sets or moves the end date; null\nclears it. Left out, the binding runs again for as long as it was granted\nfor, capped at the org's maximum (one with no end date takes the maximum,\nor keeps none without one). `max_idle_period` (1 to 999 days, in seconds)\nsets the idle limit; null removes it. Any other field left out stays as it\nis, and every renewal restarts the idle clock, so an empty body\nre-certifies a binding that is still needed. This is how an expired binding is\nrenewed, and it never changes `suspended`: renewing does not resume a\nsuspension, and resuming does not extend an expiry. Renewing re-grants the\ncredential, so it takes the same checks as `:resume`: the caller must own\nthe credential (or hold `org:admin`) as well as see the agent, and an agent\ncannot renew its own binding. Audited; broker caches are invalidated, so\na shortened deadline is checked on every broker. A separate broker may cache a denial\nuntil its binding-cache TTL elapses. Returns the binding.",
         "operationId": "renewAgentCredentialBinding",
         "parameters": [
           {
@@ -28994,7 +29005,7 @@
               }
             }
           },
-          "description": "Request body for renewing a credential binding: re-certify it, and change its limits.\n\nEvery renewal restarts the binding's idle clock. Each limit sent is set, and\nnull clears it; a limit left out stays as it is, so an absent field is never\nread as clearing. An empty body only re-certifies (\"still needed\").",
+          "description": "Request body for renewing a credential binding: re-certify it, and change its limits.\n\nEvery renewal restarts the binding's idle clock. Each limit sent is set, and\nnull clears it; an absent field is never read as clearing. An end date left\nout runs the binding again for as long as it was granted for, capped at the\norg's maximum; any other limit left out stays as it is. An empty body\nre-certifies (\"still needed\").",
           "required": true
         },
         "responses": {
@@ -38360,7 +38371,8 @@
                     "last_used_at": "2026-01-01T09:30:00Z",
                     "max_idle_period": 1209600,
                     "max_quota": 1,
-                    "quota_remaining": 0
+                    "quota_remaining": 0,
+                    "renew_on_decide": true
                   },
                   "request": {
                     "body": "charge=ch_3MmlLrLkdIwHu7ix0snN0B15",
@@ -38570,7 +38582,7 @@
     "/executions/holds/{held_execution_id}:decide": {
       "description": "`POST`: Approve or deny a held execution.",
       "post": {
-        "description": "Decide a pending held execution — the agent's owner or an ``org:admin`` only.\n\n``approve`` releases the call, which is re-authorized and run once; ``deny``\nfails it with a permission-denied result. The first decision wins: deciding\none that is no longer pending (or has expired) answers ``409``. An agent\ncaller is always refused (``403``), whatever its permissions.\n\nA ``grant_renewal`` hold (the agent's binding ended) is approved with\n``renewal``, the binding's fresh policy, which replaces its old one; with\n``run: false`` the binding is renewed and the call fails instead of\nrunning. Only a reviewer who may renew the binding directly (a person who\nowns the agent and the credential, or an ``org:admin``) can approve one\n(``403 held_execution_renewal_forbidden`` otherwise); anyone who can\ndecide may deny it. ``renewal`` on any other hold is a ``422``.",
+        "description": "Decide a pending held execution — the agent's owner or an ``org:admin`` only.\n\n``approve`` releases the call, which is re-authorized and run once; ``deny``\nfails it with a permission-denied result. The first decision wins: deciding\none that is no longer pending (or has expired) answers ``409``. An agent\ncaller is always refused (``403``), whatever its permissions.\n\nA ``grant_renewal`` hold (the agent's binding ended) is approved with\n``renewal``, the binding's fresh policy, which replaces its old one; with\n``run: false`` the binding is renewed and the call fails instead of\nrunning. Only a reviewer who may renew the binding directly (a person who\nowns the agent and the credential, or an ``org:admin``) can approve one\n(``403 held_execution_renewal_forbidden`` otherwise); anyone who can\ndecide may deny it. ``renewal`` on any other hold is a ``422``. Where this\ndeployment cannot renew from a hold (``renewal.renew_on_decide`` is false on\nthe hold), renew the binding through its own endpoint first, then approve\nwithout ``renewal``; that is accepted once the binding is live again.",
         "operationId": "decideHeldExecution",
         "parameters": [
           {

@@ -8,10 +8,11 @@ lives in one place:
 - **Defaults** apply only when a creation sets no policy at all (no end date,
   no idle limit and no use count): a request that sets any of them is taken
   as it is. The console always sets one, so it gets exactly what it chose.
-- **Maximums** apply to the values a request sets: a request that leaves the
-  end date alone (a renewal that only turns on the idle warning, say) is not
-  refused because an older grant has none. A maximum also means every grant
-  must have that limit, so "none" is refused too.
+- **Maximums** apply to the values a request sets. A maximum also means
+  every grant must have that limit, so "none" is refused too.
+- **A renewal that chooses no end date** runs the grant again for as long as
+  it was granted for, capped at the maximum (:func:`renewal_expiry`), so
+  renewing a grant made before the org set a maximum brings it under it.
 
 Limits are checked against the server's clock with a few minutes' grace: a
 browser works the end date out from its own clock as the reviewer confirms,
@@ -144,6 +145,30 @@ def new_grant_policy(
         config, now=now, expires_at=policy.expires_at, max_idle_period=policy.max_idle_period
     )
     return policy
+
+
+def renewal_expiry(
+    config: GrantExpiryConfig,
+    *,
+    now: datetime,
+    expires_at: datetime | str | None,
+    granted_at: datetime | str | None,
+) -> datetime | Unset:
+    """The end date a renewal gives a grant when it doesn't choose one.
+
+    The grant runs again for as long as it was granted for (its end date less
+    the moment it was granted or last renewed), or for the org's maximum,
+    whichever is shorter. A grant with no end date takes the maximum; with
+    neither, its end date is left alone (``UNSET``): it still has none.
+    """
+    lengths: list[timedelta] = []
+    if expires_at is not None and granted_at is not None:
+        length = as_utc(expires_at) - as_utc(granted_at)
+        if length > timedelta(0):
+            lengths.append(length)
+    if config.max_expires_in_s is not None:
+        lengths.append(timedelta(seconds=config.max_expires_in_s))
+    return now + min(lengths) if lengths else UNSET
 
 
 def check_agent_expiry(

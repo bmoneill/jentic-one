@@ -182,6 +182,15 @@ class HeldRenewalContextResponse(BaseModel):
         "person who owns the agent and the credential, or an `org:admin`.",
         examples=[True],
     )
+    renew_on_decide: bool = Field(
+        default=True,
+        description="Whether approving with `renewal` renews the binding here. False where "
+        "this deployment's admin surface cannot renew (it runs apart from the control "
+        "database), and `can_renew` is then unknown: renew the binding through "
+        "`PATCH /agents/{agent_id}/credentials/{credential_id}`, then approve without "
+        "`renewal`.",
+        examples=[True],
+    )
 
 
 class HeldExecutionDetailResponse(HeldExecutionResponse):
@@ -269,13 +278,21 @@ class HeldExecutionListResponse(BaseModel):
 
 
 class GrantRenewalRequest(BaseModel):
-    """Fresh access for an ended binding. Every field left out sets no such limit."""
+    """Fresh access for an ended binding.
+
+    Every field left out sets no such limit, except the end date: left out, the
+    binding runs again for as long as it was granted for, capped at the org's
+    maximum (``null`` sets no end date).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     expires_at: datetime | None = Field(
         default=None,
-        description="New end date (RFC 3339, in the future); null for no end date.",
+        description=(
+            "New end date (RFC 3339, in the future); null for no end date. Left out, the "
+            "binding runs again for as long as it was granted for, capped at the org's maximum."
+        ),
         examples=["2026-02-15T09:30:00Z"],
     )
     max_idle_period: int | None = Field(

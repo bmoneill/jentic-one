@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
+from jentic_one.shared.auth.grant_policy import UNSET, Unset
 from jentic_one.shared.auth.identity import Identity
 
 
@@ -23,10 +24,12 @@ class GrantRenewalPolicy:
     """The fresh policy a renewal gives the grant (replacing its old one).
 
     Each field ``None`` (``False`` for the warning) sets no such limit: fresh
-    access is exactly what the reviewer chose.
+    access is exactly what the reviewer chose. An end date left ``UNSET`` is
+    the renewal default: as long as the grant was granted for, capped at the
+    org's maximum.
     """
 
-    expires_at: datetime | None = None
+    expires_at: datetime | Unset | None = UNSET
     max_idle_period: int | None = None
     idle_warning: bool = False
     max_quota: int | None = None

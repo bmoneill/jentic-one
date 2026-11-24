@@ -16,7 +16,10 @@
  * A call held because the agent's access ended (`kind: grant_renewal`) says
  * why it ended and when the access was last used, and its decision is fresh
  * access (`RenewalDecision`): only a reviewer who may renew the binding
- * directly gets the renewal choices; anyone else may only deny.
+ * directly gets the renewal choices; anyone else may only deny. Where the
+ * deployment's admin surface can't renew from a hold (a split deployment,
+ * `renewal.renew_on_decide` false), the page renews the binding through its
+ * own renew endpoint, then approves the call.
  */
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
@@ -26,6 +29,7 @@ import {
 	Button,
 	CopyButton,
 	EmptyState,
+	ErrorAlert,
 	Label,
 	MethodBadge,
 	PageHeader,
@@ -37,7 +41,7 @@ import {
 } from '@/shared/ui';
 import { ROUTES, ROUTE_PATHS } from '@/shared/app/routes';
 import { useOptionalCurrentUser } from '@/shared/auth';
-import { useCredential } from '@/shared/credentials/api';
+import { useCredential, useRenewCredentialBinding } from '@/shared/credentials/api';
 import { useActorDirectory } from '@/shared/hooks';
 import { formatTimestamp, timeAgo } from '@/shared/lib/utils';
 import {
@@ -135,6 +139,7 @@ export default function ApprovalDetailPage() {
 
 	const { data: approval, isLoading, error } = useApproval(id);
 	const decide = useDecideApproval();
+	const renewBinding = useRenewCredentialBinding();
 	// The credential's name; a reviewer who can't read it sees a plain label.
 	const credential = useCredential(approval?.credential_id);
 	const nameOf = useActorNames([
@@ -160,7 +165,29 @@ export default function ApprovalDetailPage() {
 	}
 
 	function handleRenewal(policy: RenewalPolicyBody | null, run: boolean, why: string) {
-		if (!id) return;
+		if (!id || !approval) return;
+		if (policy !== null && approval.renewal?.renew_on_decide === false) {
+			// This deployment can't renew from the hold: renew the binding through
+			// its own endpoint, then approve (the server checks it holds again).
+			renewBinding.mutate(
+				{
+					agentId: approval.agent_id,
+					credentialId: approval.credential_id,
+					expiresAt: policy.expires_at,
+					maxIdlePeriod: policy.max_idle_period,
+					idleWarning: policy.idle_warning,
+					maxQuota: policy.max_quota,
+				},
+				{
+					onSuccess: () =>
+						decide.mutate({
+							heldExecutionId: id,
+							body: { decision: ApprovalDecision.APPROVE, reason: why || null, run },
+						}),
+				},
+			);
+			return;
+		}
 		decide.mutate({
 			heldExecutionId: id,
 			body:
@@ -373,10 +400,14 @@ export default function ApprovalDetailPage() {
 								<RenewalDecision
 									agentName={agentName}
 									canRenew={approval.renewal?.can_renew ?? false}
-									pending={decide.isPending}
+									renewElsewhere={approval.renewal?.renew_on_decide === false}
+									pending={decide.isPending || renewBinding.isPending}
 									onDeny={(why) => handleRenewal(null, false, why)}
 									onRenew={(policy, run, why) => handleRenewal(policy, run, why)}
 								/>
+								{renewBinding.error && (
+									<ErrorAlert message={renewBinding.error} className="mt-3" />
+								)}
 							</ReviewPanel>
 						</ReviewSection>
 					) : decidable && decideForbidden ? (

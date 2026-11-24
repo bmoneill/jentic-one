@@ -649,10 +649,12 @@ async def renew_credential_binding(
     """Re-certify a binding: restart its idle clock, and set, extend or clear its limits.
 
     `expires_at` (future only, otherwise 422) sets or moves the end date; null
-    clears it. `max_idle_period` (1 to 999 days, in seconds) sets the idle
-    limit; null removes it. A field left out stays as it is, and every renewal
-    restarts the idle clock, so an empty body re-certifies a binding that is
-    still needed. This is how an expired binding is
+    clears it. Left out, the binding runs again for as long as it was granted
+    for, capped at the org's maximum (one with no end date takes the maximum,
+    or keeps none without one). `max_idle_period` (1 to 999 days, in seconds)
+    sets the idle limit; null removes it. Any other field left out stays as it
+    is, and every renewal restarts the idle clock, so an empty body
+    re-certifies a binding that is still needed. This is how an expired binding is
     renewed, and it never changes `suspended`: renewing does not resume a
     suspension, and resuming does not extend an expiry. Renewing re-grants the
     credential, so it takes the same checks as `:resume`: the caller must own
@@ -664,7 +666,8 @@ async def renew_credential_binding(
     binding = await agent_svc.renew_credential(
         agent_id,
         credential_id=credential_id,
-        # A field left out of the body stays as it is (never read as a clear).
+        # A field left out of the body is never read as a clear; an end date left
+        # out takes the renewal default (the service works it out).
         expires_at=body.expires_at if "expires_at" in body.model_fields_set else UNSET,
         max_idle_period=(
             body.max_idle_period if "max_idle_period" in body.model_fields_set else UNSET

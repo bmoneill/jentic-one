@@ -46,6 +46,7 @@ from jentic_one.broker.core.schemas import ExecuteRequestContext
 from jentic_one.broker.web.routers.execute import _hold_call
 from jentic_one.control.core.schema.credentials import Credential
 from jentic_one.shared.auth.agent_expiry import as_utc
+from jentic_one.shared.auth.grant_renewal import GrantRenewalPolicy
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.config import WorkerConfig
 from jentic_one.shared.context import Context
@@ -239,9 +240,12 @@ async def _call(
 
 
 @asynccontextmanager
-async def _admin_client(ctx: Context, identity: Identity) -> AsyncIterator[AsyncClient]:
+async def _admin_client(
+    ctx: Context, identity: Identity, *, renewer: bool = True
+) -> AsyncIterator[AsyncClient]:
     app = create_app(ctx)
-    app.state.grant_renewer = AgentGrantRenewer(ctx)
+    # A split deployment's admin process cannot read the control DB: no renewer.
+    app.state.grant_renewer = AgentGrantRenewer(ctx) if renewer else None
     app.dependency_overrides[resolve_identity] = lambda: identity
     async with AsyncClient(transport=ASGITransport(app=app), base_url="https://testserver") as c:
         yield c
@@ -322,6 +326,42 @@ async def test_approving_a_renewal_renews_the_binding_and_runs_the_call(
     assert handler.calls == 1
 
 
+async def test_a_split_deployment_renews_through_the_binding_then_approves(
+    integration_context: Context, parties: _Parties
+) -> None:
+    """Without a renewer, the reviewer renews via the binding's endpoint, then approves."""
+    ctx = integration_context
+    held_id = (await _call(ctx, parties.agent))["held_execution_id"]
+    async with _admin_client(ctx, parties.owner, renewer=False) as client:
+        detail = (await client.get(f"/executions/holds/{held_id}")).json()
+        assert detail["renewal"]["renew_on_decide"] is False
+        # Renewing here is unavailable, and a bare approve can't release an ended binding.
+        here = await client.post(
+            f"/executions/holds/{held_id}:decide",
+            json={"decision": "approve", "renewal": {}},
+        )
+        assert here.status_code == 503, here.text
+        bare = await client.post(
+            f"/executions/holds/{held_id}:decide", json={"decision": "approve"}
+        )
+        assert bare.status_code == 422, bare.text
+        # The auth surface's renew endpoint, then the approval.
+        await AgentGrantRenewer(ctx).renew(
+            identity=parties.owner,
+            agent_id=parties.agent.sub,
+            credential_id=_CREDENTIAL,
+            policy=GrantRenewalPolicy(expires_at=datetime.now(UTC) + timedelta(days=7)),
+        )
+        decided = await client.post(
+            f"/executions/holds/{held_id}:decide", json={"decision": "approve"}
+        )
+    assert decided.status_code == 200, decided.text
+    assert decided.json()["execution_status"] == JobStatus.QUEUED
+    handler = _RecordingHandler()
+    assert await _worker(ctx, handler)._tick() is True
+    assert handler.calls == 1
+
+
 async def test_renewing_without_running_fails_the_stale_call(
     integration_context: Context, parties: _Parties
 ) -> None:
@@ -330,7 +370,7 @@ async def test_renewing_without_running_fails_the_stale_call(
     async with _admin_client(ctx, parties.owner) as client:
         decided = await client.post(
             f"/executions/holds/{held_id}:decide",
-            json={"decision": "approve", "renewal": {}, "run": False},
+            json={"decision": "approve", "renewal": {"expires_at": None}, "run": False},
         )
         assert decided.status_code == 200, decided.text
         assert decided.json()["execution_status"] == JobStatus.FAILED
@@ -400,15 +440,24 @@ async def test_fresh_access_respects_the_org_maximum(
     monkeypatch.setattr(ctx.config.grant_expiry, "max_expires_in_s", 7 * 86_400)
     held_id = (await _call(ctx, parties.agent))["held_execution_id"]
     async with _admin_client(ctx, parties.owner) as client:
-        # "No expiry" (every limit left out) is refused under a maximum.
+        # "No expiry" is refused under a maximum.
         refused = await client.post(
             f"/executions/holds/{held_id}:decide",
-            json={"decision": "approve", "renewal": {}},
+            json={"decision": "approve", "renewal": {"expires_at": None}},
         )
         assert refused.status_code == 422, refused.text
         assert refused.json()["type"].endswith("grant_policy_limit_exceeded")
         detail = (await client.get(f"/executions/holds/{held_id}")).json()
-    assert detail["state"] == "pending"
+        assert detail["state"] == "pending"
+        # An end date left out is the renewal default, which never exceeds the maximum.
+        approved = await client.post(
+            f"/executions/holds/{held_id}:decide",
+            json={"decision": "approve", "renewal": {}},
+        )
+        assert approved.status_code == 200, approved.text
+    expires_at = (await _binding(ctx)).expires_at
+    assert expires_at is not None
+    assert as_utc(expires_at) <= datetime.now(UTC) + timedelta(days=7)
 
 
 async def test_renewal_holds_never_count_against_the_pending_cap(
