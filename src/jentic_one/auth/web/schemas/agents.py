@@ -9,14 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from jentic_one.shared.auth.grant_policy import (
     AFTER_EXPIRY_DESCRIPTION,
-    MAX_IDLE_PERIOD_SECONDS,
     MAX_QUOTA,
-    MIN_IDLE_PERIOD_SECONDS,
     WARNING_DESCRIPTION,
     AfterExpiry,
     GrantEndReason,
 )
 from jentic_one.shared.schemas import ServedApiRef
+from jentic_one.shared.schemas.iso_duration import IdlePeriodRequest, IdlePeriodResponse
 from jentic_one.shared.web import openapi_examples as ex
 from jentic_one.shared.web.sensitive import SENSITIVE
 
@@ -62,7 +61,8 @@ _BINDING_QUOTA_DESCRIPTION = (
 )
 
 _BINDING_IDLE_DESCRIPTION = (
-    "Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends"
+    "Idle limit, as an ISO 8601 duration of weeks, days, hours, minutes or seconds (P1D"
+    " to P999D, e.g. P14D; no years or months): the binding ends"
     " once it has gone this long without a call, and the broker then refuses calls"
     " through it with 403 `credential_binding_expired`. Each call restarts the clock"
     " (counted at most about hourly), and so does every renewal; a binding that is never"
@@ -254,10 +254,10 @@ class CredentialBindingResponse(BaseModel):
         ),
         examples=[None],
     )
-    max_idle_period: int | None = Field(
+    max_idle_period: IdlePeriodResponse | None = Field(
         default=None,
         description=_BINDING_IDLE_DESCRIPTION + " Null when it has no idle limit.",
-        examples=[1_209_600],
+        examples=["P14D"],
     )
     idle_expires_at: datetime | None = Field(
         default=None,
@@ -571,15 +571,13 @@ class CredentialBindingPatchRequest(BaseModel):
         ),
         examples=[_EX_EXPIRES_AT],
     )
-    max_idle_period: int | None = Field(
+    max_idle_period: IdlePeriodRequest | None = Field(
         default=None,
-        ge=MIN_IDLE_PERIOD_SECONDS,
-        le=MAX_IDLE_PERIOD_SECONDS,
         description=(
             _BINDING_IDLE_DESCRIPTION
             + " Send null to remove the idle limit; leave it out to keep it."
         ),
-        examples=[1_209_600],
+        examples=["P14D"],
     )
     idle_warning: bool | None = Field(
         default=None,
@@ -623,12 +621,10 @@ class CredentialBindRequest(BaseModel):
         " default policy (`GET /agents/credentials:policy`; none unless the org sets one).",
         examples=[_EX_EXPIRES_AT],
     )
-    max_idle_period: int | None = Field(
+    max_idle_period: IdlePeriodRequest | None = Field(
         default=None,
-        ge=MIN_IDLE_PERIOD_SECONDS,
-        le=MAX_IDLE_PERIOD_SECONDS,
         description=_BINDING_IDLE_DESCRIPTION + " Omit for no idle limit.",
-        examples=[1_209_600],
+        examples=["P14D"],
     )
     idle_warning: bool = Field(
         default=False,

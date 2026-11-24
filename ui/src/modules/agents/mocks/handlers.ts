@@ -22,7 +22,11 @@
  * Registered additively in src/mocks/handlers.ts.
  */
 import { http, HttpResponse } from 'msw';
-import { SERVICE_ACCOUNT_SUCCESSOR_REGISTRAR } from '@/shared/lib';
+import {
+	isoDurationOrNull,
+	isoDurationSeconds,
+	SERVICE_ACCOUNT_SUCCESSOR_REGISTRAR,
+} from '@/shared/lib';
 import { CredentialType, type Credential } from '@/shared/credentials/api';
 import {
 	findMockCredential,
@@ -336,7 +340,7 @@ function bindingExpiryJson(row: CredentialBindingRow): {
 	expires_at: string | null;
 	expired: boolean;
 	expired_reason: 'end_date' | 'idle' | 'uses' | null;
-	max_idle_period: number | null;
+	max_idle_period: string | null;
 	idle_expires_at: string | null;
 	renewed_at: string | null;
 	idle_warning: boolean;
@@ -371,7 +375,7 @@ function bindingExpiryJson(row: CredentialBindingRow): {
 					: endedByDate
 						? 'end_date'
 						: null,
-		max_idle_period: limit,
+		max_idle_period: isoDurationOrNull(limit),
 		idle_expires_at: idleEnd != null ? new Date(idleEnd).toISOString() : null,
 		renewed_at: row.renewed_at ?? null,
 		idle_warning: row.idle_warning ?? false,
@@ -2117,7 +2121,7 @@ export const agentsHandlers = [
 		const body = (await request.json().catch(() => ({}))) as {
 			credential_id?: string;
 			expires_at?: string | null;
-			max_idle_period?: number | null;
+			max_idle_period?: string | null;
 			idle_warning?: boolean;
 			max_quota?: number | null;
 			after_expiry?: 'hold' | 'refuse';
@@ -2150,7 +2154,7 @@ export const agentsHandlers = [
 			credential_id: body.credential_id,
 			bound_at: now(),
 			expires_at: body.expires_at ?? null,
-			max_idle_period: body.max_idle_period ?? null,
+			max_idle_period: isoDurationSeconds(body.max_idle_period),
 			idle_warning: body.idle_warning ?? false,
 			after_expiry: body.after_expiry ?? 'hold',
 			max_quota: body.max_quota ?? null,
@@ -2198,7 +2202,7 @@ export const agentsHandlers = [
 		// the idle clock, so an empty body re-certifies it.
 		const body = (await request.json().catch(() => ({}))) as {
 			expires_at?: string | null;
-			max_idle_period?: number | null;
+			max_idle_period?: string | null;
 			idle_warning?: boolean;
 			max_quota?: number | null;
 			after_expiry?: 'hold' | 'refuse' | null;
@@ -2211,7 +2215,8 @@ export const agentsHandlers = [
 			const length = Date.parse(row.expires_at) - Date.parse(row.renewed_at ?? row.bound_at);
 			if (length > 0) row.expires_at = new Date(Date.now() + length).toISOString();
 		}
-		if ('max_idle_period' in body) row.max_idle_period = body.max_idle_period ?? null;
+		if ('max_idle_period' in body)
+			row.max_idle_period = isoDurationSeconds(body.max_idle_period);
 		if (body.idle_warning !== undefined) row.idle_warning = body.idle_warning;
 		if (body.after_expiry) row.after_expiry = body.after_expiry;
 		if ('max_quota' in body) row.max_quota = body.max_quota ?? null;

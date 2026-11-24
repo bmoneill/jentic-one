@@ -1714,7 +1714,7 @@
             {
               "name": "max-idle",
               "type": "string",
-              "usage": "ask for the access to end once unused this long, e.g. 14d (1d to 999d; the approver decides)"
+              "usage": "ask for the access to end once unused this long, e.g. 14d or P14D (1d to 999d; the approver decides)"
             },
             {
               "name": "mode",

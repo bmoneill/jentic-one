@@ -46,9 +46,9 @@ export type CredentialBindingEntry = {
      */
     last_used_at?: (string | null);
     /**
-     * Idle limit in seconds: the binding ends once it goes this long without a call; null when it has none.
+     * Idle limit (an ISO 8601 duration, e.g. P14D): the binding ends once it goes this long without a call; null when it has none.
      */
-    max_idle_period?: (number | null);
+    max_idle_period?: (string | null);
     /**
      * How many calls the binding allows before it ends; null for unlimited.
      */

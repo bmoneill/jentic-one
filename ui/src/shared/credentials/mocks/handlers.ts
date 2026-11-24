@@ -408,7 +408,7 @@ export interface MockConnectSession {
 	/** How long the request asked the access to last, in seconds; null/absent = nothing. */
 	requested_expires_in?: number | null;
 	/** The idle limit the request asked for, in seconds. */
-	requested_max_idle_period?: number | null;
+	requested_max_idle_period?: string | null;
 	reason: string | null;
 	/** Status served by `/status` polls. Tests flip it to drive terminal states. */
 	status: StatusResponse;

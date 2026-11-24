@@ -1,3 +1,4 @@
+import { isoDurationOrNull } from '@/shared/lib';
 import type { ReactNode } from 'react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -361,7 +362,7 @@ export function VendorSelfConnectFlow({
 				...(agentId
 					? {
 							expires_at: expiresAtIso(duration) ?? null,
-							max_idle_period: idleSeconds(idle),
+							max_idle_period: isoDurationOrNull(idleSeconds(idle)),
 							...(expiryWarning(
 								warn,
 								expiresAtFromDuration(duration),

@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // connectExpiresInMax is the longest duration a connect request may ask for
@@ -18,10 +20,17 @@ const (
 	connectMaxIdleMax = 999 * 86400
 )
 
-// parseIdleLimit reads an idle limit like parseAccessDuration, between 1 and
+// parseIdleLimit reads an idle limit like parseAccessDuration, or as an ISO
+// 8601 duration ("P14D", "PT36H", "P2W"; no years or months), between 1 and
 // 999 days: last-use is recorded about hourly, so shorter limits can't be exact.
 func parseIdleLimit(s string) (int, error) {
-	seconds, err := parseAccessDuration(s)
+	var seconds int
+	var err error
+	if trimmed := strings.ToUpper(strings.TrimSpace(s)); strings.HasPrefix(trimmed, "P") {
+		seconds, err = parseISODurationSeconds(trimmed)
+	} else {
+		seconds, err = parseAccessDuration(s)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -51,4 +60,29 @@ func parseAccessDuration(s string) (int, error) {
 		return 0, fmt.Errorf("duration %q must be longer than zero and at most 999 days", s)
 	}
 	return n * unit, nil
+}
+
+// parseISODurationSeconds reads a fixed-length ISO 8601 duration as whole
+// seconds: weeks, days, hours, minutes and seconds, never years or months
+// (their length depends on the calendar) or fractions.
+func parseISODurationSeconds(s string) (int, error) {
+	d, err := openapi_types.ParseDuration(s)
+	if err != nil {
+		return 0, fmt.Errorf("invalid ISO 8601 duration %q: use e.g. P14D or PT36H", s)
+	}
+	if d.Years != 0 || d.Months != 0 || d.Seconds != float64(int(d.Seconds)) {
+		return 0, fmt.Errorf("invalid ISO 8601 duration %q: use weeks, days, hours, minutes or whole seconds", s)
+	}
+	return d.Weeks*7*86400 + d.Days*86400 + d.Hours*3600 + d.Minutes*60 + int(d.Seconds), nil
+}
+
+// isoIdlePeriod is an idle limit in whole seconds as the API's ISO 8601
+// duration, in days and a time part ("P14D", "P1DT12H").
+func isoIdlePeriod(seconds int) *openapi_types.Duration {
+	return &openapi_types.Duration{
+		Days:    seconds / 86400,
+		Hours:   seconds % 86400 / 3600,
+		Minutes: seconds % 3600 / 60,
+		Seconds: float64(seconds % 60),
+	}
 }

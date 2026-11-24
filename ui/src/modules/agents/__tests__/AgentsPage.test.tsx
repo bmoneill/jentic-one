@@ -3024,7 +3024,7 @@ describe('AgentsPage — access ending soon', () => {
 			expires_at: null,
 			expired: false,
 			expired_reason: null,
-			max_idle_period: 14 * 86_400,
+			max_idle_period: 'P14D',
 			idle_expires_at: idleEnd,
 			idle_warning: true,
 			serves: [],

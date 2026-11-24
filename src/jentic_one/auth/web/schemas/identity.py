@@ -9,6 +9,7 @@ from pydantic import BaseModel, Discriminator, Field
 
 from jentic_one.shared.auth.grant_policy import AfterExpiry, GrantEndReason
 from jentic_one.shared.schemas import ServedApiRef
+from jentic_one.shared.schemas.iso_duration import IdlePeriodResponse
 from jentic_one.shared.web import openapi_examples as ex
 
 _EX_AGENT_PERMISSIONS = ["apis:read", "capabilities:execute"]
@@ -85,13 +86,14 @@ class CredentialBindingEntry(BaseModel):
         ),
         examples=[None],
     )
-    max_idle_period: int | None = Field(
+    max_idle_period: IdlePeriodResponse | None = Field(
         default=None,
         description=(
-            "Idle limit in seconds: the binding ends once it goes this long without a call;"
+            "Idle limit (an ISO 8601 duration, e.g. P14D): the binding ends once it goes"
+            " this long without a call;"
             " null when it has none."
         ),
-        examples=[1_209_600],
+        examples=["P14D"],
     )
     idle_expires_at: datetime | None = Field(
         default=None,

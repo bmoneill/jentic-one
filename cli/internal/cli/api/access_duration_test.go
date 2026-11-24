@@ -20,9 +20,22 @@ func TestParseIdleLimit(t *testing.T) {
 	if got, err := parseIdleLimit("14d"); err != nil || got != 14*86400 {
 		t.Errorf("parseIdleLimit(14d) = %d, %v", got, err)
 	}
-	for _, in := range []string{"12h", "23h", "1000d"} {
+	for in, want := range map[string]int{"P14D": 14 * 86400, "P2W": 14 * 86400, "p1dt12h": 36 * 3600} {
+		if got, err := parseIdleLimit(in); err != nil || got != want {
+			t.Errorf("parseIdleLimit(%s) = %d, %v; want %d", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"12h", "23h", "1000d", "PT12H", "P1M", "P1Y", "P"} {
 		if _, err := parseIdleLimit(in); err == nil {
 			t.Errorf("parseIdleLimit(%q) succeeded; want an error", in)
+		}
+	}
+}
+
+func TestISOIdlePeriodRendersDaysAndTime(t *testing.T) {
+	for seconds, want := range map[int]string{14 * 86400: "P14D", 36 * 3600: "P1DT12H"} {
+		if got := isoIdlePeriod(seconds).String(); got != want {
+			t.Errorf("isoIdlePeriod(%d) = %q; want %q", seconds, got, want)
 		}
 	}
 }

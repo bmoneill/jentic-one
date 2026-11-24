@@ -16,6 +16,7 @@ from jentic_one.shared.auth.grant_policy import AfterExpiry, GrantEndReason
 from jentic_one.shared.models.credentials import CredentialLocation, CredentialType
 from jentic_one.shared.schemas import APIReference as APIReferenceResponse
 from jentic_one.shared.schemas import APIReferenceRequest
+from jentic_one.shared.schemas.iso_duration import IdlePeriodResponse
 from jentic_one.shared.web import openapi_examples as ex
 from jentic_one.shared.web.sensitive import SENSITIVE
 
@@ -1066,11 +1067,12 @@ class CredentialAgentResponse(BaseModel):
             " (no uses left). Null while the binding holds."
         ),
     )
-    max_idle_period: int | None = Field(
+    max_idle_period: IdlePeriodResponse | None = Field(
         default=None,
-        examples=[1_209_600],
+        examples=["P14D"],
         description=(
-            "Idle limit in seconds: the binding ends once it goes this long without a call."
+            "Idle limit (an ISO 8601 duration, e.g. P14D): the binding ends once it goes"
+            " this long without a call."
             " Null when it has none."
         ),
     )

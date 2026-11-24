@@ -95,7 +95,7 @@ var requestConnectionSchema = map[string]any{
 		},
 		"requested_max_idle_period": map[string]any{
 			"type":        "string",
-			"description": "Ask for the access to end once you leave it unused this long (optional), e.g. \"14d\" (1d to 999d). The approver decides; it never cuts you off while you keep using it.",
+			"description": "Ask for the access to end once you leave it unused this long (optional), e.g. \"14d\" or \"P14D\" (1d to 999d). The approver decides; it never cuts you off while you keep using it.",
 		},
 		"requested_expires_in": map[string]any{
 			"type":        "string",
@@ -281,7 +281,7 @@ func (s *mcpServer) handleRequestConnection(ctx context.Context, req *mcp.CallTo
 		body.RequestedExpiresIn = &expiresIn
 	}
 	if maxIdle > 0 {
-		body.RequestedMaxIdlePeriod = &maxIdle
+		body.RequestedMaxIdlePeriod = isoIdlePeriod(maxIdle)
 	}
 	// Never set body.AgentId: the caller IS the agent — the control plane
 	// injects the caller's identity, and a supplied agent_id is refused (403).

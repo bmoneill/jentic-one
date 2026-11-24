@@ -133,7 +133,9 @@ The outcomes:
   `403` is reserved for further calls while that renewal is pending or after
   it was denied.
   Suspension is reported first. A binding can also carry an idle limit
-  (`max_idle_period`, 1 to 999 days): it ends once it goes that long without
+  (`max_idle_period`, an ISO 8601 duration from `P1D` to `P999D`, such as
+  `P14D` or `PT36H`; weeks, days, hours, minutes and seconds only, never
+  years or months, and never a bare number): it ends once it goes that long without
   a call, counted from its last use or its last renewal, whichever is later
   (the broker records use about once an hour). Any limit reached ends the
   binding. A binding can also carry a use count (`max_quota`; 1 is single

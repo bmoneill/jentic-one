@@ -16,6 +16,7 @@
  *   caller sees it but may not decide it (only the owner or an org admin may).
  *   409 `held_execution_already_settled` means it is no longer pending.
  */
+import { isoDurationOrNull } from '@/shared/lib';
 import {
 	ApiError,
 	HeldExecutionsService,
@@ -107,8 +108,13 @@ export async function getApproval(heldExecutionId: string): Promise<HeldExecutio
  */
 export type DecideApprovalBody = Omit<DecideHeldExecutionRequest, 'renewal'> & {
 	renewal?:
-		| (Omit<NonNullable<DecideHeldExecutionRequest['renewal']>, 'after_expiry'> & {
+		| (Omit<
+				NonNullable<DecideHeldExecutionRequest['renewal']>,
+				'after_expiry' | 'max_idle_period'
+		  > & {
 				after_expiry?: 'hold' | 'refuse' | null;
+				/** The idle limit in whole seconds; sent as an ISO 8601 duration. */
+				max_idle_period?: number | null;
 		  })
 		| null;
 };
@@ -120,8 +126,16 @@ export async function decideApproval(
 	try {
 		return await HeldExecutionsService.decideHeldExecution({
 			heldExecutionId,
-			// The wire values are the generated enum's.
-			requestBody: body as DecideHeldExecutionRequest,
+			// The wire values are the generated enum's; the idle limit goes as ISO 8601.
+			requestBody: (body.renewal
+				? {
+						...body,
+						renewal: {
+							...body.renewal,
+							max_idle_period: isoDurationOrNull(body.renewal.max_idle_period),
+						},
+					}
+				: body) as DecideHeldExecutionRequest,
 		});
 	} catch (error) {
 		throw toApprovalsError(error, 'Failed to submit decision');

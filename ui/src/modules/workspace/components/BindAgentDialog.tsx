@@ -35,6 +35,7 @@
  * duration) persists across dismissals and resets on a successful bind; transient errors
  * clear on reopen.
  */
+import { isoDurationSeconds } from '@/shared/lib';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot } from 'lucide-react';
 import {
@@ -672,7 +673,7 @@ function expiryOf(row: CredentialAgentResponse): BindingExpiryFields {
 		expiresAt: row.expires_at ?? null,
 		expired: row.expired ?? false,
 		expiredReason: row.expired_reason ?? null,
-		maxIdlePeriod: row.max_idle_period ?? null,
+		maxIdlePeriod: isoDurationSeconds(row.max_idle_period),
 		idleExpiresAt: row.idle_expires_at ?? null,
 		maxQuota: row.max_quota ?? null,
 		quotaRemaining: row.quota_remaining ?? null,

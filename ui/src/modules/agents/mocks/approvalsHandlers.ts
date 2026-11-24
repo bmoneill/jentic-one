@@ -49,7 +49,8 @@ interface ApprovalRow {
 		expired_reason: string | null;
 		last_used_at: string | null;
 		expires_at: string | null;
-		max_idle_period: number | null;
+		/** ISO 8601 duration (`"P14D"`). */
+		max_idle_period: string | null;
 		idle_warning: boolean;
 		/** What a call through it gets once it has ended; absent reads as `hold`. */
 		after_expiry?: 'hold' | 'refuse';

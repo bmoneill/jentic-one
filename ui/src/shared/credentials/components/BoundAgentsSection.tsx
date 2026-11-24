@@ -30,6 +30,7 @@
  * else it is shared with. For those viewers the copy says "your agents", so it
  * never claims the credential is unused when other users' agents use it.
  */
+import { isoDurationSeconds } from '@/shared/lib';
 import { useState, type MouseEvent } from 'react';
 import { Bot, Hourglass, PauseCircle, RefreshCw } from 'lucide-react';
 import { AppLink, Button, ErrorAlert, LoadingState, StatusChip } from '@/shared/ui';
@@ -260,7 +261,7 @@ function BoundAgentRow({
 					credentialId={credentialId}
 					expiresAt={row.expires_at}
 					expired={expired}
-					maxIdlePeriod={row.max_idle_period ?? null}
+					maxIdlePeriod={isoDurationSeconds(row.max_idle_period)}
 					idleWarning={row.idle_warning ?? false}
 					afterExpiry={row.after_expiry ?? null}
 					maxQuota={row.max_quota ?? null}
@@ -278,7 +279,7 @@ function expiryFields(row: CredentialAgentResponse): BindingExpiryFields {
 		expiresAt: row.expires_at ?? null,
 		expired: row.expired ?? false,
 		expiredReason: row.expired_reason ?? null,
-		maxIdlePeriod: row.max_idle_period ?? null,
+		maxIdlePeriod: isoDurationSeconds(row.max_idle_period),
 		idleExpiresAt: row.idle_expires_at ?? null,
 		maxQuota: row.max_quota ?? null,
 		quotaRemaining: row.quota_remaining ?? null,

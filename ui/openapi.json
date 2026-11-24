@@ -1898,7 +1898,7 @@
             "idle_warning": false,
             "key": "example-secret",
             "kind": "api_key",
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1,
             "permission_rules": [
               {
@@ -2009,17 +2009,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "maximum": 86313600.0,
-                "minimum": 86400.0,
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
+            "description": "The new binding's idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -4868,7 +4870,7 @@
             "expires_at": "2026-12-31T23:59:00Z",
             "idle_warning": false,
             "kind": "basic",
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1,
             "password": "example-secret",
             "permission_rules": [
@@ -4969,17 +4971,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "maximum": 86313600.0,
-                "minimum": 86400.0,
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
+            "description": "The new binding's idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -5080,7 +5084,7 @@
             "expires_at": "2026-12-31T23:59:00Z",
             "idle_warning": false,
             "kind": "bearer",
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1,
             "permission_rules": [
               {
@@ -5180,17 +5184,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "maximum": 86313600.0,
-                "minimum": 86400.0,
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
+            "description": "The new binding's idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -6935,7 +6941,7 @@
                 "idle_expires_at": "2026-12-31T23:59:00Z",
                 "idle_warning": false,
                 "last_used_at": "2026-02-03T14:05:00Z",
-                "max_idle_period": 1209600,
+                "max_idle_period": "P14D",
                 "max_quota": 1,
                 "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
                 "quota_remaining": 1,
@@ -6965,7 +6971,7 @@
                   "idle_expires_at": "2026-12-31T23:59:00Z",
                   "idle_warning": false,
                   "last_used_at": "2026-02-03T14:05:00Z",
-                  "max_idle_period": 1209600,
+                  "max_idle_period": "P14D",
                   "max_quota": 1,
                   "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
                   "quota_remaining": 1,
@@ -7023,7 +7029,7 @@
             "idle_expires_at": "2026-12-31T23:59:00Z",
             "idle_warning": false,
             "last_used_at": "2026-02-03T14:05:00Z",
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1,
             "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
             "quota_remaining": 1,
@@ -7142,15 +7148,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Idle limit in seconds: the binding ends once it goes this long without a call. Null when it has none.",
+            "description": "Idle limit (an ISO 8601 duration, e.g. P14D): the binding ends once it goes this long without a call. Null when it has none.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -7255,7 +7265,7 @@
             "credential_id": "cred_6968b39855d91a3561684b32",
             "expires_at": "2026-12-31T23:59:00Z",
             "idle_warning": false,
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1
           }
         ],
@@ -7303,17 +7313,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "maximum": 86313600.0,
-                "minimum": 86400.0,
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Omit for no idle limit.",
+            "description": "Idle limit, as an ISO 8601 duration of weeks, days, hours, minutes or seconds (P1D to P999D, e.g. P14D; no years or months): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Omit for no idle limit.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -7351,7 +7363,7 @@
             "idle_expires_at": "2026-12-31T23:59:00Z",
             "idle_warning": false,
             "last_used_at": "2026-11-20T10:00:00Z",
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1,
             "name": "Stripe production key",
             "quota_remaining": 1,
@@ -7470,15 +7482,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Idle limit in seconds: the binding ends once it goes this long without a call; null when it has none.",
+            "description": "Idle limit (an ISO 8601 duration, e.g. P14D): the binding ends once it goes this long without a call; null when it has none.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -7621,7 +7637,7 @@
                     "last_used_at": "2026-02-03T14:05:00Z"
                   }
                 ],
-                "max_idle_period": 1209600,
+                "max_idle_period": "P14D",
                 "max_quota": 1,
                 "name": "Stripe production key",
                 "quota_remaining": 1,
@@ -7664,7 +7680,7 @@
                       "last_used_at": "2026-02-03T14:05:00Z"
                     }
                   ],
-                  "max_idle_period": 1209600,
+                  "max_idle_period": "P14D",
                   "max_quota": 1,
                   "name": "Stripe production key",
                   "quota_remaining": 1,
@@ -7701,7 +7717,7 @@
             "after_expiry": "refuse",
             "expires_at": "2026-12-31T23:59:00Z",
             "idle_warning": true,
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1
           }
         ],
@@ -7752,17 +7768,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "maximum": 86313600.0,
-                "minimum": 86400.0,
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Send null to remove the idle limit; leave it out to keep it.",
+            "description": "Idle limit, as an ISO 8601 duration of weeks, days, hours, minutes or seconds (P1D to P999D, e.g. P14D; no years or months): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Send null to remove the idle limit; leave it out to keep it.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -7806,7 +7824,7 @@
                 "last_used_at": "2026-02-03T14:05:00Z"
               }
             ],
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1,
             "name": "Stripe production key",
             "quota_remaining": 1,
@@ -7956,15 +7974,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Null when it has no idle limit.",
+            "description": "Idle limit, as an ISO 8601 duration of weeks, days, hours, minutes or seconds (P1D to P999D, e.g. P14D; no years or months): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Null when it has no idle limit.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -8714,7 +8736,7 @@
                 "after_expiry": "hold",
                 "expires_at": "2026-02-15T09:30:00Z",
                 "idle_warning": false,
-                "max_idle_period": 1209600,
+                "max_idle_period": "P14D",
                 "max_quota": 1
               }
             ]
@@ -10369,7 +10391,7 @@
                     "last_used_at": "2026-02-03T14:05:00Z"
                   }
                 ],
-                "max_idle_period": 1209600,
+                "max_idle_period": "P14D",
                 "max_quota": 1,
                 "name": "Stripe production key",
                 "quota_remaining": 1,
@@ -10415,7 +10437,7 @@
                       "last_used_at": "2026-02-03T14:05:00Z"
                     }
                   ],
-                  "max_idle_period": 1209600,
+                  "max_idle_period": "P14D",
                   "max_quota": 1,
                   "name": "Stripe production key",
                   "quota_remaining": 1,
@@ -10469,7 +10491,7 @@
                 "last_used_at": "2026-02-03T14:05:00Z"
               }
             ],
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1,
             "name": "Stripe production key",
             "quota_remaining": 1,
@@ -10645,15 +10667,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Null when it has no idle limit.",
+            "description": "Idle limit, as an ISO 8601 duration of weeks, days, hours, minutes or seconds (P1D to P999D, e.g. P14D; no years or months): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Null when it has no idle limit.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -11732,7 +11758,7 @@
             "expires_at": "2026-12-31T23:59:00Z",
             "idle_warning": false,
             "kind": "existing_credential",
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1,
             "permission_rules": [
               {
@@ -11840,17 +11866,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "maximum": 86313600.0,
-                "minimum": 86400.0,
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
+            "description": "The new binding's idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -12165,7 +12193,7 @@
             "after_expiry": "hold",
             "expires_at": "2026-02-15T09:30:00Z",
             "idle_warning": false,
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1
           }
         ],
@@ -12210,17 +12238,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "maximum": 86313600.0,
-                "minimum": 86400.0,
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "New idle limit in seconds (1 day to 999 days); null for none.",
+            "description": "New idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D); null for none.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -12342,7 +12372,7 @@
               "expires_at": "2026-01-10T00:00:00Z",
               "idle_warning": false,
               "last_used_at": "2026-01-01T09:30:00Z",
-              "max_idle_period": 1209600,
+              "max_idle_period": "P14D",
               "max_quota": 1,
               "quota_remaining": 0,
               "renew_on_decide": true
@@ -12604,7 +12634,7 @@
                 "expires_at": "2026-01-10T00:00:00Z",
                 "idle_warning": false,
                 "last_used_at": "2026-01-01T09:30:00Z",
-                "max_idle_period": 1209600,
+                "max_idle_period": "P14D",
                 "max_quota": 1,
                 "quota_remaining": 0,
                 "renew_on_decide": true
@@ -13271,7 +13301,7 @@
             "expires_at": "2026-01-10T00:00:00Z",
             "idle_warning": false,
             "last_used_at": "2026-01-01T09:30:00Z",
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1,
             "quota_remaining": 0,
             "renew_on_decide": true
@@ -13349,15 +13379,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Its current idle limit in seconds.",
+            "description": "Its current idle limit, as an ISO 8601 duration.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -13573,7 +13607,7 @@
             "preferred_flow": "authorization_code",
             "reason": "Needs read access to triage issues in the platform repo.",
             "requested_expires_in": 604800,
-            "requested_max_idle_period": 1209600,
+            "requested_max_idle_period": "P14D",
             "requested_permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -13721,17 +13755,19 @@
           "requested_max_idle_period": {
             "anyOf": [
               {
-                "maximum": 86313600.0,
-                "minimum": 86400.0,
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "The idle limit to ask for, in seconds (1 to 999 days): the access would end once it goes this long without a call. Shown on the review page; the approver decides.",
+            "description": "The idle limit to ask for, as an ISO 8601 duration (P1D to P999D, e.g. P14D): the access would end once it goes this long without a call. Shown on the review page; the approver decides.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "requested_permission_rules": {
@@ -14442,7 +14478,7 @@
                 "idle_expires_at": "2026-12-31T23:59:00Z",
                 "idle_warning": false,
                 "last_used_at": "2026-11-20T10:00:00Z",
-                "max_idle_period": 1209600,
+                "max_idle_period": "P14D",
                 "max_quota": 1,
                 "name": "Stripe production key",
                 "quota_remaining": 1,
@@ -14504,7 +14540,7 @@
                   "idle_expires_at": "2026-12-31T23:59:00Z",
                   "idle_warning": false,
                   "last_used_at": "2026-11-20T10:00:00Z",
-                  "max_idle_period": 1209600,
+                  "max_idle_period": "P14D",
                   "max_quota": 1,
                   "name": "Stripe production key",
                   "quota_remaining": 1,
@@ -17624,7 +17660,7 @@
             "expires_at": "2026-12-31T23:59:00Z",
             "idle_warning": false,
             "kind": "oauth",
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1,
             "permission_rules": [
               {
@@ -17744,17 +17780,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "maximum": 86313600.0,
-                "minimum": 86400.0,
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
+            "description": "The new binding's idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -19939,7 +19977,7 @@
             "expires_at": "2026-12-31T23:59:00Z",
             "idle_warning": false,
             "kind": "own_oauth_client",
-            "max_idle_period": 1209600,
+            "max_idle_period": "P14D",
             "max_quota": 1,
             "permission_rules": [
               {
@@ -20083,17 +20121,19 @@
           "max_idle_period": {
             "anyOf": [
               {
-                "maximum": 86313600.0,
-                "minimum": 86400.0,
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
+            "description": "The new binding's idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "max_quota": {
@@ -22454,7 +22494,7 @@
             "reason": "Needs read access to triage issues in the platform repo.",
             "requested_by_actor_id": "agnt_6968b3984d1c238dbe7e2e29",
             "requested_expires_in": 604800,
-            "requested_max_idle_period": 1209600,
+            "requested_max_idle_period": "P14D",
             "requested_permission_rules": [
               {
                 "comment": "Lets the agent draft replies, never send them.",
@@ -22752,15 +22792,19 @@
           "requested_max_idle_period": {
             "anyOf": [
               {
-                "type": "integer"
+                "examples": [
+                  "P14D"
+                ],
+                "format": "duration",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "The idle limit the requester asked for, in seconds; null when none.",
+            "description": "The idle limit the requester asked for, as an ISO 8601 duration; null when none.",
             "examples": [
-              1209600
+              "P14D"
             ]
           },
           "requested_permission_rules": {
@@ -28151,7 +28195,7 @@
                           "last_used_at": "2026-02-03T14:05:00Z"
                         }
                       ],
-                      "max_idle_period": 1209600,
+                      "max_idle_period": "P14D",
                       "max_quota": 1,
                       "name": "Stripe production key",
                       "quota_remaining": 1,
@@ -28783,7 +28827,7 @@
                           "last_used_at": "2026-02-03T14:05:00Z"
                         }
                       ],
-                      "max_idle_period": 1209600,
+                      "max_idle_period": "P14D",
                       "max_quota": 1,
                       "name": "Stripe production key",
                       "quota_remaining": 1,
@@ -28890,7 +28934,7 @@
                 "credential_id": "cred_6968b39855d91a3561684b32",
                 "expires_at": "2026-12-31T23:59:00Z",
                 "idle_warning": false,
-                "max_idle_period": 1209600,
+                "max_idle_period": "P14D",
                 "max_quota": 1
               },
               "schema": {
@@ -28924,7 +28968,7 @@
                       "last_used_at": "2026-02-03T14:05:00Z"
                     }
                   ],
-                  "max_idle_period": 1209600,
+                  "max_idle_period": "P14D",
                   "max_quota": 1,
                   "name": "Stripe production key",
                   "quota_remaining": 1,
@@ -29137,7 +29181,7 @@
       },
       "description": "`PATCH`: Renew a credential binding. `DELETE`: Suspend or remove a credential binding.",
       "patch": {
-        "description": "Re-certify a binding: restart its idle clock, and set, extend or clear its limits.\n\n`expires_at` (future only, otherwise 422) sets or moves the end date; null\nclears it. Left out, the binding runs again for as long as it was granted\nfor, capped at the org's maximum (one with no end date takes the maximum,\nor keeps none without one). `max_idle_period` (1 to 999 days, in seconds)\nsets the idle limit; null removes it. Any other field left out stays as it\nis, and every renewal restarts the idle clock, so an empty body\nre-certifies a binding that is still needed. This is how an expired binding is\nrenewed, and it never changes `suspended`: renewing does not resume a\nsuspension, and resuming does not extend an expiry. Renewing re-grants the\ncredential, so it takes the same checks as `:resume`: the caller must own\nthe credential (or hold `org:admin`) as well as see the agent, and an agent\ncannot renew its own binding. Audited; broker caches are invalidated, so\na shortened deadline is checked on every broker. A separate broker may cache a denial\nuntil its binding-cache TTL elapses. Returns the binding.",
+        "description": "Re-certify a binding: restart its idle clock, and set, extend or clear its limits.\n\n`expires_at` (future only, otherwise 422) sets or moves the end date; null\nclears it. Left out, the binding runs again for as long as it was granted\nfor, capped at the org's maximum (one with no end date takes the maximum,\nor keeps none without one). `max_idle_period` (an ISO 8601 duration, P1D to P999D)\nsets the idle limit; null removes it. Any other field left out stays as it\nis, and every renewal restarts the idle clock, so an empty body\nre-certifies a binding that is still needed. This is how an expired binding is\nrenewed, and it never changes `suspended`: renewing does not resume a\nsuspension, and resuming does not extend an expiry. Renewing re-grants the\ncredential, so it takes the same checks as `:resume`: the caller must own\nthe credential (or hold `org:admin`) as well as see the agent, and an agent\ncannot renew its own binding. Audited; broker caches are invalidated, so\na shortened deadline is checked on every broker. A separate broker may cache a denial\nuntil its binding-cache TTL elapses. Returns the binding.",
         "operationId": "renewAgentCredentialBinding",
         "parameters": [
           {
@@ -29188,7 +29232,7 @@
                 "after_expiry": "refuse",
                 "expires_at": "2026-12-31T23:59:00Z",
                 "idle_warning": true,
-                "max_idle_period": 1209600,
+                "max_idle_period": "P14D",
                 "max_quota": 1
               },
               "schema": {
@@ -29222,7 +29266,7 @@
                       "last_used_at": "2026-02-03T14:05:00Z"
                     }
                   ],
-                  "max_idle_period": 1209600,
+                  "max_idle_period": "P14D",
                   "max_quota": 1,
                   "name": "Stripe production key",
                   "quota_remaining": 1,
@@ -29366,7 +29410,7 @@
                       "last_used_at": "2026-02-03T14:05:00Z"
                     }
                   ],
-                  "max_idle_period": 1209600,
+                  "max_idle_period": "P14D",
                   "max_quota": 1,
                   "name": "Stripe production key",
                   "quota_remaining": 1,
@@ -34650,7 +34694,7 @@
                   "reason": "Needs read access to triage issues in the platform repo.",
                   "requested_by_actor_id": "agnt_6968b3984d1c238dbe7e2e29",
                   "requested_expires_in": 604800,
-                  "requested_max_idle_period": 1209600,
+                  "requested_max_idle_period": "P14D",
                   "requested_permission_rules": [
                     {
                       "comment": "Lets the agent draft replies, never send them.",
@@ -36150,7 +36194,7 @@
                       "idle_expires_at": "2026-12-31T23:59:00Z",
                       "idle_warning": false,
                       "last_used_at": "2026-02-03T14:05:00Z",
-                      "max_idle_period": 1209600,
+                      "max_idle_period": "P14D",
                       "max_quota": 1,
                       "owner_id": "usr_6968b3987ee4c3ec0b4ee3b9",
                       "quota_remaining": 1,
@@ -38564,7 +38608,7 @@
                     "expires_at": "2026-01-10T00:00:00Z",
                     "idle_warning": false,
                     "last_used_at": "2026-01-01T09:30:00Z",
-                    "max_idle_period": 1209600,
+                    "max_idle_period": "P14D",
                     "max_quota": 1,
                     "quota_remaining": 0,
                     "renew_on_decide": true
@@ -39732,7 +39776,7 @@
                 "preferred_flow": "authorization_code",
                 "reason": "Needs read access to triage issues in the platform repo.",
                 "requested_expires_in": 604800,
-                "requested_max_idle_period": 1209600,
+                "requested_max_idle_period": "P14D",
                 "requested_permission_rules": [
                   {
                     "comment": "Lets the agent draft replies, never send them.",

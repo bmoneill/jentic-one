@@ -278,7 +278,7 @@ describe('Renewal holds (access ended)', () => {
 				expired_reason: 'idle',
 				last_used_at: new Date(Date.now() - 15 * 86_400_000).toISOString(),
 				expires_at: null,
-				max_idle_period: 14 * 86_400,
+				max_idle_period: 'P14D',
 				idle_warning: false,
 				max_quota: null,
 				quota_remaining: null,
@@ -307,7 +307,7 @@ describe('Renewal holds (access ended)', () => {
 		const body = bodies[0] as {
 			decision: string;
 			run: boolean;
-			renewal: { expires_at: string; max_quota: number; max_idle_period: number | null };
+			renewal: { expires_at: string; max_quota: number; max_idle_period: string | null };
 		};
 		expect(body.decision).toBe('approve');
 		expect(body.run).toBe(true);

@@ -24,9 +24,9 @@ export type GrantRenewalRequest = {
      */
     idle_warning?: boolean;
     /**
-     * New idle limit in seconds (1 day to 999 days); null for none.
+     * New idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D); null for none.
      */
-    max_idle_period?: (number | null);
+    max_idle_period?: (string | null);
     /**
      * New use count (1 is single use); null for unlimited calls.
      */

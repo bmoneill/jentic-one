@@ -240,7 +240,7 @@ func newConnectCmd(a *app) *cobra.Command {
 				body.RequestedExpiresIn = &expiresInSeconds
 			}
 			if maxIdleSeconds > 0 {
-				body.RequestedMaxIdlePeriod = &maxIdleSeconds
+				body.RequestedMaxIdlePeriod = isoIdlePeriod(maxIdleSeconds)
 			}
 			// Never set body.AgentId: an agent caller IS the agent (the
 			// control plane injects the identity and refuses an override);
@@ -348,7 +348,7 @@ func newConnectCmd(a *app) *cobra.Command {
 	cmd.Flags().StringVar(&expiresIn, "expires-in", "",
 		"how long you need the access, e.g. 7d, 8h or 30m (the approver decides the actual end date)")
 	cmd.Flags().StringVar(&maxIdle, "max-idle", "",
-		"ask for the access to end once unused this long, e.g. 14d (1d to 999d; the approver decides)")
+		"ask for the access to end once unused this long, e.g. 14d or P14D (1d to 999d; the approver decides)")
 	cmd.Flags().BoolVar(&wait, "wait", false,
 		"poll the session until it connects or ends (rejected, expired, or cancelled)")
 	cmd.Flags().DurationVar(&timeout, "timeout", connectWaitDefault,

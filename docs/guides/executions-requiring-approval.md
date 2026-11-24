@@ -163,8 +163,8 @@ access ended and its owner has been asked to renew it.
   other call through the binding gets `403 credential_binding_expired` with
   the pending review's `review_url` and `held_execution_id`. Renewal holds do
   not count against `held_executions.max_pending_per_agent`.
-- **Deciding.** Approve with the binding's fresh policy:
-  `{"decision": "approve", "renewal": {"expires_at": "…", "max_idle_period": …,
+- **Deciding.** Approve with the binding's new policy:
+  `{"decision": "approve", "renewal": {"expires_at": "…", "max_idle_period": "P14D",
   "idle_warning": false, "max_quota": 1}}` (each limit left out sets none,
   except the end date: left out, the binding runs again for as long as it was
   granted for, capped at the org's maximum; `null` sets no end date).

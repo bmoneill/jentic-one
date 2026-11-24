@@ -7,6 +7,7 @@
  * `@/shared/api`. Swap to generated services when `make openapi` runs.
  */
 
+import { isoDuration, isoDurationOrNull } from '@/shared/lib';
 import {
 	AgentsService,
 	CredentialsService,
@@ -161,7 +162,7 @@ export async function bindCredentialToAgentBlocked(
 			requestBody: {
 				credential_id: credentialId,
 				...(expiresAt !== undefined ? { expires_at: expiresAt } : {}),
-				...(maxIdlePeriod != null ? { max_idle_period: maxIdlePeriod } : {}),
+				...(maxIdlePeriod != null ? { max_idle_period: isoDuration(maxIdlePeriod) } : {}),
 				...(idleWarning ? { idle_warning: true } : {}),
 				...(maxQuota != null ? { max_quota: maxQuota } : {}),
 				// Left out, the binding holds the first call after it ends.
@@ -224,7 +225,7 @@ export async function renewCredentialBinding(
 			requestBody: {
 				...(renewal.expiresAt !== undefined ? { expires_at: renewal.expiresAt } : {}),
 				...(renewal.maxIdlePeriod !== undefined
-					? { max_idle_period: renewal.maxIdlePeriod }
+					? { max_idle_period: isoDurationOrNull(renewal.maxIdlePeriod) }
 					: {}),
 				...(renewal.idleWarning !== undefined ? { idle_warning: renewal.idleWarning } : {}),
 				...(renewal.maxQuota !== undefined ? { max_quota: renewal.maxQuota } : {}),

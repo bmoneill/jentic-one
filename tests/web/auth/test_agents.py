@@ -803,7 +803,7 @@ def test_renew_without_expires_at_reruns_the_grant_and_restarts_the_idle_clock(
         json={
             "credential_id": control_credential_id,
             "expires_at": expires.isoformat(),
-            "max_idle_period": 7 * 86_400,
+            "max_idle_period": "P7D",
         },
     )
     assert resp.status_code == 201
@@ -818,7 +818,7 @@ def test_renew_without_expires_at_reruns_the_grant_and_restarts_the_idle_clock(
     assert abs(datetime.fromisoformat(body["expires_at"]) - (renewed + length)) < timedelta(
         seconds=1
     )
-    assert body["max_idle_period"] == 7 * 86_400
+    assert body["max_idle_period"] == "P7D"
     assert datetime.fromisoformat(body["idle_expires_at"]) == renewed + timedelta(days=7)
 
     resp = admin_client.patch(f"{url}/{control_credential_id}", json={"unknown": 1})
@@ -840,18 +840,18 @@ def test_bind_with_idle_limit_then_change_and_remove_it(
 ) -> None:
     url = f"/agents/{binding_agent_id}/credentials"
     resp = admin_client.post(
-        url, json={"credential_id": control_credential_id, "max_idle_period": 14 * 86_400}
+        url, json={"credential_id": control_credential_id, "max_idle_period": "P2W"}
     )
     assert resp.status_code == 201
     body = resp.json()
-    assert body["max_idle_period"] == 14 * 86_400
+    assert body["max_idle_period"] == "P14D"
     assert body["expires_at"] is None
     assert body["expired"] is False
     assert body["idle_expires_at"] is not None
 
-    resp = admin_client.patch(f"{url}/{control_credential_id}", json={"max_idle_period": 86_400})
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={"max_idle_period": "PT24H"})
     assert resp.status_code == 200
-    assert resp.json()["max_idle_period"] == 86_400
+    assert resp.json()["max_idle_period"] == "P1D"
 
     resp = admin_client.patch(f"{url}/{control_credential_id}", json={"max_idle_period": None})
     assert resp.status_code == 200
@@ -859,9 +859,19 @@ def test_bind_with_idle_limit_then_change_and_remove_it(
     assert resp.json()["idle_expires_at"] is None
 
 
-@pytest.mark.parametrize("seconds", [3_600, 86_399, 1_000 * 86_400])
+@pytest.mark.parametrize(
+    "seconds",
+    [
+        pytest.param("PT1H", id="under-a-day"),
+        pytest.param("PT86399S", id="a-second-short"),
+        pytest.param("P1000D", id="over-999-days"),
+        pytest.param(1_209_600, id="bare-seconds"),
+        pytest.param("14d", id="not-iso"),
+        pytest.param("P1M", id="months"),
+    ],
+)
 def test_idle_limit_out_of_range_is_422(
-    admin_client: TestClient, binding_agent_id: str, control_credential_id: str, seconds: int
+    admin_client: TestClient, binding_agent_id: str, control_credential_id: str, seconds: object
 ) -> None:
     url = f"/agents/{binding_agent_id}/credentials"
     resp = admin_client.post(
@@ -881,7 +891,7 @@ def test_idle_warning_is_set_on_bind_and_changed_on_renewal(
         url,
         json={
             "credential_id": control_credential_id,
-            "max_idle_period": 14 * 86_400,
+            "max_idle_period": "P14D",
             "idle_warning": True,
         },
     )
@@ -912,7 +922,7 @@ async def test_bindings_ending_soon_lists_warned_bindings_near_their_idle_limit(
         url,
         json={
             "credential_id": control_credential_id,
-            "max_idle_period": 5 * 86_400,
+            "max_idle_period": "P5D",
             "idle_warning": True,
         },
     )

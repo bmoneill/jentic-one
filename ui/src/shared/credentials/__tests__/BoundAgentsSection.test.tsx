@@ -29,7 +29,7 @@ function seedBoundAgents(
 		expires_at?: string | null;
 		expired?: boolean;
 		expired_reason?: string | null;
-		max_idle_period?: number | null;
+		max_idle_period?: string | null;
 		idle_expires_at?: string | null;
 		idle_warning?: boolean;
 		after_expiry?: 'hold' | 'refuse';
@@ -577,7 +577,7 @@ describe('BoundAgentsSection — when access ends', () => {
 			{
 				agent_id: 'agnt_idle',
 				agent_name: 'idle-agent',
-				max_idle_period: 14 * 86_400,
+				max_idle_period: 'P14D',
 				idle_expires_at: new Date(Date.now() - 60_000).toISOString(),
 				expired: true,
 				expired_reason: 'idle',
@@ -613,7 +613,7 @@ describe('BoundAgentsSection — when access ends', () => {
 			{
 				agent_id: 'agnt_warned',
 				agent_name: 'warned-agent',
-				max_idle_period: 14 * 86_400,
+				max_idle_period: 'P14D',
 				idle_expires_at: new Date(Date.now() + 5 * 86_400_000).toISOString(),
 				idle_warning: true,
 			},

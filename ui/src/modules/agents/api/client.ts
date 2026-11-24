@@ -36,7 +36,7 @@ import {
 	type PermissionTestResponse,
 	type RuleSetResponse,
 } from '@/shared/api';
-import { hasTrace } from '@/shared/lib';
+import { hasTrace, isoDurationSeconds } from '@/shared/lib';
 import {
 	agentToEntity,
 	type AgentEntity,
@@ -204,7 +204,7 @@ function bindingToEntity(r: CredentialBindingResponse): CredentialBindingEntity 
 		expiresAt: r.expires_at ?? null,
 		expired: r.expired ?? false,
 		expiredReason: r.expired_reason ?? null,
-		maxIdlePeriod: r.max_idle_period ?? null,
+		maxIdlePeriod: isoDurationSeconds(r.max_idle_period),
 		idleExpiresAt: r.idle_expires_at ?? null,
 		idleWarning: r.idle_warning ?? false,
 		afterExpiry: r.after_expiry ?? 'hold',

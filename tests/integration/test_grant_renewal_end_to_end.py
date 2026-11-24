@@ -410,14 +410,14 @@ async def test_a_denied_renewal_refuses_calls_until_the_owner_renews(
     assert again["held_execution_id"] != held_id
 
 
-async def test_only_a_reviewer_who_may_renew_can_grant_fresh_access(
+async def test_only_a_reviewer_who_may_renew_can_regrant_access(
     integration_context: Context, parties: _Parties
 ) -> None:
     ctx = integration_context
     held_id = (await _call(ctx, parties.agent, credential_id=_OTHERS_CREDENTIAL))[
         "held_execution_id"
     ]
-    renewal = {"decision": "approve", "renewal": {"max_idle_period": 14 * 86_400}}
+    renewal = {"decision": "approve", "renewal": {"max_idle_period": "P14D"}}
     # The agent's owner may decide, but the credential is someone else's.
     async with _admin_client(ctx, parties.owner) as client:
         detail = (await client.get(f"/executions/holds/{held_id}")).json()
@@ -433,7 +433,7 @@ async def test_only_a_reviewer_who_may_renew_can_grant_fresh_access(
     assert (await _binding(ctx, _OTHERS_CREDENTIAL)).max_idle_period == 14 * 86_400
 
 
-async def test_fresh_access_respects_the_org_maximum(
+async def test_regranted_access_respects_the_org_maximum(
     integration_context: Context, parties: _Parties, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ctx = integration_context

@@ -29,7 +29,7 @@ describe('rail — credential_grant.idle_expiring', () => {
 				agent_id: 'agnt_scout',
 				credential_id: 'cred_1',
 				idle_expires_at: '2026-11-25T12:00:00Z',
-				max_idle_period: 1_209_600,
+				max_idle_period: 'P14D',
 			}),
 		);
 		expect(ev.kind).toBe('credential');

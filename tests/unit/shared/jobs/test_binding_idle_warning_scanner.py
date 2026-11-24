@@ -144,7 +144,7 @@ async def test_warns_once_inside_the_window(admin_db: _MemoryDb) -> None:
     assert event.created_by == "agt_idle"
     assert event.data["agent_id"] == "agt_idle"
     assert event.data["credential_id"] == "crd_soon"
-    assert event.data["max_idle_period"] == 14 * _DAY
+    assert event.data["max_idle_period"] == "P14D"
     assert datetime.fromisoformat(event.data["idle_expires_at"]) == _NOW + timedelta(hours=47)
     assert "Reporter" in event.summary
     assert await _warned_at(admin_db, "crd_soon") is not None

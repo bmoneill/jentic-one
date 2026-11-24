@@ -43,9 +43,9 @@ export type OAuthConfirmSessionRequest = {
      */
     kind?: string;
     /**
-     * The new binding's idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.
+     * The new binding's idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.
      */
-    max_idle_period?: (number | null);
+    max_idle_period?: (string | null);
     /**
      * How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
      */

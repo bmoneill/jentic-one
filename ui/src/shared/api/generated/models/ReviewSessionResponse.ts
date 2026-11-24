@@ -31,9 +31,9 @@ export type ReviewSessionResponse = {
      */
     requested_expires_in?: (number | null);
     /**
-     * The idle limit the requester asked for, in seconds; null when none.
+     * The idle limit the requester asked for, as an ISO 8601 duration; null when none.
      */
-    requested_max_idle_period?: (number | null);
+    requested_max_idle_period?: (string | null);
     requested_permission_rules?: Array<PermissionRuleSchema>;
     requested_scopes?: Array<string>;
     resolved_flow: string;

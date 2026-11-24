@@ -81,6 +81,7 @@ from jentic_one.mcp.envelopes import (
 )
 from jentic_one.shared.auth.durations import parse_duration_seconds
 from jentic_one.shared.models import ActorType
+from jentic_one.shared.schemas.iso_duration import parse_iso_duration
 
 logger = structlog.get_logger()
 
@@ -466,13 +467,21 @@ def _requested_expires_in(raw: object) -> int | None:
 
 
 def _requested_max_idle_period(raw: object) -> int | None:
-    """``requested_max_idle_period`` as seconds, 1 to 999 days (Go: same rule)."""
+    """``requested_max_idle_period`` as seconds, 1 to 999 days (Go: same rule).
+
+    Takes ``14d`` style or an ISO 8601 duration (``P14D``).
+    """
     if raw is None or raw == "":
         return None
     if not isinstance(raw, str):
-        raise invalid_params("requested_max_idle_period must be a duration such as 14d")
+        raise invalid_params("requested_max_idle_period must be a duration such as 14d or P14D")
     try:
-        seconds = parse_duration_seconds(raw)
+        text = raw.strip()
+        seconds = (
+            parse_iso_duration(text)
+            if text.upper().startswith("P")
+            else parse_duration_seconds(text)
+        )
     except ValueError as exc:
         raise invalid_params(f"requested_max_idle_period: {exc}") from None
     if not MIN_IDLE_PERIOD_S <= seconds <= MAX_IDLE_PERIOD_S:

@@ -1177,7 +1177,7 @@ components:
         idle_warning: false
         key: example-secret
         kind: api_key
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
         permission_rules: &id018
         - comment: Lets the agent draft replies, never send them.
@@ -1246,13 +1246,12 @@ components:
           - api_key
           type: string
         max_idle_period:
-          description: 'The new binding''s idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.'
+          description: 'The new binding''s idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.'
           examples:
-          - 1209600
-          maximum: 86313600.0
-          minimum: 86400.0
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
@@ -2903,7 +2902,7 @@ components:
         expires_at: '2026-12-31T23:59:00Z'
         idle_warning: false
         kind: basic
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
         password: example-secret
         permission_rules: &id041
@@ -2964,13 +2963,12 @@ components:
           - basic
           type: string
         max_idle_period:
-          description: 'The new binding''s idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.'
+          description: 'The new binding''s idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.'
           examples:
-          - 1209600
-          maximum: 86313600.0
-          minimum: 86400.0
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
@@ -3032,7 +3030,7 @@ components:
         expires_at: '2026-12-31T23:59:00Z'
         idle_warning: false
         kind: bearer
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
         permission_rules: &id042
         - comment: Lets the agent draft replies, never send them.
@@ -3092,13 +3090,12 @@ components:
           - bearer
           type: string
         max_idle_period:
-          description: 'The new binding''s idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.'
+          description: 'The new binding''s idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.'
           examples:
-          - 1209600
-          maximum: 86313600.0
-          minimum: 86400.0
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
@@ -4145,7 +4142,7 @@ components:
           idle_expires_at: '2026-12-31T23:59:00Z'
           idle_warning: false
           last_used_at: '2026-02-03T14:05:00Z'
-          max_idle_period: 1209600
+          max_idle_period: P14D
           max_quota: 1
           owner_id: usr_6968b3987ee4c3ec0b4ee3b9
           quota_remaining: 1
@@ -4192,7 +4189,7 @@ components:
         idle_expires_at: '2026-12-31T23:59:00Z'
         idle_warning: false
         last_used_at: '2026-02-03T14:05:00Z'
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
         owner_id: usr_6968b3987ee4c3ec0b4ee3b9
         quota_remaining: 1
@@ -4267,11 +4264,12 @@ components:
           - string
           - 'null'
         max_idle_period:
-          description: 'Idle limit in seconds: the binding ends once it goes this long without a call. Null when it has none.'
+          description: 'Idle limit (an ISO 8601 duration, e.g. P14D): the binding ends once it goes this long without a call. Null when it has none.'
           examples:
-          - 1209600
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: How many calls the binding allows before it ends; null for unlimited.
@@ -4333,7 +4331,7 @@ components:
         credential_id: cred_6968b39855d91a3561684b32
         expires_at: '2026-12-31T23:59:00Z'
         idle_warning: false
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
       properties:
         after_expiry:
@@ -4364,13 +4362,12 @@ components:
           - false
           type: boolean
         max_idle_period:
-          description: 'Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Omit for no idle limit.'
+          description: 'Idle limit, as an ISO 8601 duration of weeks, days, hours, minutes or seconds (P1D to P999D, e.g. P14D; no years or months): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Omit for no idle limit.'
           examples:
-          - 1209600
-          maximum: 86313600.0
-          minimum: 86400.0
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Omit for unlimited calls.
@@ -4397,7 +4394,7 @@ components:
         idle_expires_at: '2026-12-31T23:59:00Z'
         idle_warning: false
         last_used_at: '2026-11-20T10:00:00Z'
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
         name: Stripe production key
         quota_remaining: 1
@@ -4471,11 +4468,12 @@ components:
           - string
           - 'null'
         max_idle_period:
-          description: 'Idle limit in seconds: the binding ends once it goes this long without a call; null when it has none.'
+          description: 'Idle limit (an ISO 8601 duration, e.g. P14D): the binding ends once it goes this long without a call; null when it has none.'
           examples:
-          - 1209600
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: How many calls the binding allows before it ends; null for unlimited.
@@ -4555,7 +4553,7 @@ components:
           last_used_at: '2026-02-03T14:05:00Z'
           last_used_by_api:
           - *id063
-          max_idle_period: 1209600
+          max_idle_period: P14D
           max_quota: 1
           name: Stripe production key
           quota_remaining: 1
@@ -4593,7 +4591,7 @@ components:
         after_expiry: refuse
         expires_at: '2026-12-31T23:59:00Z'
         idle_warning: true
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
       properties:
         after_expiry:
@@ -4619,13 +4617,12 @@ components:
           - boolean
           - 'null'
         max_idle_period:
-          description: 'Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Send null to remove the idle limit; leave it out to keep it.'
+          description: 'Idle limit, as an ISO 8601 duration of weeks, days, hours, minutes or seconds (P1D to P999D, e.g. P14D; no years or months): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Send null to remove the idle limit; leave it out to keep it.'
           examples:
-          - 1209600
-          maximum: 86313600.0
-          minimum: 86400.0
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Send null to remove the count; leave it out to keep it (every renewal restores the uses left).
@@ -4654,7 +4651,7 @@ components:
         last_used_at: '2026-02-03T14:05:00Z'
         last_used_by_api: &id065
         - *id063
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
         name: Stripe production key
         quota_remaining: 1
@@ -4746,11 +4743,12 @@ components:
             $ref: '#/components/schemas/ApiLastUseResponse'
           type: array
         max_idle_period:
-          description: 'Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Null when it has no idle limit.'
+          description: 'Idle limit, as an ISO 8601 duration of weeks, days, hours, minutes or seconds (P1D to P999D, e.g. P14D; no years or months): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Null when it has no idle limit.'
           examples:
-          - 1209600
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Null for unlimited calls.
@@ -5189,7 +5187,7 @@ components:
           - after_expiry: hold
             expires_at: '2026-02-15T09:30:00Z'
             idle_warning: false
-            max_idle_period: 1209600
+            max_idle_period: P14D
             max_quota: 1
         run:
           default: true
@@ -6112,7 +6110,7 @@ components:
           last_used_at: '2026-02-03T14:05:00Z'
           last_used_by_api:
           - *id063
-          max_idle_period: 1209600
+          max_idle_period: P14D
           max_quota: 1
           name: Stripe production key
           quota_remaining: 1
@@ -6154,7 +6152,7 @@ components:
         last_used_at: '2026-02-03T14:05:00Z'
         last_used_by_api: &id093
         - *id063
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
         name: Stripe production key
         quota_remaining: 1
@@ -6265,11 +6263,12 @@ components:
             $ref: '#/components/schemas/ApiLastUseResponse'
           type: array
         max_idle_period:
-          description: 'Idle limit, in whole seconds (at least 1 day, at most 999 days): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Null when it has no idle limit.'
+          description: 'Idle limit, as an ISO 8601 duration of weeks, days, hours, minutes or seconds (P1D to P999D, e.g. P14D; no years or months): the binding ends once it has gone this long without a call, and the broker then refuses calls through it with 403 `credential_binding_expired`. Each call restarts the clock (counted at most about hourly), and so does every renewal; a binding that is never used ends one idle period after it was granted. Null when it has no idle limit.'
           examples:
-          - 1209600
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: How many calls the binding allows before it ends (1 is single use); each authorized call takes one, whatever the upstream answers, and renewing restores the count. Null for unlimited calls.
@@ -6880,7 +6879,7 @@ components:
         expires_at: '2026-12-31T23:59:00Z'
         idle_warning: false
         kind: existing_credential
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
         permission_rules: &id105
         - comment: Lets the agent draft replies, never send them.
@@ -6946,13 +6945,12 @@ components:
           - existing_credential
           type: string
         max_idle_period:
-          description: 'The new binding''s idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.'
+          description: 'The new binding''s idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.'
           examples:
-          - 1209600
-          maximum: 86313600.0
-          minimum: 86400.0
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
@@ -7158,7 +7156,7 @@ components:
       - after_expiry: hold
         expires_at: '2026-02-15T09:30:00Z'
         idle_warning: false
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
       properties:
         after_expiry:
@@ -7183,13 +7181,12 @@ components:
           - false
           type: boolean
         max_idle_period:
-          description: New idle limit in seconds (1 day to 999 days); null for none.
+          description: New idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D); null for none.
           examples:
-          - 1209600
-          maximum: 86313600.0
-          minimum: 86400.0
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: New use count (1 is single use); null for unlimited calls.
@@ -7284,7 +7281,7 @@ components:
           expires_at: '2026-01-10T00:00:00Z'
           idle_warning: false
           last_used_at: '2026-01-01T09:30:00Z'
-          max_idle_period: 1209600
+          max_idle_period: P14D
           max_quota: 1
           quota_remaining: 0
           renew_on_decide: true
@@ -7848,7 +7845,7 @@ components:
         expires_at: '2026-01-10T00:00:00Z'
         idle_warning: false
         last_used_at: '2026-01-01T09:30:00Z'
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
         quota_remaining: 0
         renew_on_decide: true
@@ -7895,11 +7892,12 @@ components:
           - string
           - 'null'
         max_idle_period:
-          description: Its current idle limit in seconds.
+          description: Its current idle limit, as an ISO 8601 duration.
           examples:
-          - 1209600
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: Its use count (1 is single use).
@@ -8043,7 +8041,7 @@ components:
         preferred_flow: authorization_code
         reason: Needs read access to triage issues in the platform repo.
         requested_expires_in: 604800
-        requested_max_idle_period: 1209600
+        requested_max_idle_period: P14D
         requested_permission_rules: &id118
         - comment: Lets the agent draft replies, never send them.
           effect: allow
@@ -8119,13 +8117,12 @@ components:
           - integer
           - 'null'
         requested_max_idle_period:
-          description: 'The idle limit to ask for, in seconds (1 to 999 days): the access would end once it goes this long without a call. Shown on the review page; the approver decides.'
+          description: 'The idle limit to ask for, as an ISO 8601 duration (P1D to P999D, e.g. P14D): the access would end once it goes this long without a call. Shown on the review page; the approver decides.'
           examples:
-          - 1209600
-          maximum: 86313600.0
-          minimum: 86400.0
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         requested_permission_rules:
           description: Permission rules proposed for the agent, shown pre-filled on the review page; nothing is bound until confirm.
@@ -10429,7 +10426,7 @@ components:
         expires_at: '2026-12-31T23:59:00Z'
         idle_warning: false
         kind: oauth
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
         permission_rules: &id158
         - comment: Lets the agent draft replies, never send them.
@@ -10498,13 +10495,12 @@ components:
           - oauth
           type: string
         max_idle_period:
-          description: 'The new binding''s idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.'
+          description: 'The new binding''s idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.'
           examples:
-          - 1209600
-          maximum: 86313600.0
-          minimum: 86400.0
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
@@ -11714,7 +11710,7 @@ components:
         expires_at: '2026-12-31T23:59:00Z'
         idle_warning: false
         kind: own_oauth_client
-        max_idle_period: 1209600
+        max_idle_period: P14D
         max_quota: 1
         permission_rules: &id182
         - comment: Lets the agent draft replies, never send them.
@@ -11806,13 +11802,12 @@ components:
           - own_oauth_client
           type: string
         max_idle_period:
-          description: 'The new binding''s idle limit, in seconds (1 to 999 days), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.'
+          description: 'The new binding''s idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as the approver chose it: the binding ends once it goes this long without a call. Null or absent sets none. Ignored when the agent is already bound to the credential.'
           examples:
-          - 1209600
-          maximum: 86313600.0
-          minimum: 86400.0
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         max_quota:
           description: How many calls the new binding allows before it ends (1 is single use). Null or absent sets no count. Ignored when the agent is already bound to the credential.
@@ -13075,7 +13070,7 @@ components:
         reason: Needs read access to triage issues in the platform repo.
         requested_by_actor_id: agnt_6968b3984d1c238dbe7e2e29
         requested_expires_in: 604800
-        requested_max_idle_period: 1209600
+        requested_max_idle_period: P14D
         requested_permission_rules: &id221
         - *id189
         requested_scopes: &id222
@@ -13165,11 +13160,12 @@ components:
           - integer
           - 'null'
         requested_max_idle_period:
-          description: The idle limit the requester asked for, in seconds; null when none.
+          description: The idle limit the requester asked for, as an ISO 8601 duration; null when none.
           examples:
-          - 1209600
+          - P14D
+          format: duration
           type:
-          - integer
+          - string
           - 'null'
         requested_permission_rules:
           examples:
@@ -17197,7 +17193,7 @@ paths:
         `expires_at` (future only, otherwise 422) sets or moves the end date; null
         clears it. Left out, the binding runs again for as long as it was granted
         for, capped at the org's maximum (one with no end date takes the maximum,
-        or keeps none without one). `max_idle_period` (1 to 999 days, in seconds)
+        or keeps none without one). `max_idle_period` (an ISO 8601 duration, P1D to P999D)
         sets the idle limit; null removes it. Any other field left out stays as it
         is, and every renewal restarts the idle clock, so an empty body
         re-certifies a binding that is still needed. This is how an expired binding is

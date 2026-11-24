@@ -9,9 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from jentic_one.shared.auth.grant_policy import (
     AFTER_EXPIRY_DESCRIPTION,
-    MAX_IDLE_PERIOD_SECONDS,
     MAX_QUOTA,
-    MIN_IDLE_PERIOD_SECONDS,
     AfterExpiry,
     GrantEndReason,
 )
@@ -21,6 +19,7 @@ from jentic_one.shared.models.held_executions import (
     HeldExecutionKind,
     HeldExecutionState,
 )
+from jentic_one.shared.schemas.iso_duration import IdlePeriodRequest, IdlePeriodResponse
 from jentic_one.shared.web import openapi_examples as ex
 
 #: Where a held call stands, from held through to its outcome.
@@ -164,8 +163,10 @@ class HeldRenewalContextResponse(BaseModel):
     expires_at: datetime | None = Field(
         default=None, description="Its current end date.", examples=["2026-01-10T00:00:00Z"]
     )
-    max_idle_period: int | None = Field(
-        default=None, description="Its current idle limit in seconds.", examples=[1_209_600]
+    max_idle_period: IdlePeriodResponse | None = Field(
+        default=None,
+        description="Its current idle limit, as an ISO 8601 duration.",
+        examples=["P14D"],
     )
     idle_warning: bool = Field(
         default=False,
@@ -302,12 +303,11 @@ class GrantRenewalRequest(BaseModel):
         ),
         examples=["2026-02-15T09:30:00Z"],
     )
-    max_idle_period: int | None = Field(
+    max_idle_period: IdlePeriodRequest | None = Field(
         default=None,
-        ge=MIN_IDLE_PERIOD_SECONDS,
-        le=MAX_IDLE_PERIOD_SECONDS,
-        description="New idle limit in seconds (1 day to 999 days); null for none.",
-        examples=[1_209_600],
+        description="New idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D);"
+        " null for none.",
+        examples=["P14D"],
     )
     idle_warning: bool = Field(
         default=False,

@@ -33,9 +33,9 @@ export type HeldRenewalContextResponse = {
      */
     last_used_at?: (string | null);
     /**
-     * Its current idle limit in seconds.
+     * Its current idle limit, as an ISO 8601 duration.
      */
-    max_idle_period?: (number | null);
+    max_idle_period?: (string | null);
     /**
      * Its use count (1 is single use).
      */

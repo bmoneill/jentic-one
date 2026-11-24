@@ -293,7 +293,7 @@
             "type": "string"
           },
           "requested_max_idle_period": {
-            "description": "Ask for the access to end once you leave it unused this long (optional), e.g. \"14d\" (1d to 999d). The approver decides; it never cuts you off while you keep using it.",
+            "description": "Ask for the access to end once you leave it unused this long (optional), e.g. \"14d\" or \"P14D\" (1d to 999d). The approver decides; it never cuts you off while you keep using it.",
             "type": "string"
           },
           "requested_permission_rules": {

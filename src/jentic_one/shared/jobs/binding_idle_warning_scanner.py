@@ -38,6 +38,7 @@ from jentic_one.shared.config import GrantExpiryConfig
 from jentic_one.shared.events import emit_event, summary_label
 from jentic_one.shared.jobs.periodic import PeriodicScanner
 from jentic_one.shared.models.events import EventSeverity, EventType
+from jentic_one.shared.schemas.iso_duration import format_iso_duration
 
 if TYPE_CHECKING:
     from jentic_one.shared.db.session import DatabaseSession
@@ -103,7 +104,7 @@ class BindingIdleWarningScanner(PeriodicScanner):
                     summary=f"ends if unused before {_when(deadline)}",
                     data={
                         "idle_expires_at": deadline.isoformat(),
-                        "max_idle_period": row.max_idle_period,
+                        "max_idle_period": format_iso_duration(row.max_idle_period),
                     },
                 ):
                     emitted += 1

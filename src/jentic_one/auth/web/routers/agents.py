@@ -658,7 +658,7 @@ async def renew_credential_binding(
     `expires_at` (future only, otherwise 422) sets or moves the end date; null
     clears it. Left out, the binding runs again for as long as it was granted
     for, capped at the org's maximum (one with no end date takes the maximum,
-    or keeps none without one). `max_idle_period` (1 to 999 days, in seconds)
+    or keeps none without one). `max_idle_period` (an ISO 8601 duration, P1D to P999D)
     sets the idle limit; null removes it. Any other field left out stays as it
     is, and every renewal restarts the idle clock, so an empty body
     re-certifies a binding that is still needed. This is how an expired binding is

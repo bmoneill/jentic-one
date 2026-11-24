@@ -198,7 +198,7 @@ describe('VendorConnectFlow approve — how long the access lasts', () => {
 	it("preselects a requested idle limit and sends the approver's choice", async () => {
 		const seeded = seedManualSession({
 			requested_expires_in: 30 * 86_400,
-			requested_max_idle_period: 14 * 86_400,
+			requested_max_idle_period: 'P14D',
 		});
 		renderApprove(seeded.session_id);
 		const user = userEvent.setup();
@@ -215,8 +215,8 @@ describe('VendorConnectFlow approve — how long the access lasts', () => {
 		await user.click(screen.getByRole('button', { name: 'Connect' }));
 
 		expect(await screen.findByText('Connected to acme-com')).toBeInTheDocument();
-		const body = getMockConnectSessions()[0].confirmBodies[0] as { max_idle_period?: number };
-		expect(body.max_idle_period).toBe(7 * 86_400);
+		const body = getMockConnectSessions()[0].confirmBodies[0] as { max_idle_period?: string };
+		expect(body.max_idle_period).toBe('P7D');
 	});
 
 	it('waits for a choice when nothing was asked, and asks before No expiry', async () => {

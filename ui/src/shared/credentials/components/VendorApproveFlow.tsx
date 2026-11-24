@@ -1,3 +1,4 @@
+import { isoDurationOrNull, isoDurationSeconds } from '@/shared/lib';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -195,7 +196,9 @@ export function VendorApproveFlow({
 		if (durationSeeded.current || !session) return;
 		durationSeeded.current = true;
 		if (requestedDuration) setDuration(requestedDuration);
-		const requestedIdle = idleLimitFromSeconds(session.requested_max_idle_period);
+		const requestedIdle = idleLimitFromSeconds(
+			isoDurationSeconds(session.requested_max_idle_period),
+		);
 		if (requestedIdle) setIdle(requestedIdle);
 	}, [session, requestedDuration]);
 	const scopes: ReviewScope[] = useMemo(() => session?.scopes ?? [], [session]);
@@ -395,7 +398,7 @@ export function VendorApproveFlow({
 		...(review?.agent
 			? {
 					expires_at: expiresAtIso(duration) ?? null,
-					max_idle_period: idleSeconds(idle),
+					max_idle_period: isoDurationOrNull(idleSeconds(idle)),
 					...(expiryWarning(warn, expiresAtFromDuration(duration), idleSeconds(idle))
 						? { idle_warning: true }
 						: {}),
@@ -857,12 +860,18 @@ export function VendorApproveFlow({
 						idleSeconds={idleSeconds(idle)}
 						testIdPrefix="approve"
 					/>
-					{requestedText(requestedDuration, session.requested_max_idle_period) && (
+					{requestedText(
+						requestedDuration,
+						isoDurationSeconds(session.requested_max_idle_period),
+					) && (
 						<p
 							className="text-muted-foreground text-xs"
 							data-testid="approve-duration-requested"
 						>
-							{requestedText(requestedDuration, session.requested_max_idle_period)}
+							{requestedText(
+								requestedDuration,
+								isoDurationSeconds(session.requested_max_idle_period),
+							)}
 						</p>
 					)}
 					<AccessEndFields

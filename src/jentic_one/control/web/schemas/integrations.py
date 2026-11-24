@@ -23,6 +23,7 @@ from jentic_one.shared.auth.grant_policy import (
     WARNING_DESCRIPTION,
     AfterExpiry,
 )
+from jentic_one.shared.schemas.iso_duration import IdlePeriodRequest, IdlePeriodResponse
 from jentic_one.shared.web import openapi_examples as ex
 from jentic_one.shared.web.sensitive import SENSITIVE
 
@@ -306,13 +307,12 @@ class IntegrationsConnectRequest(BaseModel):
             "the binding's actual end date. Omit to ask for nothing in particular."
         ),
     )
-    requested_max_idle_period: int | None = Field(
+    requested_max_idle_period: IdlePeriodRequest | None = Field(
         default=None,
-        ge=MIN_IDLE_PERIOD_S,
-        le=MAX_IDLE_PERIOD_S,
-        examples=[1_209_600],
+        examples=["P14D"],
         description=(
-            "The idle limit to ask for, in seconds (1 to 999 days): the access would end once "
+            "The idle limit to ask for, as an ISO 8601 duration (P1D to P999D, e.g. P14D): "
+            "the access would end once "
             "it goes this long without a call. Shown on the review page; the approver decides."
         ),
     )
@@ -1041,10 +1041,12 @@ class ReviewSessionResponse(BaseModel):
             "when nothing was asked. The approver chooses the actual end date on confirm."
         ),
     )
-    requested_max_idle_period: int | None = Field(
+    requested_max_idle_period: IdlePeriodResponse | None = Field(
         default=None,
-        examples=[1_209_600],
-        description="The idle limit the requester asked for, in seconds; null when none.",
+        examples=["P14D"],
+        description=(
+            "The idle limit the requester asked for, as an ISO 8601 duration; null when none."
+        ),
     )
     provenance: ReviewProvenanceResponse | None = None
     agent: ReviewAgentResponse | None = None
@@ -1226,13 +1228,12 @@ class OAuthConfirmSessionRequest(BaseModel):
         examples=["2026-12-31T23:59:00Z"],
         description=_CONFIRM_EXPIRES_AT_DESCRIPTION,
     )
-    max_idle_period: int | None = Field(
+    max_idle_period: IdlePeriodRequest | None = Field(
         default=None,
-        ge=MIN_IDLE_PERIOD_S,
-        le=MAX_IDLE_PERIOD_S,
-        examples=[1_209_600],
+        examples=["P14D"],
         description=(
-            "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose "
+            "The new binding's idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as "
+            "the approver chose "
             "it: the binding ends once it goes this long without a call. Null or absent sets "
             "none. Ignored when the agent is already bound to the credential."
         ),
@@ -1300,13 +1301,12 @@ class _ReviewedConfirm(BaseModel):
         examples=["2026-12-31T23:59:00Z"],
         description=_CONFIRM_EXPIRES_AT_DESCRIPTION,
     )
-    max_idle_period: int | None = Field(
+    max_idle_period: IdlePeriodRequest | None = Field(
         default=None,
-        ge=MIN_IDLE_PERIOD_S,
-        le=MAX_IDLE_PERIOD_S,
-        examples=[1_209_600],
+        examples=["P14D"],
         description=(
-            "The new binding's idle limit, in seconds (1 to 999 days), as the approver chose "
+            "The new binding's idle limit, as an ISO 8601 duration (P1D to P999D, e.g. P14D), as "
+            "the approver chose "
             "it: the binding ends once it goes this long without a call. Null or absent sets "
             "none. Ignored when the agent is already bound to the credential."
         ),

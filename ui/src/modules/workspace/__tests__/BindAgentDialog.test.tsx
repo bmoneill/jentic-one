@@ -651,7 +651,7 @@ describe('BindAgentDialog — how long the access lasts', () => {
 		expect(bodies[0].body).toEqual({
 			credential_id: 'cred_big',
 			expires_at: null,
-			max_idle_period: 30 * 86_400,
+			max_idle_period: 'P30D',
 		});
 	});
 

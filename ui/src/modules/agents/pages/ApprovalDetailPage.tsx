@@ -21,6 +21,7 @@
  * `renewal.renew_on_decide` false), the page renews the binding through its
  * own renew endpoint, then approves the call.
  */
+import { isoDurationSeconds } from '@/shared/lib';
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { ArrowLeft, ArrowUpRight, CheckSquare } from 'lucide-react';
@@ -110,18 +111,17 @@ function ago(iso: string): string {
 function endedText(renewal: {
 	expired_reason?: string | null;
 	expires_at?: string | null;
-	max_idle_period?: number | null;
+	max_idle_period?: string | null;
 	max_quota?: number | null;
 }): string {
+	const idle = isoDurationSeconds(renewal.max_idle_period);
 	switch (renewal.expired_reason) {
 		case 'end_date':
 			return renewal.expires_at
 				? `End date passed ${ago(renewal.expires_at)}`
 				: 'End date passed';
 		case 'idle':
-			return renewal.max_idle_period
-				? `Unused for ${idleLabel(renewal.max_idle_period)}`
-				: 'Unused too long';
+			return idle ? `Unused for ${idleLabel(idle)}` : 'Unused too long';
 		case 'uses':
 			return renewal.max_quota === 1
 				? 'Already used once'

@@ -236,6 +236,6 @@ async def test_http_refuses_an_idle_limit_under_a_day(env: Context) -> None:
     await import_spec(env, KEY_SCHEME)
     async with client(env, AGENT) as agent:
         refused = await agent.post(
-            "/integrations:connect", json={**API_BODY, "requested_max_idle_period": 3_600}
+            "/integrations:connect", json={**API_BODY, "requested_max_idle_period": "PT1H"}
         )
     assert refused.status_code == 422, refused.text

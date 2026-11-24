@@ -22,6 +22,7 @@
  * `useCanApproveConnectRequests`, `useCanDecideApprovals`) makes no request
  * for it.
  */
+import { isoDurationSeconds } from '@/shared/lib';
 import { useMemo, type ReactNode } from 'react';
 import { AGENTS_READ, useCanAccess } from '@/shared/auth';
 import { AppLink, Tooltip, UserText } from '@/shared/ui';
@@ -320,7 +321,7 @@ function endsLabel(binding: EndingSoonBindingResponse): string {
 			? bindingExpiryLabel({
 					expiresAt: null,
 					expired: false,
-					maxIdlePeriod: binding.max_idle_period ?? null,
+					maxIdlePeriod: isoDurationSeconds(binding.max_idle_period),
 					idleExpiresAt: binding.ends_at,
 				})
 			: bindingExpiryLabel({ expiresAt: binding.ends_at, expired: false });
