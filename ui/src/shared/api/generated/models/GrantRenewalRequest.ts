@@ -4,7 +4,7 @@
 /* eslint-disable */
 import type { AfterExpiry } from './AfterExpiry';
 /**
- * Fresh access for an ended binding.
+ * Re-grant access for an ended binding.
  *
  * Every field left out sets no such limit, except the end date: left out, the
  * binding runs again for as long as it was granted for, capped at the org's

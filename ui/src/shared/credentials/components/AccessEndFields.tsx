@@ -3,9 +3,9 @@
  * the limits: "Warn me before this access ends" (off to start) and "After
  * access ends" (hold the first denied request, or let the agent ask).
  *
- * The warning box is usable once the access has a deadline worth warning
- * about (an end date at least 4 days away, or an idle limit of 4 days or
- * more); otherwise it is disabled and says why. Controlled.
+ * The warning box is shown only when it is an option: the access has an end
+ * date or an idle limit, and neither is under 4 days. Otherwise it is hidden
+ * (and nothing is warned about). Controlled.
  */
 import { useId } from 'react';
 import { Checkbox, Select } from '@/shared/ui';
@@ -38,28 +38,29 @@ export function AccessEndFields({
 	const option = AFTER_EXPIRY_OPTIONS.find((o) => o.value === afterExpiry);
 	return (
 		<div className="space-y-2" data-testid={`${testIdPrefix}-access-end`}>
-			<div className="space-y-0.5">
-				<div data-testid={`${testIdPrefix}-idle-warning`}>
-					<Checkbox
-						size="sm"
-						checked={warnable && warn}
-						disabled={disabled || !warnable}
-						onChange={(on): void => onWarnChange(on)}
+			{warnable && (
+				<div className="space-y-0.5">
+					<div data-testid={`${testIdPrefix}-idle-warning`}>
+						<Checkbox
+							size="sm"
+							checked={warn}
+							disabled={disabled}
+							onChange={(on): void => onWarnChange(on)}
+						>
+							<span className="text-foreground text-sm">
+								Warn me before this access ends
+							</span>
+						</Checkbox>
+					</div>
+					<p
+						className="text-muted-foreground pl-6 text-xs"
+						data-testid={`${testIdPrefix}-idle-warning-hint`}
 					>
-						<span className="text-foreground text-sm">
-							Warn me before this access ends
-						</span>
-					</Checkbox>
+						Up to 48 hours before the end date or idle limit, in &ldquo;Waiting for
+						you&rdquo; and the event stream.
+					</p>
 				</div>
-				<p
-					className="text-muted-foreground pl-6 text-xs"
-					data-testid={`${testIdPrefix}-idle-warning-hint`}
-				>
-					{warnable
-						? 'Up to 48 hours before the end date or idle limit, in "Waiting for you" and the event stream.'
-						: 'Warnings need an end date at least 4 days away or an idle limit of 4 days or more.'}
-				</p>
-			</div>
+			)}
 			<div className="space-y-1">
 				<label htmlFor={selectId} className="text-foreground block text-sm">
 					After access ends

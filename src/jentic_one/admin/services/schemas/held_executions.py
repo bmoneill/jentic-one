@@ -65,7 +65,7 @@ class RenewalContextView(BaseModel):
     after_expiry: str = "hold"
     max_quota: int | None = None
     quota_remaining: int | None = None
-    #: Whether the reader may grant fresh access (else only deny).
+    #: Whether the reader may re-grant access (else only deny).
     can_renew: bool = False
     #: Whether approving can renew the binding itself (``renewal`` on the
     #: decision). False where this process cannot read the control database (a

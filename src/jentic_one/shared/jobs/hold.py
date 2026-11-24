@@ -644,12 +644,12 @@ def approval_denied_problem(approval_id: str, reason: str | None) -> dict[str, A
 
 
 def renewed_without_run_problem(approval_id: str) -> dict[str, Any]:
-    """Result body for a renewal hold whose reviewer gave fresh access but dropped the call."""
+    """Result body for a renewal hold whose reviewer re-granted access but dropped the call."""
     return _approval_problem(
         type=APPROVAL_RENEWED_WITHOUT_RUN_TYPE,
         title="Access renewed; held call not run",
         detail=(
-            "A reviewer gave this agent fresh access but did not run the held call; "
+            "A reviewer re-granted this agent access but did not run the held call; "
             "send it again if it is still needed"
         ),
         approval_id=approval_id,

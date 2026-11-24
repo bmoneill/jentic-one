@@ -7149,7 +7149,7 @@ components:
     GrantRenewalRequest:
       additionalProperties: false
       description: |-
-        Fresh access for an ended binding.
+        Re-grant access for an ended binding.
 
         Every field left out sets no such limit, except the end date: left out, the
         binding runs again for as long as it was granted for, capped at the org's
@@ -7404,7 +7404,7 @@ components:
         kind:
           $ref: '#/components/schemas/HeldExecutionKind'
           default: execution
-          description: 'Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent''s binding to the credential has ended; approving gives it fresh access first).'
+          description: 'Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent''s binding to the credential has ended; approving re-grants its access first).'
           examples:
           - execution
         matched_rule_id:
@@ -7491,7 +7491,7 @@ components:
 
         ``execution``: a ``require-approval`` rule matched; approving runs it.
         ``grant_renewal``: the agent's binding to the credential has ended (its end
-        date, idle limit or uses); approving gives the binding fresh access first,
+        date, idle limit or uses); approving re-grants the binding first,
         and may then run the call.
       enum:
       - execution
@@ -7709,7 +7709,7 @@ components:
         kind:
           $ref: '#/components/schemas/HeldExecutionKind'
           default: execution
-          description: 'Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent''s binding to the credential has ended; approving gives it fresh access first).'
+          description: 'Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent''s binding to the credential has ended; approving re-grants its access first).'
           examples:
           - execution
         matched_rule_id:
@@ -7861,7 +7861,7 @@ components:
           - hold
         can_renew:
           default: false
-          description: 'Whether the caller may grant fresh access (else it can only deny): a person who owns the agent and the credential, or an `org:admin`.'
+          description: 'Whether the caller may re-grant access (else it can only deny): a person who owns the agent and the credential, or an `org:admin`.'
           examples:
           - true
           type: boolean

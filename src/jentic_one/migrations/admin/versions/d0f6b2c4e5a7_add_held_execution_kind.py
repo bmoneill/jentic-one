@@ -2,7 +2,7 @@
 
 Adds ``kind`` (``execution`` or ``grant_renewal``, default ``execution``) to
 ``held_executions``. A ``grant_renewal`` hold is filed when an agent calls
-through a binding that has ended: its owner can give the binding fresh access
+through a binding that has ended: its owner can re-grant the binding
 and run the call. Every existing hold is an ``execution`` hold.
 
 A partial unique index keeps one pending renewal per binding

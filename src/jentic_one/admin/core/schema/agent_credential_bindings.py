@@ -111,7 +111,8 @@ class AgentCredentialBinding(AuditableMixin, AdminBase):
         String(16), nullable=False, default="hold", server_default=text("'hold'")
     )
     # Use count (NULL = unlimited): the binding ends once ``quota_remaining``
-    # reaches zero. The broker takes one use per authorized call with an
+    # reaches zero. The broker takes one use per call through it (failed or
+    # refused calls included) with an
     # atomic decrement; a renewal restores it to ``max_quota``.
     max_quota: Mapped[int | None] = mapped_column(Integer, nullable=True)
     quota_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)

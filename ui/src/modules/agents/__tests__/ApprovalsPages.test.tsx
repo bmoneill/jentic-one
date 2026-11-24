@@ -288,7 +288,7 @@ describe('Renewal holds (access ended)', () => {
 		});
 	}
 
-	it('says why access ended and grants fresh access, then runs the call', async () => {
+	it('says why access ended and re-grants access, then runs the call', async () => {
 		const row = seedRenewal(true);
 		const bodies: unknown[] = [];
 		worker.events.on('request:start', async ({ request }) => {
@@ -297,7 +297,7 @@ describe('Renewal holds (access ended)', () => {
 		const { container } = renderDetail(row.id);
 		expect(await screen.findByTestId('renewal-ended')).toHaveTextContent('Unused for 14 days');
 		const grant = screen.getByTestId('renewal-grant-and-run');
-		// Nothing preselected: fresh access waits for a choice.
+		// Nothing preselected: re-granting waits for a choice.
 		expect(grant).toBeDisabled();
 		await userEvent.selectOptions(screen.getByTestId('renewal-duration-preset'), '7d');
 		await userEvent.click(screen.getByText('End after one use'));

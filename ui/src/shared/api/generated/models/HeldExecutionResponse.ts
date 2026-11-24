@@ -63,7 +63,7 @@ export type HeldExecutionResponse = {
      */
     id: string;
     /**
-     * Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent's binding to the credential has ended; approving gives it fresh access first).
+     * Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent's binding to the credential has ended; approving re-grants its access first).
      */
     kind?: HeldExecutionKind;
     /**

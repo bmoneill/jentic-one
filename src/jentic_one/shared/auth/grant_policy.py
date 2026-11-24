@@ -12,7 +12,8 @@ of them is reached:
   period after it was granted, and a renewal restarts the clock without
   counting as a use;
 - a use count (``max_quota``): the grant ends once ``quota_remaining`` reaches
-  zero. The broker takes one use per authorized call with an atomic
+  zero. The broker takes one use per call through the grant, failed or not
+  (a call its rules refuse included), with an atomic
   decrement, and a renewal restores the count. Single use is ``max_quota=1``.
 
 This module is the one place that decides it, so the broker, the auth surface

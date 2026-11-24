@@ -399,7 +399,7 @@ class HeldExecutionService:
         *,
         identity: Identity,
     ) -> bool:
-        """Give a ``grant_renewal`` hold's binding fresh access before approving it.
+        """Re-grant a ``grant_renewal`` hold's binding before approving it.
 
         Returns whether it did. Only approving a renewal hold renews, and only
         with the fresh policy and a reviewer who may renew the binding directly

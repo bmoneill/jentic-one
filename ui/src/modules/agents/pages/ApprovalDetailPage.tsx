@@ -215,7 +215,7 @@ export default function ApprovalDetailPage() {
 				subtitle={
 					approval
 						? renewalHold
-							? `${agentName}'s access to ${approval.api_name} has ended. Grant fresh access to let this call run.`
+							? `${agentName}'s access to ${approval.api_name} has ended. Re-grant access to let this call run.`
 							: `${agentName} wants to make this call. It runs once if approved.`
 						: "An agent's call is waiting on a human decision."
 				}

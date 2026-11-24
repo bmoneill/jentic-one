@@ -10,7 +10,7 @@
  *     owner (or an org admin) to approve or deny it. Its Review links open the
  *     approval's review page, the address the broker returns as `review_url`.
  *     A call held because the agent's access ended gets its own row ("needs
- *     fresh access to …"), linking to the same review page.
+ *     access to … re-granted"), linking to the same review page.
  *   - access ending soon — a binding whose owner asked to be warned will
  *     reach its end date, or its idle limit unless the agent uses it, within
  *     two days. Review opens the agent, whose API tile renews it.

@@ -13,7 +13,7 @@ export type HeldRenewalContextResponse = {
      */
     after_expiry?: AfterExpiry;
     /**
-     * Whether the caller may grant fresh access (else it can only deny): a person who owns the agent and the credential, or an `org:admin`.
+     * Whether the caller may re-grant access (else it can only deny): a person who owns the agent and the credential, or an `org:admin`.
      */
     can_renew?: boolean;
     /**

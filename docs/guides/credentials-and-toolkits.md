@@ -137,8 +137,9 @@ The outcomes:
   a call, counted from its last use or its last renewal, whichever is later
   (the broker records use about once an hour). Any limit reached ends the
   binding. A binding can also carry a use count (`max_quota`; 1 is single
-  use): each authorized call takes one use, whatever the upstream answers,
-  and the binding ends when none is left (`quota_remaining` reaches 0). A
+  use): every call through the binding takes one use and restarts the idle
+  clock, whether it succeeds or fails (refused by the binding's permission
+  rules, a failed token refresh, an upstream error), and the binding ends when none is left (`quota_remaining` reaches 0). A
   binding with a count is checked on every call, never from a cache.
   Binding responses and `/me` report `expired` with `expired_reason`, naming
   the limit that ended it (`end_date`, `idle` or `uses`), and

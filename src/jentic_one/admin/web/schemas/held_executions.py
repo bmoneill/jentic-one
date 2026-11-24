@@ -82,8 +82,8 @@ class HeldExecutionResponse(BaseModel):
     kind: HeldExecutionKind = Field(
         default=HeldExecutionKind.EXECUTION,
         description="Why the call is held: `execution` (a require-approval rule matched) or "
-        "`grant_renewal` (the agent's binding to the credential has ended; approving gives it "
-        "fresh access first).",
+        "`grant_renewal` (the agent's binding to the credential has ended; approving re-grants "
+        "its access first).",
         examples=["execution"],
     )
     execution_status: HeldExecutionStatus | None = Field(
@@ -185,7 +185,7 @@ class HeldRenewalContextResponse(BaseModel):
     )
     can_renew: bool = Field(
         default=False,
-        description="Whether the caller may grant fresh access (else it can only deny): a "
+        description="Whether the caller may re-grant access (else it can only deny): a "
         "person who owns the agent and the credential, or an `org:admin`.",
         examples=[True],
     )
@@ -285,7 +285,7 @@ class HeldExecutionListResponse(BaseModel):
 
 
 class GrantRenewalRequest(BaseModel):
-    """Fresh access for an ended binding.
+    """Re-grant access for an ended binding.
 
     Every field left out sets no such limit, except the end date: left out, the
     binding runs again for as long as it was granted for, capped at the org's

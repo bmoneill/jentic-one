@@ -113,6 +113,10 @@ def binding_without_a_use_count(monkeypatch: pytest.MonkeyPatch) -> None:
         "jentic_one.broker.services.credentials.orchestrator.BindingUseRepository.take_use",
         AsyncMock(return_value=True),
     )
+    monkeypatch.setattr(
+        "jentic_one.broker.services.credentials.orchestrator.BindingUseRepository.record_use",
+        AsyncMock(return_value=True),
+    )
 
 
 @pytest.fixture(autouse=True)

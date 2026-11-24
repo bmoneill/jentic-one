@@ -762,6 +762,12 @@ async def authorize_execution(
         )
 
     if not evaluation.allowed:
+        # A refused call is still a call through the binding: it spends a use
+        # and restarts the idle clock like any other. With none left, the
+        # binding has ended and says so instead.
+        await CredentialService(ctx).spend_binding_use(
+            identity=identity, credential_id=selected_credential.credential_id, api=api
+        )
         # Two-variant deny split (#578): an empty rule list (nothing
         # configured for this binding) vs loaded rules where none allowed the
         # request.

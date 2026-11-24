@@ -43,16 +43,19 @@ export function afterExpiryFrom(value: string | null | undefined): AfterExpiry {
 }
 
 /**
- * Whether the access would have a deadline worth warning about if saved now:
- * an end date at least 4 days away, or an idle limit of 4 days or more.
+ * Whether the warning is an option for the access if saved now: it has an
+ * end date or an idle limit, and neither is under 4 days (an end date less
+ * than 4 days away, or an idle limit shorter than 4 days, rules it out).
  */
 export function expiryWarnable(
 	end: Date | 'never' | null,
 	idleSeconds: number | null,
 	now: number = Date.now(),
 ): boolean {
-	if (idleSeconds !== null && idleSeconds >= WARNING_MIN_SECONDS) return true;
-	return end instanceof Date && end.getTime() - now >= WARNING_MIN_SECONDS * 1000 - SLACK_MS;
+	const hasEnd = end instanceof Date;
+	if (hasEnd && end.getTime() - now < WARNING_MIN_SECONDS * 1000 - SLACK_MS) return false;
+	if (idleSeconds !== null && idleSeconds < WARNING_MIN_SECONDS) return false;
+	return hasEnd || idleSeconds !== null;
 }
 
 /** The `idle_warning` to send: ticked, with a deadline worth warning about. */

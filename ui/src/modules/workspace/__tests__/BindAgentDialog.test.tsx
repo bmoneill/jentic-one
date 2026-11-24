@@ -662,24 +662,27 @@ describe('BindAgentDialog — how long the access lasts', () => {
 		const warning = (): HTMLElement =>
 			within(screen.getByTestId('bind-agent-idle-warning')).getByRole('checkbox');
 
-		// No end date and a three-day idle limit: nothing to warn about yet.
+		// No end date and a three-day idle limit: no warning on offer.
 		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), 'custom');
 		await user.selectOptions(screen.getByTestId('bind-agent-duration-unit'), 'never');
 		await user.click(screen.getByText('Also end if unused for'));
 		await user.selectOptions(screen.getByTestId('bind-agent-idle-preset'), 'custom');
 		await user.clear(screen.getByTestId('bind-agent-idle-amount'));
 		await user.type(screen.getByTestId('bind-agent-idle-amount'), '3');
-		expect(warning()).not.toBeChecked();
-		expect(warning()).toBeDisabled();
-		expect(screen.getByTestId('bind-agent-idle-warning-hint')).toHaveTextContent(
-			'Warnings need an end date',
-		);
+		expect(screen.queryByTestId('bind-agent-idle-warning')).not.toBeInTheDocument();
 
-		// The box sits below the idle row.
+		// A 14-day idle limit offers it, below the idle row.
+		await user.clear(screen.getByTestId('bind-agent-idle-amount'));
+		await user.type(screen.getByTestId('bind-agent-idle-amount'), '14');
+		expect(warning()).not.toBeChecked();
 		expect(
 			screen.getByTestId('bind-agent-idle').compareDocumentPosition(warning()) &
 				Node.DOCUMENT_POSITION_FOLLOWING,
 		).toBeTruthy();
+
+		// An end date under 4 days rules it out, whatever the idle limit.
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), '1d');
+		expect(screen.queryByTestId('bind-agent-idle-warning')).not.toBeInTheDocument();
 
 		// An end date alone is enough to warn about.
 		await user.click(screen.getByText('Also end if unused for'));

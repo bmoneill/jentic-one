@@ -736,7 +736,7 @@ async def _handle(
             )
         except CredentialBindingExpiredError as exc:
             # The agent's binding has ended: hold the call so its owner can
-            # give fresh access (D14), when the call can be held at all.
+            # re-grant access (D14), when the call can be held at all.
             if not _renewable(ctx, identity, exc):
                 raise
             return await _hold_call(
@@ -1401,7 +1401,7 @@ async def _hold_call(
     requests join an existing hold.
 
     With ``ended`` (the 403 for a binding whose policy has ended), the hold is
-    a ``grant_renewal``: its reviewer can give the binding fresh access and
+    a ``grant_renewal``: its reviewer can re-grant the binding and
     run the call. It never counts against the pending cap. When the binding
     already has a pending renewal, or a reviewer denied one and nobody has
     renewed it since, the 403 is raised instead, saying which (with the
@@ -1507,7 +1507,7 @@ async def _hold_call(
             if ended is not None:
                 summary = (
                     f"Agent {agent}'s access to {ctx_req.api_vendor} has ended; it asks for "
-                    f"fresh access to {ctx_req.method} {summary_text(path)}"
+                    f"access to be re-granted for {ctx_req.method} {summary_text(path)}"
                 )
             await emit_event_best_effort(
                 session,

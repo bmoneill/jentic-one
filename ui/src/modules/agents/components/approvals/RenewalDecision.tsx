@@ -3,11 +3,11 @@
  * (`kind: grant_renewal`). A reviewer who may renew the binding directly
  * chooses its fresh policy with the same controls as granting access (an end
  * date, nothing preselected; an idle limit; single use; the warning before
- * it ends and what happens after it, starting on the binding's own), then either grants
- * fresh access and runs the call, grants it without running a stale call, or
- * denies. Fresh access replaces the binding's old policy; its rules stay.
+ * it ends and what happens after it, starting on the binding's own), then either
+ * re-grants access and runs the call, re-grants it without running a stale call, or
+ * denies. Re-granting replaces the binding's old policy; its rules stay.
  *
- * Anyone else who may review sees only Deny, with who can grant fresh access.
+ * Anyone else who may review sees only Deny, with who can re-grant access.
  * Where the deployment can't tell who may renew from here (`renewElsewhere`),
  * everyone sees the choices, and the renewal itself says if they may not.
  */
@@ -52,7 +52,7 @@ export interface RenewalPolicyBody {
 
 export interface RenewalDecisionProps {
 	agentName: string;
-	/** Whether the viewer may grant fresh access (the server's `renewal.can_renew`). */
+	/** Whether the viewer may re-grant access (the server's `renewal.can_renew`). */
 	canRenew: boolean;
 	/**
 	 * The renewal goes through the binding's own renew endpoint before the
@@ -83,7 +83,7 @@ export function RenewalDecision({
 	const [uses, setUses] = useState<number | null>(null);
 	const [warn, setWarn] = useState(false);
 	const [after, setAfter] = useState<AfterExpiry>(() => afterExpiryFrom(afterExpiryNow));
-	// The org's defaults preselect fresh access (D14); its maximums bound it.
+	// The org's defaults preselect the re-granted access (D14); its maximums bound it.
 	const limits = useGrantPolicyLimits();
 	usePreselectGrantDefaults(limits, (d) => {
 		setDuration((cur) => cur ?? d.duration);
@@ -128,7 +128,7 @@ export function RenewalDecision({
 							className="text-muted-foreground text-sm"
 							data-testid="renewal-elsewhere"
 						>
-							Granting fresh access renews the agent&apos;s access first. Only someone
+							Re-granting access renews the agent&apos;s access first. Only someone
 							who owns both the agent and the credential, or an org admin, can.
 						</p>
 					)}
@@ -137,7 +137,7 @@ export function RenewalDecision({
 						value={duration}
 						onChange={setDuration}
 						disabled={pending}
-						label="Fresh access for"
+						label="Re-grant access for"
 						emptyHint={NO_DURATION_HINT}
 						selectRef={durationRef}
 						testIdPrefix="renewal"
@@ -174,7 +174,7 @@ export function RenewalDecision({
 			) : (
 				<p className="text-muted-foreground text-sm" data-testid="renewal-cannot-renew">
 					Only someone who owns both the agent and the credential, or an org admin, can
-					grant fresh access. You can deny the call.
+					re-grant access. You can deny the call.
 				</p>
 			)}
 			<div>
@@ -208,7 +208,7 @@ export function RenewalDecision({
 							disabled={pending || incomplete}
 							data-testid="renewal-grant"
 						>
-							Grant fresh access
+							Re-grant access
 						</Button>
 						<Button
 							type="button"
@@ -217,7 +217,7 @@ export function RenewalDecision({
 							disabled={pending || incomplete}
 							data-testid="renewal-grant-and-run"
 						>
-							Grant fresh access and run this call
+							Re-grant access and run this call
 						</Button>
 					</>
 				)}

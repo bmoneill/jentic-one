@@ -5757,7 +5757,7 @@ type GrantPolicyLimitsResponse struct {
 	SingleUseByDefault bool `json:"single_use_by_default"`
 }
 
-// GrantRenewalRequest Fresh access for an ended binding.
+// GrantRenewalRequest Re-grant access for an ended binding.
 //
 // Every field left out sets no such limit, except the end date: left out, the
 // binding runs again for as long as it was granted for, capped at the org's
@@ -5906,7 +5906,7 @@ type HeldExecutionDetailResponse struct {
 	// Examples: held_6968b398a1c4e2d07b5f93c6
 	Id string `json:"id"`
 
-	// Kind Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent's binding to the credential has ended; approving gives it fresh access first).
+	// Kind Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent's binding to the credential has ended; approving re-grants its access first).
 	//
 	// Examples: execution
 	Kind *HeldExecutionKind `json:"kind,omitempty"`
@@ -5971,7 +5971,7 @@ type HeldExecutionDetailResponseExecutionStatus string
 //
 // “execution“: a “require-approval“ rule matched; approving runs it.
 // “grant_renewal“: the agent's binding to the credential has ended (its end
-// date, idle limit or uses); approving gives the binding fresh access first,
+// date, idle limit or uses); approving re-grants the binding first,
 // and may then run the call.
 type HeldExecutionKind string
 
@@ -6094,7 +6094,7 @@ type HeldExecutionResponse struct {
 	// Examples: held_6968b398a1c4e2d07b5f93c6
 	Id string `json:"id"`
 
-	// Kind Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent's binding to the credential has ended; approving gives it fresh access first).
+	// Kind Why the call is held: `execution` (a require-approval rule matched) or `grant_renewal` (the agent's binding to the credential has ended; approving re-grants its access first).
 	//
 	// Examples: execution
 	Kind *HeldExecutionKind `json:"kind,omitempty"`
@@ -6193,7 +6193,7 @@ type HeldRenewalContextResponse struct {
 	// Examples: hold
 	AfterExpiry *AfterExpiry `json:"after_expiry,omitempty"`
 
-	// CanRenew Whether the caller may grant fresh access (else it can only deny): a person who owns the agent and the credential, or an `org:admin`.
+	// CanRenew Whether the caller may re-grant access (else it can only deny): a person who owns the agent and the credential, or an `org:admin`.
 	//
 	// Examples: true
 	CanRenew *bool `json:"can_renew,omitempty"`

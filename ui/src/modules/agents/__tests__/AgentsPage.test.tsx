@@ -3080,7 +3080,7 @@ describe('AgentsPage — access ending soon', () => {
 		renderPage();
 		const section = await screen.findByRole('region', { name: 'Waiting for you' });
 		const row = await within(section).findByTestId('waiting-renewal');
-		expect(row).toHaveTextContent('needs fresh access to api.stripe.com/payments');
+		expect(row).toHaveTextContent('needs access to api.stripe.com/payments re-granted');
 		expect(
 			within(row)
 				.getByRole('link', { name: /^Review/ })

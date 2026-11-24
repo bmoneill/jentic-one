@@ -85,7 +85,7 @@ class HeldExecution(AuditableMixin, AdminBase):
         String(16), nullable=False, default="pending", server_default=text("'pending'")
     )
     # ``execution`` (a require-approval rule) or ``grant_renewal`` (an ended
-    # binding the owner may give fresh access); see ``HeldExecutionKind``.
+    # binding the owner may re-grant access); see ``HeldExecutionKind``.
     kind: Mapped[str] = mapped_column(
         String(16), nullable=False, default="execution", server_default=text("'execution'")
     )

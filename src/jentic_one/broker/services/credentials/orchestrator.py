@@ -171,6 +171,13 @@ class CredentialService:
                 server_variables_unresolved=server_variables_unresolved,
             )
         )
+        # Every call through a binding is a use of it, whether or not it then
+        # succeeds: take it (and restart the idle clock) before anything below
+        # can fail. Losing the race for the last use is refused like any ended
+        # binding.
+        await self.spend_binding_use(
+            identity=identity, credential_id=resolved.credential_id, api=api
+        )
         try:
             try:
                 access_token: str | None = None
@@ -231,19 +238,6 @@ class CredentialService:
                 ) from exc
 
             async with self._ctx.admin_db.transaction() as session:
-                # A binding with a use count gives up one use per authorized
-                # call, before any secret leaves the broker. Losing the race
-                # for the last use is refused like any ended binding, and the
-                # access is not audited (this transaction rolls back).
-                if identity.actor_type == ActorType.AGENT and not (
-                    await BindingUseRepository.take_use(
-                        session,
-                        agent_id=identity.sub,
-                        credential_id=resolved.credential_id,
-                        now=datetime.now(UTC),
-                    )
-                ):
-                    raise _uses_exhausted_denial(api)
                 await emit_credential_access(
                     session,
                     actor_id=identity.sub,
@@ -264,7 +258,6 @@ class CredentialService:
                     # a 500 here would fail the whole execute request (#903).
                     trace_id=valid_trace_id_or_none(trace_id),
                 )
-            await self._record_binding_use(identity=identity, credential_id=resolved.credential_id)
             return InjectedAuth(
                 headers=result.headers,
                 query_params=result.query_params,
@@ -471,44 +464,53 @@ class CredentialService:
                 extra={"candidates": [c.model_dump(mode="json") for c in exc.candidates]},
             ) from exc
 
-    async def _record_binding_use(self, *, identity: Identity, credential_id: str) -> None:
-        """Restart the binding's idle clock: this call is a use of it.
+    async def spend_binding_use(
+        self, *, identity: Identity, credential_id: str, api: APIReference
+    ) -> None:
+        """Count one call through the agent's binding, before it can fail.
 
-        Every route that authorizes a call through a binding injects its
-        credential here, so ``/execute``, MCP and queued or approved calls all
-        count. The write happens at most once per :data:`BINDING_USE_INTERVAL`
-        per binding (a shared-state claim skips it in between, and the UPDATE
-        itself only fires on a stale value), in its own short transaction after
-        the access audit has committed: a failed write never fails the call,
-        it only lets the binding look idle up to an interval sooner.
+        Any call that reaches a live binding is a use of it, including one its
+        permission rules refuse or one that fails afterwards (refresh,
+        decryption, upstream). Every route that authorizes a call through a
+        binding comes through here, so ``/execute``, MCP and queued or
+        approved calls all count. A caller that is not an agent spends nothing.
+
+        - A binding with a use count gives up one use, atomically, so two calls
+          never both take the last one; with none left the call is refused as
+          an ended binding (``_uses_exhausted_denial``). Taking a use also
+          restarts the idle clock.
+        - Otherwise the idle clock restarts (``last_used_at``) at most once per
+          :data:`BINDING_USE_INTERVAL` per binding: a shared-state claim skips
+          the write in between, and the UPDATE itself only fires on a stale
+          value.
+
+        Both writes share one short admin transaction, committed before the
+        call goes on.
         """
         if identity.actor_type != ActorType.AGENT:
             return
         key = f"{BINDING_USE_NAMESPACE}:{identity.sub}:{credential_id}"
         try:
-            claimed = await self._ctx.state_backend.set_if_absent(
+            stamp = await self._ctx.state_backend.set_if_absent(
                 key, b"1", ttl_s=BINDING_USE_INTERVAL.total_seconds()
             )
         except Exception:  # the UPDATE's own staleness guard still applies
-            claimed = True
-        if not claimed:
-            return
-        try:
-            async with self._ctx.admin_db.transaction() as session:
+            stamp = True
+        now = datetime.now(UTC)
+        async with self._ctx.admin_db.transaction() as session:
+            taken = await BindingUseRepository.take_use(
+                session, agent_id=identity.sub, credential_id=credential_id, now=now
+            )
+            if taken and stamp:
                 await BindingUseRepository.record_use(
                     session,
                     agent_id=identity.sub,
                     credential_id=credential_id,
-                    now=datetime.now(UTC),
+                    now=now,
                     min_interval=BINDING_USE_INTERVAL,
                 )
-        except Exception:  # tracking use must never fail the call
-            logger.warning(
-                "binding_use_record_failed",
-                agent_id=identity.sub,
-                credential_id=credential_id,
-                exc_info=True,
-            )
+        if not taken:
+            raise _uses_exhausted_denial(api)
 
     async def _emit_credential_failure(
         self,
