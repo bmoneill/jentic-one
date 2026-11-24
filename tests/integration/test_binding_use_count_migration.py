@@ -2,8 +2,8 @@
 
 Upgrading gives every existing binding no count (unlimited uses). The
 downgrade fails closed: without the columns a binding with a count would allow
-unlimited calls, so every one of them is suspended (reason ``binding_expired``)
-before the columns are dropped.
+unlimited calls, so every one of them is suspended (``binding_expired`` once
+used up, else ``binding_policy_removed``) before the columns are dropped.
 """
 
 from __future__ import annotations
@@ -123,6 +123,6 @@ async def test_downgrade_suspends_every_binding_with_a_count(
                 )
             ).all()
         }
-    assert state["acb_buse_unused"] == (True, "binding_expired")
+    assert state["acb_buse_unused"] == (True, "binding_policy_removed")
     assert state["acb_buse_used"] == (True, "binding_expired")
     assert state["acb_buse_none"] == (False, None)

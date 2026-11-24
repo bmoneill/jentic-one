@@ -1,9 +1,10 @@
 """Upgrade/downgrade of the ``agent_credential_bindings.expires_at`` migration.
 
-Downgrading drops the column, so it first suspends every binding whose expiry
-has already passed (reason ``binding_expired``): a code rollback must fail
-closed, never revive lapsed access. Bindings with no expiry or a future expiry
-are left alone, and re-upgrading restores the column with no policy backfilled.
+Downgrading drops the column, so it first suspends every binding with an end
+date: a code rollback must fail closed. A passed one reads ``binding_expired``
+(relabelling a binding already suspended), a future one
+``binding_policy_removed``. Bindings with no end date are left alone, and
+re-upgrading restores the column with no policy backfilled.
 """
 
 from __future__ import annotations
@@ -54,18 +55,21 @@ async def _has_expires_at(db: DatabaseSession) -> bool:
     return "expires_at" in columns
 
 
-async def test_downgrade_suspends_lapsed_bindings_and_reupgrade_restores_column(
+async def test_downgrade_suspends_every_binding_with_an_end_date_and_reupgrade_restores(
     integration_config: AppConfig, admin_db: DatabaseSession, restore_head: None
 ) -> None:
     cfg = alembic_config_for("admin", integration_config.databases.admin)
     now = datetime.now(UTC)
     rows = {
-        "acb_bex_past": now - timedelta(days=1),
-        "acb_bex_future": now + timedelta(days=1),
-        "acb_bex_none": None,
+        "acb_bex_past": (now - timedelta(days=1), False),
+        # Still running, but the older code would never end it.
+        "acb_bex_future": (now + timedelta(days=1), False),
+        "acb_bex_none": (None, False),
+        # Suspended for another reason and ended: relabelled, so a resume is knowing.
+        "acb_bex_held_past": (now - timedelta(days=1), True),
     }
     async with admin_db.transaction() as session:
-        for binding_id, expires_at in rows.items():
+        for binding_id, (expires_at, suspended) in rows.items():
             await session.execute(
                 text(
                     "INSERT INTO agent_credential_bindings "
@@ -76,7 +80,7 @@ async def test_downgrade_suspends_lapsed_bindings_and_reupgrade_restores_column(
                     "id": binding_id,
                     "agent": f"agnt_{binding_id}",
                     "cred": f"cred_{binding_id}",
-                    "suspended": False,
+                    "suspended": suspended,
                     "expires_at": expires_at,
                 },
             )
@@ -92,8 +96,9 @@ async def test_downgrade_suspends_lapsed_bindings_and_reupgrade_restores_column(
         )
         state = {r[0]: (bool(r[1]), r[2]) for r in result.all()}
     assert state["acb_bex_past"] == (True, "binding_expired")
-    assert state["acb_bex_future"] == (False, None)
+    assert state["acb_bex_future"] == (True, "binding_policy_removed")
     assert state["acb_bex_none"] == (False, None)
+    assert state["acb_bex_held_past"] == (True, "binding_expired")
 
     await asyncio.to_thread(command.upgrade, cfg, _REVISION)
     assert await _has_expires_at(admin_db)

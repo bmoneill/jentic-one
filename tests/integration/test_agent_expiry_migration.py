@@ -1,9 +1,9 @@
 """Upgrade/downgrade of the ``agents.expires_at`` migration.
 
-Downgrading drops the column, so it first disables every active agent whose
-expiry has already passed: a code rollback must fail closed, never revive a
-lapsed agent. Agents with no expiry or a future expiry, and agents that are not
-active, are left alone; re-upgrading restores the column with no backfill.
+Downgrading drops the column, so it first disables every active agent with an
+expiry and rejects every pending agent whose expiry has passed: a code rollback
+must fail closed. Agents with no expiry, and pending agents whose expiry is
+ahead, are left alone; re-upgrading restores the column with no backfill.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ async def _has_expires_at(db: DatabaseSession) -> bool:
     return "expires_at" in columns
 
 
-async def test_downgrade_disables_lapsed_agents_and_reupgrade_restores_column(
+async def test_downgrade_disables_every_agent_with_an_expiry_and_reupgrade_restores(
     integration_config: AppConfig, admin_db: DatabaseSession, restore_head: None
 ) -> None:
     cfg = alembic_config_for("admin", integration_config.databases.admin)
@@ -61,6 +61,7 @@ async def test_downgrade_disables_lapsed_agents_and_reupgrade_restores_column(
         "agnt_aex_future": ("active", now + timedelta(days=1)),
         "agnt_aex_none": ("active", None),
         "agnt_aex_pending_past": ("pending", now - timedelta(days=1)),
+        "agnt_aex_pending_future": ("pending", now + timedelta(days=1)),
     }
     async with admin_db.transaction() as session:
         for agent_id, (status, expires_at) in rows.items():
@@ -81,9 +82,12 @@ async def test_downgrade_disables_lapsed_agents_and_reupgrade_restores_column(
         state = {r[0]: r[1] for r in result.all()}
     assert state == {
         "agnt_aex_past": "disabled",
-        "agnt_aex_future": "active",
+        # Still running, but the older code would never end it.
+        "agnt_aex_future": "disabled",
         "agnt_aex_none": "active",
-        "agnt_aex_pending_past": "pending",
+        # Lapsed before anyone approved it: never approvable under the older code.
+        "agnt_aex_pending_past": "rejected",
+        "agnt_aex_pending_future": "pending",
     }
 
     await asyncio.to_thread(command.upgrade, cfg, _REVISION)

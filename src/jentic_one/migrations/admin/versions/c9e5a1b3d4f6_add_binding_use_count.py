@@ -7,9 +7,10 @@ call, and a renewal restores the count. Single use is ``max_quota = 1``.
 Every existing binding gets no count (unlimited uses).
 
 The downgrade fails closed: without the columns, a binding with a use count
-would allow unlimited calls, so every one of them (used up or not) is
-suspended with ``suspended_reason = 'binding_expired'`` before the columns
-are dropped. An operator can resume them.
+would allow unlimited calls, so every one of them is suspended before the
+columns are dropped: as ``binding_expired`` when its uses have run out
+(relabelling one already suspended), else ``binding_policy_removed``. An
+operator can resume them.
 
 Revision ID: c9e5a1b3d4f6
 Revises: b8d4f0a2c3e5
@@ -33,6 +34,7 @@ _BINDINGS = sa.table(
     sa.column("suspended", sa.Boolean),
     sa.column("suspended_reason", sa.String),
     sa.column("max_quota", sa.Integer),
+    sa.column("quota_remaining", sa.Integer),
 )
 
 
@@ -46,11 +48,18 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.get_bind().execute(
+    conn = op.get_bind()
+    counted = _BINDINGS.c.max_quota.is_not(None)
+    used_up = sa.func.coalesce(_BINDINGS.c.quota_remaining, 0) <= 0
+    conn.execute(
         _BINDINGS.update()
-        .where(_BINDINGS.c.max_quota.is_not(None))
-        .where(_BINDINGS.c.suspended.is_(False))
+        .where(counted, used_up)
         .values(suspended=True, suspended_reason="binding_expired")
+    )
+    conn.execute(
+        _BINDINGS.update()
+        .where(counted, _BINDINGS.c.suspended.is_(False))
+        .values(suspended=True, suspended_reason="binding_policy_removed")
     )
     op.drop_column("agent_credential_bindings", "quota_remaining")
     op.drop_column("agent_credential_bindings", "max_quota")

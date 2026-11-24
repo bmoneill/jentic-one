@@ -3,8 +3,9 @@
 Upgrading backfills ``last_used_at`` from the latest execution record for the
 binding's agent and credential (so the idle clock starts from real history)
 and ``renewed_at`` from ``bound_at``; no binding gets an idle limit. The
-downgrade suspends every binding its idle limit has already ended (reason
-``binding_expired``) before dropping the columns, so a rollback fails closed.
+downgrade suspends every binding with an idle limit (``binding_expired`` once
+reached, else ``binding_policy_removed``) before dropping the columns, so a
+rollback fails closed.
 """
 
 from __future__ import annotations
@@ -115,7 +116,7 @@ async def test_upgrade_backfills_the_idle_clock_without_setting_a_limit(
     assert as_utc(renewed) == bound
 
 
-async def test_downgrade_suspends_idle_ended_bindings(
+async def test_downgrade_suspends_every_binding_with_an_idle_limit(
     integration_config: AppConfig, admin_db: DatabaseSession, restore_head: None
 ) -> None:
     cfg = alembic_config_for("admin", integration_config.databases.admin)
@@ -123,7 +124,7 @@ async def test_downgrade_suspends_idle_ended_bindings(
     rows = {
         # Unused for longer than its one-day limit: ended, so the rollback suspends it.
         "acb_bidle_idle": (86_400, now - timedelta(days=3)),
-        # Used within its limit: still holds.
+        # Used within its limit: still holds, but the older code would never end it.
         "acb_bidle_live": (86_400, now - timedelta(hours=2)),
         # No idle limit at all.
         "acb_bidle_none": (None, now - timedelta(days=90)),
@@ -163,7 +164,7 @@ async def test_downgrade_suspends_idle_ended_bindings(
             ).all()
         }
     assert state["acb_bidle_idle"] == (True, "binding_expired")
-    assert state["acb_bidle_live"] == (False, None)
+    assert state["acb_bidle_live"] == (True, "binding_policy_removed")
     assert state["acb_bidle_none"] == (False, None)
 
 
