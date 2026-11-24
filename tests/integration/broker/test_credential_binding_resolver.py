@@ -568,7 +568,10 @@ async def test_idle_ended_binding_is_refused_and_says_why(
 async def test_a_use_count_is_never_cached(
     admin_db: DatabaseSession, control_db: DatabaseSession, clean_tables: None
 ) -> None:
-    """Every call must reach the counter, so the derivation is valid only until now."""
+    """Every call must reach the counter, so the derivation is never cached.
+
+    Its time limits still bound it: ``valid_until`` is the end date, not now.
+    """
     cred_id = await _seed_credential(
         control_db, name="acme", vendor="acme.com", api_name="pets-api", version="v1"
     )
@@ -587,7 +590,8 @@ async def test_a_use_count_is_never_cached(
     )
 
     assert [bc.credential_id for bc in result.credentials] == [cred_id]
-    assert result.valid_until == _NOW
+    assert result.cacheable is False
+    assert result.valid_until == _NOW + timedelta(days=30)
 
 
 async def test_a_used_up_binding_is_refused_and_says_why(

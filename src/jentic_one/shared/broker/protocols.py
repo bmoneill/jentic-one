@@ -225,6 +225,9 @@ class CredentialDerivation:
     - ``valid_until`` — the earliest moment (timezone-aware) at which one of the
       candidate credentials' bindings expires, or ``None`` when none expires.
       A cache must never serve this derivation at or after it.
+    - ``cacheable`` — ``False`` when a candidate binding carries a use count:
+      every call must reach the counter, so a cache must not keep this
+      derivation at all (its time-based ``valid_until`` still applies).
     """
 
     credentials: tuple[BoundCredential, ...]
@@ -239,6 +242,7 @@ class CredentialDerivation:
     expired_credential_id: str | None = None
     expired_reason: str | None = None
     valid_until: datetime | None = None
+    cacheable: bool = True
 
 
 @runtime_checkable

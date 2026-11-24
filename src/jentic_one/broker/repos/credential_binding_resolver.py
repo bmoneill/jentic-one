@@ -178,6 +178,7 @@ class CredentialBindingResolver:
         expiries: dict[str, datetime] = {}
         expired_reasons: dict[str, GrantEndReason] = {}
         suspended_ids: set[str] = set()
+        use_counted: set[str] = set()
         for row in binding_rows:
             if row.suspended:
                 suspended_ids.add(row.credential_id)
@@ -189,8 +190,10 @@ class CredentialBindingResolver:
                 continue
             rule_sets[row.credential_id] = row.rule_set_id
             # A use count is checked on every call, so its derivation is never
-            # cached: it is valid only until now.
-            deadline = now if counts_uses(policy) else grant_deadline(policy)
+            # cached (``cacheable``); its time limits still cap ``valid_until``.
+            if counts_uses(policy):
+                use_counted.add(row.credential_id)
+            deadline = grant_deadline(policy)
             if deadline is not None:
                 expiries[row.credential_id] = deadline
 
@@ -261,6 +264,7 @@ class CredentialBindingResolver:
                 (expiries[c.credential_id] for c in candidates if c.credential_id in expiries),
                 default=None,
             ),
+            cacheable=not any(c.credential_id in use_counted for c in candidates),
         )
 
     async def _pending_covers(

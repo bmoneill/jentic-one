@@ -199,3 +199,21 @@ async def test_in_flight_lookup_crossing_deadline_is_rederived_for_every_waiter(
     release.set()
     for result in await asyncio.gather(leader, waiter):
         assert not result.credentials
+
+
+@pytest.mark.asyncio
+async def test_use_counted_derivation_is_returned_once_and_never_cached() -> None:
+    """A use count must reach the counter on every call: not kept, but not re-derived in a loop."""
+    clock = _Clock(_T0)
+
+    class UseCountedDeriver(_CountingDeriver):
+        async def derive_credentials(self, **kwargs: str) -> CredentialDerivation:
+            result = await super().derive_credentials(**kwargs)
+            return replace(result, cacheable=False, valid_until=_T0 + timedelta(days=1))
+
+    inner = UseCountedDeriver()
+    cached = CachingCredentialDeriver(inner, cache_ttl_seconds=300.0, clock=clock)
+    first = await asyncio.wait_for(cached.derive_credentials(**_KW), timeout=1)
+    second = await asyncio.wait_for(cached.derive_credentials(**_KW), timeout=1)
+    assert first.credentials and second.credentials
+    assert inner.calls == 2  # one read per call: never served from the cache

@@ -77,7 +77,8 @@ class CachingCredentialDeriver:
     An entry whose derivation carries ``valid_until`` is never served at or
     after that moment, even inside the TTL, so a binding's expiry is exact
     rather than bounded by the TTL. ``clock`` (wall-clock, timezone-aware) is
-    injectable so tests can cross the boundary without sleeping.
+    injectable so tests can cross the boundary without sleeping. A derivation
+    that is not ``cacheable`` (a candidate binding counts uses) is never kept.
     """
 
     def __init__(
@@ -133,7 +134,12 @@ class CachingCredentialDeriver:
             result = await self._inner.derive_credentials(
                 agent_id=agent_id, vendor=vendor, name=name, version=version
             )
-            self._store(key, _CacheEntry(value=result, cached_at=time.monotonic()))
+            # A derivation through a use-counted binding must reach the counter
+            # on every call, so it is shared only with this load's waiters.
+            if result.cacheable:
+                self._store(key, _CacheEntry(value=result, cached_at=time.monotonic()))
+            else:
+                self._cache.pop(key, None)
             _cache_misses.add(1)
             logger.debug("credential_binding_cache_miss", agent_id=agent_id, vendor=vendor)
             return result
