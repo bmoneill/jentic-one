@@ -312,6 +312,8 @@ test('Add APIs → Access: Set up later warns first; a preset binds and the row 
 
 	// A preset answers it; adding binds AND saves the rules.
 	await step.getByRole('radio', { name: /Allow all operations/ }).check();
+	// How long access lasts is a required choice: nothing is preselected.
+	await step.getByTestId('queue-access-duration-preset').selectOption('7d');
 	await step.getByRole('button', { name: new RegExp(`^Add `) }).click();
 	await expect(page.getByTestId('queue-done-pane')).toBeVisible();
 	await expect(page.getByTestId('queue-done-pane')).toContainText('1 API added');
