@@ -32,6 +32,7 @@ function seedBoundAgents(
 		max_idle_period?: number | null;
 		idle_expires_at?: string | null;
 		idle_warning?: boolean;
+		after_expiry?: 'hold' | 'refuse';
 		max_quota?: number | null;
 		quota_remaining?: number | null;
 	}>,
@@ -69,6 +70,7 @@ function seedBoundAgents(
 						expired: r.expired ?? false,
 						expired_reason: r.expired_reason ?? null,
 					}),
+					...('after_expiry' in r && { after_expiry: r.after_expiry }),
 				})),
 				has_more: false,
 				next_cursor: null,
@@ -569,7 +571,7 @@ describe('BoundAgentsSection — when access ends', () => {
 		expect(within(control).queryByText(/Unprocessable/)).not.toBeInTheDocument();
 	});
 
-	it('says when an idle binding ended, and "Still needed" restarts its idle clock', async () => {
+	it('says when an idle binding ended, and renewing restarts its idle clock', async () => {
 		const renewals = watchRenewals();
 		seedBoundAgents('cred_gh_1', [
 			{
@@ -595,8 +597,14 @@ describe('BoundAgentsSection — when access ends', () => {
 			(screen.getByTestId('bound-agent-renew-control-idle-preset') as HTMLSelectElement)
 				.value,
 		).toBe('14d');
-		await user.click(screen.getByTestId('bound-agent-renew-control-still-needed'));
-		await vi.waitFor(() => expect(renewals).toEqual([{}]));
+		expect(screen.queryByTestId('bound-agent-renew-control-still-needed')).toBeNull();
+		await user.selectOptions(
+			screen.getByTestId('bound-agent-renew-control-duration-preset'),
+			'30d',
+		);
+		await user.click(screen.getByTestId('bound-agent-renew-control-save'));
+		await vi.waitFor(() => expect(renewals).toHaveLength(1));
+		expect(renewals[0]).toHaveProperty('expires_at');
 	});
 
 	it('starts the warning box on the binding and saves only a change to it', async () => {
@@ -624,7 +632,57 @@ describe('BoundAgentsSection — when access ends', () => {
 		await vi.waitFor(() => expect(renewals).toEqual([{ idle_warning: false }]));
 	});
 
-	it('says a single-use binding was used, and "Still needed" restores the use', async () => {
+	it('warns before an end date alone, and saves only that change', async () => {
+		const renewals = watchRenewals();
+		seedBoundAgents('cred_gh_1', [
+			{
+				agent_id: 'agnt_dated',
+				agent_name: 'dated-agent',
+				expires_at: new Date(Date.now() + 20 * 86_400_000).toISOString(),
+			},
+		]);
+		const user = userEvent.setup();
+		renderSheet('cred_gh_1');
+
+		const row = await screen.findByTestId('bound-agent-row');
+		await user.click(within(row).getByTestId('bound-agent-renew'));
+		const box = within(screen.getByTestId('bound-agent-renew-control-idle-warning')).getByRole(
+			'checkbox',
+		);
+		expect(box).not.toBeChecked();
+		expect(box).toBeEnabled();
+		await user.click(box);
+		await user.click(screen.getByTestId('bound-agent-renew-control-save'));
+		await vi.waitFor(() => expect(renewals).toEqual([{ idle_warning: true }]));
+	});
+
+	it('starts "After access ends" on the binding and saves only a change to it', async () => {
+		const renewals = watchRenewals();
+		seedBoundAgents('cred_gh_1', [
+			{
+				agent_id: 'agnt_asks',
+				agent_name: 'asking-agent',
+				expires_at: new Date(Date.now() + 20 * 86_400_000).toISOString(),
+				after_expiry: 'refuse',
+			},
+		]);
+		const user = userEvent.setup();
+		renderSheet('cred_gh_1');
+
+		const row = await screen.findByTestId('bound-agent-row');
+		await user.click(within(row).getByTestId('bound-agent-renew'));
+		const after = screen.getByTestId(
+			'bound-agent-renew-control-after-expiry',
+		) as HTMLSelectElement;
+		expect(after.value).toBe('refuse');
+		const save = screen.getByTestId('bound-agent-renew-control-save');
+		expect(save).toBeDisabled();
+		await user.selectOptions(after, 'hold');
+		await user.click(save);
+		await vi.waitFor(() => expect(renewals).toEqual([{ after_expiry: 'hold' }]));
+	});
+
+	it('says a single-use binding was used, and renewing restores the use', async () => {
 		const renewals = watchRenewals();
 		seedBoundAgents('cred_gh_1', [
 			{ agent_id: 'agnt_fresh', agent_name: 'fresh-agent', max_quota: 1, quota_remaining: 1 },
@@ -655,8 +713,14 @@ describe('BoundAgentsSection — when access ends', () => {
 				'checkbox',
 			),
 		).toBeChecked();
-		await user.click(screen.getByTestId('bound-agent-renew-control-still-needed'));
-		await vi.waitFor(() => expect(renewals).toEqual([{}]));
+		expect(screen.queryByTestId('bound-agent-renew-control-still-needed')).toBeNull();
+		await user.selectOptions(
+			screen.getByTestId('bound-agent-renew-control-duration-preset'),
+			'30d',
+		);
+		await user.click(screen.getByTestId('bound-agent-renew-control-save'));
+		await vi.waitFor(() => expect(renewals).toHaveLength(1));
+		expect(renewals[0]).toHaveProperty('expires_at');
 	});
 
 	it('sorts the longest-unused first on request', async () => {

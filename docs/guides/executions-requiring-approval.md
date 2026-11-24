@@ -152,7 +152,11 @@ withdrawal and expiry is audit-logged and emits an event
 When an agent calls through a credential binding that has ended (its end
 date passed, it went unused for its idle limit, or its uses ran out), the
 call is held the same way, with `kind: grant_renewal`, instead of being
-refused. The agent gets the same `202` held envelope, telling it that its
+refused. This is the binding's default (`after_expiry: hold`, **Hold first
+denied request** in the console). A binding set to `after_expiry: refuse`
+(**Let the agent ask**) is never held: every call gets
+`403 credential_binding_expired`, telling the agent to ask its owner to
+renew, and the owner renews it from the console. The agent gets the same `202` held envelope, telling it that its
 access ended and its owner has been asked to renew it.
 
 - **One pending renewal per binding.** The same call again joins it; any
@@ -164,6 +168,7 @@ access ended and its owner has been asked to renew it.
   "idle_warning": false, "max_quota": 1}}` (each limit left out sets none,
   except the end date: left out, the binding runs again for as long as it was
   granted for, capped at the org's maximum; `null` sets no end date).
+  `after_expiry` left out keeps the binding's own.
   The binding's policy is replaced in place (its rules stay), its idle clock
   restarts and its uses are restored, then the call runs. Add `"run": false`
   to renew without running a stale call (it fails with

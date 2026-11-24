@@ -157,10 +157,17 @@ The outcomes:
   path that creates or renews a binding. A renewal that leaves the end date
   out takes the shorter of its granted length and the maximum, so renewing a
   binding made before the org set a maximum brings it under it. `GET /agents/credentials:policy` reports them. With
-  `idle_warning` turned on (off by default; it takes an idle limit of 4 days
-  or more), the agent's owner gets one `credential_grant.idle_expiring` event
-  in the 48 hours before the idle limit is reached, and
-  `GET /agents/credentials:ending-soon` lists those bindings.
+  `idle_warning` turned on (off by default), the agent's owner is warned in
+  the 48 hours before the binding ends: one `credential_grant.expiring` event
+  before its end date (for a binding granted for 4 days or more) and one
+  `credential_grant.idle_expiring` event before its idle limit (for an idle
+  limit of 4 days or more). `GET /agents/credentials:ending-soon` lists those
+  bindings, with the nearer deadline in `ends_at` and `ending`. A binding's
+  `after_expiry` says what a call through it gets once it has ended: `hold`
+  (the default) holds the first call for the owner to renew and run (see
+  [Calls held because access ended](executions-requiring-approval.md#calls-held-because-access-ended)),
+  and `refuse` answers every call with `403 credential_binding_expired`,
+  whose directive tells the agent to ask its owner to renew.
 - **1 winner → use it.** The response carries `Jentic-Credential-Id` and
   `Jentic-Credential-Name` (absent when no stored credential was used), and
   the execution record carries the same attribution — every execution names

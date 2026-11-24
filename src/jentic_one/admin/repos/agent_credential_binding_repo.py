@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -29,6 +29,7 @@ class AgentCredentialBindingRepository:
         max_idle_period: int | None = None,
         idle_warning: bool = False,
         max_quota: int | None = None,
+        after_expiry: str = "hold",
     ) -> AgentCredentialBinding:
         await lock_agent_bindings(session, agent_id)
         await lock_credential_bindings(session, credential_id)
@@ -41,6 +42,7 @@ class AgentCredentialBindingRepository:
             idle_warning=idle_warning,
             max_quota=max_quota,
             quota_remaining=max_quota,
+            after_expiry=after_expiry,
             # Granting starts the idle clock.
             renewed_at=datetime.now(UTC),
         )
@@ -122,8 +124,15 @@ class AgentCredentialBindingRepository:
             update(AgentCredentialBinding)
             .where(AgentCredentialBinding.agent_id == agent_id)
             .where(AgentCredentialBinding.credential_id == credential_id)
-            # A renewal restarts the idle period, so it may warn again.
-            .values(**policy, renewed_at=now, idle_warned_at=None, quota_remaining=uses)
+            # A renewal restarts the idle period and may move the end date,
+            # so both may warn again.
+            .values(
+                **policy,
+                renewed_at=now,
+                idle_warned_at=None,
+                expiry_warned_at=None,
+                quota_remaining=uses,
+            )
         )
         result = await session.execute(stmt)
         await session.flush()
@@ -158,7 +167,9 @@ class AgentCredentialBindingRepository:
         min_idle_period: int,
         agent_filters: Sequence[ColumnElement[bool]] = (),
     ) -> list[tuple[AgentCredentialBinding, str]]:
-        """Active bindings with the idle warning on, with their agent's name.
+        """Active bindings with the warning on that may be due one, with their agent's name.
+
+        Due one: an idle limit of at least ``min_idle_period``, or an end date.
 
         ``agent_filters`` scope the agents (``build_access_filters`` on
         ``Agent``); whether each one is due is the caller's check.
@@ -168,7 +179,12 @@ class AgentCredentialBindingRepository:
             .join(Agent, Agent.id == AgentCredentialBinding.agent_id)
             .where(AgentCredentialBinding.idle_warning.is_(True))
             .where(AgentCredentialBinding.suspended.is_(False))
-            .where(AgentCredentialBinding.max_idle_period >= min_idle_period)
+            .where(
+                or_(
+                    AgentCredentialBinding.max_idle_period >= min_idle_period,
+                    AgentCredentialBinding.expires_at.is_not(None),
+                )
+            )
         )
         for agent_filter in agent_filters:
             stmt = stmt.where(agent_filter)

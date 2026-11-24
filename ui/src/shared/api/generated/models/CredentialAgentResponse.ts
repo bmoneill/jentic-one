@@ -2,11 +2,16 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { AfterExpiry } from './AfterExpiry';
 import type { GrantEndReason } from './GrantEndReason';
 /**
  * Agent directly bound to a credential.
  */
 export type CredentialAgentResponse = {
+    /**
+     * What a call through the binding gets once it has ended: `hold` holds the first call for the owner to renew; `refuse` answers `403 credential_binding_expired`.
+     */
+    after_expiry?: AfterExpiry;
     /**
      * ID of the bound agent.
      */
@@ -36,7 +41,7 @@ export type CredentialAgentResponse = {
      */
     idle_expires_at?: (string | null);
     /**
-     * Whether the agent's owner is warned before the idle limit is reached.
+     * Whether the agent's owner is warned before the binding ends (its end date or idle limit).
      */
     idle_warning?: boolean;
     /**

@@ -101,14 +101,27 @@ export async function getApproval(heldExecutionId: string): Promise<HeldExecutio
 	}
 }
 
+/**
+ * A decision as pages build it: the generated request, with `after_expiry`
+ * on a renewal as its plain wire value (`hold` or `refuse`).
+ */
+export type DecideApprovalBody = Omit<DecideHeldExecutionRequest, 'renewal'> & {
+	renewal?:
+		| (Omit<NonNullable<DecideHeldExecutionRequest['renewal']>, 'after_expiry'> & {
+				after_expiry?: 'hold' | 'refuse' | null;
+		  })
+		| null;
+};
+
 export async function decideApproval(
 	heldExecutionId: string,
-	body: DecideHeldExecutionRequest,
+	body: DecideApprovalBody,
 ): Promise<HeldExecutionResponse> {
 	try {
 		return await HeldExecutionsService.decideHeldExecution({
 			heldExecutionId,
-			requestBody: body,
+			// The wire values are the generated enum's.
+			requestBody: body as DecideHeldExecutionRequest,
 		});
 	} catch (error) {
 		throw toApprovalsError(error, 'Failed to submit decision');

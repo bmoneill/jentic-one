@@ -404,10 +404,12 @@ export function useBindCredentialToAgents() {
 			expiresAt?: string | null;
 			/** The idle limit in seconds, the same for every binding. */
 			maxIdlePeriod?: number | null;
-			/** Warn the owner before that idle limit is reached. */
+			/** Warn the owner before the access ends (its end date or idle limit). */
 			idleWarning?: boolean;
 			/** The use count (1 is single use), the same for every binding. */
 			maxQuota?: number | null;
+			/** What a call gets once the access has ended, the same for every binding. */
+			afterExpiry?: 'hold' | 'refuse';
 		}
 	>({
 		mutationFn: async ({ credentialId, agentIds, rules, ...policy }) => {
@@ -688,7 +690,7 @@ export const bindingsEndingSoonKey = [
 ] as const;
 
 /**
- * Bindings that will soon reach their idle limit, with the warning on (see
+ * Bindings that will soon reach their end date or idle limit, with the warning on (see
  * {@link listBindingsEndingSoon}). The window is two days, so the inbox's
  * cadence is plenty; any renewal refreshes it at once.
  */

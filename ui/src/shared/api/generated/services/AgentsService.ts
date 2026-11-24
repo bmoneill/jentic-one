@@ -117,13 +117,15 @@ export class AgentsService {
     }
     /**
      * List credential bindings ending soon
-     * List bindings that will reach their idle limit soon unless they are used.
+     * List bindings that will reach their end date or idle limit soon.
      *
-     * Only bindings whose owner turned on the idle warning (`idle_warning`),
-     * with an idle limit of 4 days or more, whose idle deadline (`idle_expires_at`)
-     * is within the next 48 hours, and which have not been suspended or ended.
-     * The same bindings get a `credential_grant.idle_expiring` event once per
-     * idle period. Soonest first. Scoped like the agents list: `org:admin` sees
+     * Only bindings whose owner turned on the warning (`idle_warning`) and which
+     * have not been suspended or ended, where either the end date is within the
+     * next 48 hours (for a binding granted for 4 days or more) or the idle
+     * deadline (`idle_expires_at`) is (for an idle limit of 4 days or more).
+     * `ends_at` and `ending` give the nearer of the two. The same bindings get a
+     * `credential_grant.expiring` or `credential_grant.idle_expiring` event, once
+     * per end date or idle period. Soonest first. Scoped like the agents list: `org:admin` sees
      * every agent's bindings, anyone else their own agents'.
      * @returns EndingSoonBindingListResponse Successful Response
      * @throws ApiError

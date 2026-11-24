@@ -12,18 +12,14 @@ const END_FORMAT = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', tim
 export type IdlePreset = '7d' | '14d' | '30d' | '90d';
 export type IdleUnit = 'hours' | 'days';
 
-export type IdleLimit = (
+export type IdleLimit =
 	| { kind: 'preset'; preset: IdlePreset }
 	| {
 			kind: 'custom';
 			/** The number field's text. */
 			amount: string;
 			unit: IdleUnit;
-	  }
-) & {
-	/** "Warn me before it ends": the owner hears before the limit is reached. */
-	warn?: boolean;
-};
+	  };
 
 const HOUR_S = 3_600;
 const DAY_S = 86_400;
@@ -42,12 +38,6 @@ export const IDLE_UNITS: readonly { value: IdleUnit; label: string }[] = [
 	{ value: 'hours', label: 'Hours' },
 	{ value: 'days', label: 'Days' },
 ];
-
-/**
- * The shortest idle limit an owner can be warned about: the warning arrives up
- * to 48 hours ahead, which would cover half or more of a shorter limit.
- */
-export const IDLE_WARNING_MIN_SECONDS = 4 * DAY_S;
 
 /** What turning the idle row on starts with. */
 export const DEFAULT_IDLE_LIMIT: IdleLimit = { kind: 'preset', preset: '14d' };
@@ -84,33 +74,14 @@ export function idleLimitError(
 	return null;
 }
 
-/** Whether a limit is long enough to warn about (see {@link IDLE_WARNING_MIN_SECONDS}). */
-export function idleWarnable(seconds: number | null): boolean {
-	return seconds !== null && seconds >= IDLE_WARNING_MIN_SECONDS;
-}
-
-/** The `idle_warning` to send: ticked, on a limit long enough to warn about. */
-export function idleWarning(limit: IdleLimit | null): boolean {
-	return limit?.warn === true && idleWarnable(idleSeconds(limit));
-}
-
 /** A limit in seconds (as the API returns it) as the field's choice. */
-export function idleLimitFromSeconds(
-	seconds: number | null | undefined,
-	warn = false,
-): IdleLimit | null {
+export function idleLimitFromSeconds(seconds: number | null | undefined): IdleLimit | null {
 	if (!seconds || seconds < MIN_IDLE_SECONDS) return null;
-	const extra = warn ? { warn: true } : {};
 	const preset = IDLE_PRESETS.find((p) => p.seconds === seconds);
-	if (preset) return { kind: 'preset', preset: preset.value, ...extra };
+	if (preset) return { kind: 'preset', preset: preset.value };
 	if (seconds % DAY_S === 0)
-		return { kind: 'custom', amount: String(seconds / DAY_S), unit: 'days', ...extra };
-	return {
-		kind: 'custom',
-		amount: String(Math.round(seconds / HOUR_S)),
-		unit: 'hours',
-		...extra,
-	};
+		return { kind: 'custom', amount: String(seconds / DAY_S), unit: 'days' };
+	return { kind: 'custom', amount: String(Math.round(seconds / HOUR_S)), unit: 'hours' };
 }
 
 /** "14 days", "36 hours", "1 day". */

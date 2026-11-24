@@ -178,8 +178,10 @@ interface CredentialBindingRow {
 	expires_at?: string | null;
 	/** Idle limit in seconds; null = none. */
 	max_idle_period?: number | null;
-	/** Whether the owner is warned before the idle limit is reached. */
+	/** Whether the owner is warned before it ends (its end date or idle limit). */
 	idle_warning?: boolean;
+	/** What a call gets once it has ended: `hold` (the default) or `refuse`. */
+	after_expiry?: 'hold' | 'refuse';
 	/** Use count (1 = single use) and the uses left; null = unlimited. */
 	max_quota?: number | null;
 	quota_remaining?: number | null;
@@ -338,6 +340,7 @@ function bindingExpiryJson(row: CredentialBindingRow): {
 	idle_expires_at: string | null;
 	renewed_at: string | null;
 	idle_warning: boolean;
+	after_expiry: 'hold' | 'refuse';
 	max_quota: number | null;
 	quota_remaining: number | null;
 } {
@@ -372,6 +375,7 @@ function bindingExpiryJson(row: CredentialBindingRow): {
 		idle_expires_at: idleEnd != null ? new Date(idleEnd).toISOString() : null,
 		renewed_at: row.renewed_at ?? null,
 		idle_warning: row.idle_warning ?? false,
+		after_expiry: row.after_expiry ?? 'hold',
 		max_quota: maxQuota,
 		quota_remaining: maxQuota != null ? (row.quota_remaining ?? 0) : null,
 	};
@@ -395,27 +399,40 @@ const IDLE_WARNING_WINDOW_MS = 48 * 3_600_000;
 const IDLE_WARNING_MIN_S = 4 * 86_400;
 
 /**
- * `GET /agents/credentials:ending-soon`: bindings with the warning on, an idle
- * limit of 4 days or more and an idle deadline in the next 48 hours, still
- * holding, soonest first.
+ * `GET /agents/credentials:ending-soon`: bindings with the warning on, still
+ * holding, whose end date (granted for 4 days or more) or idle deadline (an
+ * idle limit of 4 days or more) falls in the next 48 hours — the nearer as
+ * `ends_at` / `ending` — soonest first.
  */
 function bindingsEndingSoon(): unknown[] {
 	const now = Date.now();
+	const inWindow = (at: number): boolean => at > now && at <= now + IDLE_WARNING_WINDOW_MS;
 	return credentialBindings
 		.filter((row) => row.idle_warning && !row.suspended)
-		.filter((row) => (row.max_idle_period ?? 0) >= IDLE_WARNING_MIN_S)
-		.map((row) => ({ row, policy: bindingExpiryJson(row) }))
-		.filter(({ policy }) => {
-			if (policy.expired || policy.idle_expires_at === null) return false;
-			const end = Date.parse(policy.idle_expires_at);
-			return end > now && end <= now + IDLE_WARNING_WINDOW_MS;
+		.flatMap((row) => {
+			const policy = bindingExpiryJson(row);
+			if (policy.expired) return [];
+			const due: { at: number; ending: 'end_date' | 'idle' }[] = [];
+			if ((row.max_idle_period ?? 0) >= IDLE_WARNING_MIN_S && policy.idle_expires_at) {
+				const at = Date.parse(policy.idle_expires_at);
+				if (inWindow(at)) due.push({ at, ending: 'idle' });
+			}
+			if (policy.expires_at) {
+				const at = Date.parse(policy.expires_at);
+				const granted = Date.parse(row.renewed_at ?? row.bound_at);
+				if (inWindow(at) && at - granted >= IDLE_WARNING_MIN_S * 1000)
+					due.push({ at, ending: 'end_date' });
+			}
+			if (due.length === 0) return [];
+			const soonest = due.reduce((a, b) => (b.at < a.at ? b : a));
+			return [{ row, soonest }];
 		})
-		.sort(
-			(a, b) => Date.parse(a.policy.idle_expires_at!) - Date.parse(b.policy.idle_expires_at!),
-		)
-		.map(({ row }) => ({
+		.sort((a, b) => a.soonest.at - b.soonest.at)
+		.map(({ row, soonest }) => ({
 			...bindingJson(row),
 			agent_name: agents.find((a) => a.id === row.agent_id)?.name ?? row.agent_id,
+			ends_at: new Date(soonest.at).toISOString(),
+			ending: soonest.ending,
 		}));
 }
 
@@ -2103,6 +2120,7 @@ export const agentsHandlers = [
 			max_idle_period?: number | null;
 			idle_warning?: boolean;
 			max_quota?: number | null;
+			after_expiry?: 'hold' | 'refuse';
 		};
 		const pastExpiry = pastExpiryError(body.expires_at);
 		if (pastExpiry) return pastExpiry;
@@ -2134,6 +2152,7 @@ export const agentsHandlers = [
 			expires_at: body.expires_at ?? null,
 			max_idle_period: body.max_idle_period ?? null,
 			idle_warning: body.idle_warning ?? false,
+			after_expiry: body.after_expiry ?? 'hold',
 			max_quota: body.max_quota ?? null,
 			quota_remaining: body.max_quota ?? null,
 			renewed_at: now(),
@@ -2176,12 +2195,13 @@ export const agentsHandlers = [
 		if (!row) return new HttpResponse(null, { status: 404 });
 		// A field left out stays as it is (an end date left out runs again for
 		// as long as it was granted for); null clears it. Every renewal restarts
-		// the idle clock, so an empty body is "still needed".
+		// the idle clock, so an empty body re-certifies it.
 		const body = (await request.json().catch(() => ({}))) as {
 			expires_at?: string | null;
 			max_idle_period?: number | null;
 			idle_warning?: boolean;
 			max_quota?: number | null;
+			after_expiry?: 'hold' | 'refuse' | null;
 		};
 		if ('expires_at' in body) {
 			const pastExpiry = pastExpiryError(body.expires_at);
@@ -2193,6 +2213,7 @@ export const agentsHandlers = [
 		}
 		if ('max_idle_period' in body) row.max_idle_period = body.max_idle_period ?? null;
 		if (body.idle_warning !== undefined) row.idle_warning = body.idle_warning;
+		if (body.after_expiry) row.after_expiry = body.after_expiry;
 		if ('max_quota' in body) row.max_quota = body.max_quota ?? null;
 		// Every renewal restores the uses left.
 		row.quota_remaining = row.max_quota ?? null;

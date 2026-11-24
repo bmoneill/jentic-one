@@ -2,7 +2,8 @@
  * RenewalDecision — the decision on a held call whose agent's access ended
  * (`kind: grant_renewal`). A reviewer who may renew the binding directly
  * chooses its fresh policy with the same controls as granting access (an end
- * date, nothing preselected; an idle limit; single use), then either grants
+ * date, nothing preselected; an idle limit; single use; the warning before
+ * it ends and what happens after it, starting on the binding's own), then either grants
  * fresh access and runs the call, grants it without running a stale call, or
  * denies. Fresh access replaces the binding's old policy; its rules stay.
  *
@@ -12,6 +13,7 @@
  */
 import { useRef, useState } from 'react';
 import {
+	AccessEndFields,
 	BindingDurationField,
 	IdleLimitField,
 	NoExpiryConfirmDialog,
@@ -30,12 +32,13 @@ import {
 	durationChosen,
 	NO_DURATION_HINT,
 } from '@/shared/credentials/lib/bindingExpiry';
+import { idleLimitError, idleSeconds, type IdleLimit } from '@/shared/credentials/lib/idleLimit';
 import {
-	idleLimitError,
-	idleSeconds,
-	idleWarning,
-	type IdleLimit,
-} from '@/shared/credentials/lib/idleLimit';
+	afterExpiryFrom,
+	expiryWarnable,
+	expiryWarning,
+	type AfterExpiry,
+} from '@/shared/credentials/lib/accessEnd';
 import { Button, Label, Textarea, UserText } from '@/shared/ui';
 
 /** The fresh policy a renewal sends, as `:decide` takes it. */
@@ -44,6 +47,7 @@ export interface RenewalPolicyBody {
 	max_idle_period: number | null;
 	idle_warning: boolean;
 	max_quota: number | null;
+	after_expiry: AfterExpiry;
 }
 
 export interface RenewalDecisionProps {
@@ -56,6 +60,8 @@ export interface RenewalDecisionProps {
 	 * known once it is tried.
 	 */
 	renewElsewhere?: boolean;
+	/** What a call through the binding gets once it ends now (`hold` or `refuse`). */
+	afterExpiry?: string | null;
 	pending: boolean;
 	onDeny: (reason: string) => void;
 	onRenew: (policy: RenewalPolicyBody, run: boolean, reason: string) => void;
@@ -65,6 +71,7 @@ export function RenewalDecision({
 	agentName,
 	canRenew: viewerMayRenew,
 	renewElsewhere = false,
+	afterExpiry: afterExpiryNow = null,
 	pending,
 	onDeny,
 	onRenew,
@@ -74,6 +81,8 @@ export function RenewalDecision({
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	const [uses, setUses] = useState<number | null>(null);
+	const [warn, setWarn] = useState(false);
+	const [after, setAfter] = useState<AfterExpiry>(() => afterExpiryFrom(afterExpiryNow));
 	// The org's defaults preselect fresh access (D14); its maximums bound it.
 	const limits = useGrantPolicyLimits();
 	usePreselectGrantDefaults(limits, (d) => {
@@ -97,8 +106,13 @@ export function RenewalDecision({
 						// Worked out now, as the reviewer decides: the duration runs from here.
 						expires_at: expiresAtIso(duration) ?? null,
 						max_idle_period: idleSeconds(idle),
-						idle_warning: idleWarning(idle),
+						idle_warning: expiryWarning(
+							warn,
+							expiresAtFromDuration(duration),
+							idleSeconds(idle),
+						),
 						max_quota: uses,
+						after_expiry: after,
 					},
 					run,
 					reason,
@@ -141,6 +155,18 @@ export function RenewalDecision({
 						onChange={setUses}
 						end={expiresAtFromDuration(duration)}
 						idleSeconds={idleSeconds(idle)}
+						disabled={pending}
+						testIdPrefix="renewal"
+					/>
+					<AccessEndFields
+						warn={warn}
+						onWarnChange={setWarn}
+						warnable={expiryWarnable(
+							expiresAtFromDuration(duration),
+							idleSeconds(idle),
+						)}
+						afterExpiry={after}
+						onAfterExpiryChange={setAfter}
 						disabled={pending}
 						testIdPrefix="renewal"
 					/>

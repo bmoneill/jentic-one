@@ -80,7 +80,10 @@ from jentic_one.shared.auth.grant_limits import (
 from jentic_one.shared.auth.grant_policy import (
     GRANT_POLICY_FIELDS,
     UNSET,
+    AfterExpiry,
+    GrantEndReason,
     Unset,
+    expiry_warning_due,
     idle_warning_due,
 )
 from jentic_one.shared.auth.identity import Identity
@@ -933,12 +936,14 @@ class AgentService:
     async def list_bindings_ending_soon(
         self, *, identity: Identity, now: datetime | None = None
     ) -> list[EndingSoonBindingView]:
-        """Bindings of the caller's visible agents that will soon go idle.
+        """Bindings of the caller's visible agents that will soon end.
 
-        The live state behind the owner's idle warning (and the console's
-        "Ending soon" row): the warning is on, the idle limit is long enough to
-        warn about, and the idle deadline falls within the warning window,
-        soonest first. Visibility is the agents list's: ``org:admin`` sees every
+        The live state behind the owner's warning (and the console's "Ending
+        soon" row): the warning is on, and either the idle deadline (for an
+        idle limit long enough to warn about) or the end date (for a binding
+        granted at least that long) falls within the warning window. Each
+        carries the nearer of the two (``ends_at``, ``ending``), soonest
+        first. Visibility is the agents list's: ``org:admin`` sees every
         agent's, anyone else their own agents'.
         """
         now = now or datetime.now(UTC)
@@ -953,17 +958,37 @@ class AgentService:
             )
         views: list[tuple[datetime, EndingSoonBindingView]] = []
         for binding, agent_name in rows:
+            current = CredentialBindingView.model_validate(binding)
+            due = [
+                (deadline, reason)
+                for deadline, reason in (
+                    (
+                        idle_warning_due(
+                            current.policy, now=now, window=window, min_idle_period=min_idle
+                        ),
+                        GrantEndReason.IDLE,
+                    ),
+                    (
+                        expiry_warning_due(
+                            current.policy, now=now, window=window, min_length=min_idle
+                        ),
+                        GrantEndReason.END_DATE,
+                    ),
+                )
+                if deadline is not None
+            ]
+            if not due:
+                continue
+            deadline, reason = min(due, key=lambda pair: pair[0])
             view = EndingSoonBindingView.model_validate(
                 {
-                    **CredentialBindingView.model_validate(binding).model_dump(),
+                    **current.model_dump(),
                     "agent_name": agent_name,
+                    "ends_at": deadline,
+                    "ending": reason.value,
                 }
             )
-            deadline = idle_warning_due(
-                view.policy, now=now, window=window, min_idle_period=min_idle
-            )
-            if deadline is not None:
-                views.append((deadline, view))
+            views.append((deadline, view))
         ending = [view for _, view in sorted(views, key=lambda pair: pair[0])]
         credential_ids = sorted({v.credential_id for v in ending})
         if credential_ids and self._ctx.is_db_allowed("control"):
@@ -1002,6 +1027,7 @@ class AgentService:
         max_idle_period: int | Unset | None = UNSET,
         idle_warning: bool = False,
         max_quota: int | Unset | None = UNSET,
+        after_expiry: AfterExpiry = AfterExpiry.HOLD,
     ) -> CredentialBindingView:
         """Create a direct agent↔credential binding.
 
@@ -1049,6 +1075,7 @@ class AgentService:
                     max_idle_period=policy.max_idle_period,
                     idle_warning=idle_warning,
                     max_quota=policy.max_quota,
+                    after_expiry=after_expiry.value,
                 )
             except IntegrityError:
                 raise CredentialBindingConflictError(agent_id, credential_id) from None
@@ -1287,6 +1314,7 @@ class AgentService:
         max_idle_period: int | Unset | None = UNSET,
         idle_warning: bool | Unset = UNSET,
         max_quota: int | Unset | None = UNSET,
+        after_expiry: AfterExpiry | Unset = UNSET,
     ) -> CredentialBindingView:
         """Re-certify a binding: set, move or clear its limits, and restart its idle clock.
 
@@ -1295,8 +1323,7 @@ class AgentService:
         the org's maximum (a binding with no end date takes the maximum, or
         keeps none without one); any other limit left out stays as it is.
         Every renewal restarts the idle clock (``renewed_at``) and restores
-        the use count, so renewing with no change is the "still needed"
-        re-certification.
+        the use count, so renewing with no change re-certifies the binding.
 
         Renewing re-grants the credential, so it takes exactly the checks of
         :meth:`resume_credential`: the agent check, the credential-ownership
@@ -1313,6 +1340,8 @@ class AgentService:
             policy["idle_warning"] = idle_warning
         if not isinstance(max_quota, Unset):
             policy["max_quota"] = max_quota
+        if not isinstance(after_expiry, Unset):
+            policy["after_expiry"] = after_expiry.value
         # The org's maximums apply to the limits this renewal sets.
         check_grant_limits(
             self._ctx.config.grant_expiry,

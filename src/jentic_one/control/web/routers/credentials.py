@@ -91,7 +91,7 @@ from jentic_one.control.web.schemas.permission_rules import (
     PermissionTestResponse,
     ScopeOptionSchema,
 )
-from jentic_one.shared.auth.grant_policy import grant_end_reason, idle_deadline
+from jentic_one.shared.auth.grant_policy import AfterExpiry, grant_end_reason, idle_deadline
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
 from jentic_one.shared.models.credentials import CredentialType
@@ -573,6 +573,7 @@ async def list_credential_agents(
                 max_idle_period=row.max_idle_period,
                 idle_expires_at=idle_deadline(row.policy()),
                 idle_warning=row.idle_warning,
+                after_expiry=AfterExpiry(row.after_expiry),
                 max_quota=row.max_quota,
                 quota_remaining=row.quota_remaining,
                 last_used_at=row.last_used_at,

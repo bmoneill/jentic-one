@@ -181,7 +181,7 @@ func (EditRuleView) RequiredFields() []string                  { return []string
 func (EffectivePermission) RequiredFields() []string           { return []string{"name"} }
 func (EndingSoonBindingListResponse) RequiredFields() []string { return []string{"data"} }
 func (EndingSoonBindingResponse) RequiredFields() []string {
-	return []string{"agent_id", "agent_name", "bound_at", "credential_id", "id", "suspended"}
+	return []string{"agent_id", "agent_name", "bound_at", "credential_id", "ending", "ends_at", "id", "suspended"}
 }
 func (ErrorItem) RequiredFields() []string         { return []string{"detail"} }
 func (EventLinks) RequiredFields() []string        { return []string{"self"} }

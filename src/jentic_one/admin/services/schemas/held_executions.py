@@ -62,6 +62,7 @@ class RenewalContextView(BaseModel):
     expires_at: datetime | None = None
     max_idle_period: int | None = None
     idle_warning: bool = False
+    after_expiry: str = "hold"
     max_quota: int | None = None
     quota_remaining: int | None = None
     #: Whether the reader may grant fresh access (else only deny).

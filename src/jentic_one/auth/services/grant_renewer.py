@@ -61,6 +61,7 @@ class AgentGrantRenewer:
                 max_idle_period=policy.max_idle_period,
                 idle_warning=policy.idle_warning,
                 max_quota=policy.max_quota,
+                after_expiry=policy.after_expiry,
             )
         except (
             ActorNotFoundError,

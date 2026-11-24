@@ -13,16 +13,13 @@ import {
 	decideApproval,
 	getApproval,
 	listApprovals,
+	type DecideApprovalBody,
 	type HeldExecutionDetailResponse,
 	type ListApprovalsParams,
 } from '@/modules/agents/api/approvals-client';
 import { isCallUnderWay } from '@/modules/agents/lib/approvalState';
 import { invalidateBindingSurfaces } from '@/shared/credentials/api';
-import {
-	sharedQueryKeys,
-	type DecideHeldExecutionRequest,
-	type HeldExecutionResponse,
-} from '@/shared/api';
+import { sharedQueryKeys, type HeldExecutionResponse } from '@/shared/api';
 
 export { ApprovalDecision, HeldExecutionState } from '@/shared/api';
 export { ApprovalsApiError, HELD_EXECUTION_ERRORS } from '@/modules/agents/api/approvals-client';
@@ -71,7 +68,7 @@ export function useDecideApproval() {
 	return useMutation<
 		HeldExecutionResponse,
 		Error,
-		{ heldExecutionId: string; body: DecideHeldExecutionRequest }
+		{ heldExecutionId: string; body: DecideApprovalBody }
 	>({
 		mutationFn: ({ heldExecutionId, body }) => decideApproval(heldExecutionId, body),
 		onSuccess: (data, { heldExecutionId }) => {

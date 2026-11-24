@@ -54,14 +54,20 @@ import {
 	durationChosen,
 } from '@/shared/credentials/lib/bindingExpiry';
 import { BindingDurationField } from './BindingDurationField';
+import { AccessEndFields } from './AccessEndFields';
 import { IdleLimitField } from './IdleLimitField';
 import { SingleUseField } from './SingleUseField';
+import {
+	DEFAULT_AFTER_EXPIRY,
+	expiryWarnable,
+	expiryWarning,
+	type AfterExpiry,
+} from '@/shared/credentials/lib/accessEnd';
 import {
 	idleLabel,
 	idleLimitError,
 	idleLimitFromSeconds,
 	idleSeconds,
-	idleWarning,
 	type IdleLimit,
 } from '@/shared/credentials/lib/idleLimit';
 import { NoExpiryConfirmDialog, useNoExpiryConfirm } from './NoExpiryConfirmDialog';
@@ -153,6 +159,9 @@ export function VendorApproveFlow({
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	// The optional use count (1 = "End after one use"); null = off.
 	const [uses, setUses] = useState<number | null>(null);
+	// Warn before the access ends (off to start), and what happens after it.
+	const [warn, setWarn] = useState(false);
+	const [afterExpiry, setAfterExpiry] = useState<AfterExpiry>(DEFAULT_AFTER_EXPIRY);
 	// What the request asked for comes first (below); the org's defaults fill
 	// what it left out, and its maximums bound the controls.
 	const limits = useGrantPolicyLimits();
@@ -387,8 +396,11 @@ export function VendorApproveFlow({
 			? {
 					expires_at: expiresAtIso(duration) ?? null,
 					max_idle_period: idleSeconds(idle),
-					...(idleWarning(idle) ? { idle_warning: true } : {}),
+					...(expiryWarning(warn, expiresAtFromDuration(duration), idleSeconds(idle))
+						? { idle_warning: true }
+						: {}),
 					...(uses !== null ? { max_quota: uses } : {}),
+					...(afterExpiry !== DEFAULT_AFTER_EXPIRY ? { after_expiry: afterExpiry } : {}),
 				}
 			: {}),
 	});
@@ -853,6 +865,17 @@ export function VendorApproveFlow({
 							{requestedText(requestedDuration, session.requested_max_idle_period)}
 						</p>
 					)}
+					<AccessEndFields
+						warn={warn}
+						onWarnChange={setWarn}
+						warnable={expiryWarnable(
+							expiresAtFromDuration(duration),
+							idleSeconds(idle),
+						)}
+						afterExpiry={afterExpiry}
+						onAfterExpiryChange={setAfterExpiry}
+						testIdPrefix="approve"
+					/>
 				</div>
 			)}
 

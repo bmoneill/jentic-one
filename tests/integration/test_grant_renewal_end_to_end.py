@@ -43,7 +43,7 @@ from jentic_one.admin.web.app import create_app
 from jentic_one.auth.services.grant_renewer import AgentGrantRenewer
 from jentic_one.broker.core.errors import CredentialBindingExpiredError
 from jentic_one.broker.core.schemas import ExecuteRequestContext
-from jentic_one.broker.web.routers.execute import _hold_call
+from jentic_one.broker.web.routers.execute import _hold_call, _renewable
 from jentic_one.control.core.schema.credentials import Credential
 from jentic_one.shared.auth.agent_expiry import as_utc
 from jentic_one.shared.auth.grant_renewal import GrantRenewalPolicy
@@ -486,3 +486,13 @@ async def test_renewal_holds_never_count_against_the_pending_cap(
             kind=HeldExecutionKind.GRANT_RENEWAL,
         )
     assert hold.joined is False
+
+
+async def test_a_binding_set_to_refuse_is_never_held(
+    integration_context: Context, parties: _Parties
+) -> None:
+    """``after_expiry: refuse`` keeps the plain 403: the agent asks its owner instead."""
+    ended = _ended(_CREDENTIAL)
+    assert _renewable(integration_context, parties.agent, ended)
+    ended.holds_for_renewal = False
+    assert not _renewable(integration_context, parties.agent, ended)

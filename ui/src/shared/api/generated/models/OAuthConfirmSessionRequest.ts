@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { AfterExpiry } from './AfterExpiry';
 import type { PermissionRuleSchema } from './PermissionRuleSchema';
 /**
  * Confirm an OAuth session: the scopes to request and the agent's rules.
@@ -9,6 +10,10 @@ import type { PermissionRuleSchema } from './PermissionRuleSchema';
  * The default variant — a body without ``kind`` is this one.
  */
 export type OAuthConfirmSessionRequest = {
+    /**
+     * What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent's owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew. Applies to the new binding.
+     */
+    after_expiry?: AfterExpiry;
     /**
      * Agent to bind when the session has none; ignored if the session already has one.
      */
@@ -30,7 +35,7 @@ export type OAuthConfirmSessionRequest = {
      */
     expires_at?: (string | null);
     /**
-     * Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+     * Warn the agent's owner before the binding ends: once a day a job raises a `credential_grant.expiring` event when its end date is within 48 hours (for a binding granted for 4 days or more), and a `credential_grant.idle_expiring` event when it will go idle within 48 hours (for idle limits of 4 days or more); each once per end date or idle period. Off unless set. Applies to the new binding.
      */
     idle_warning?: boolean;
     /**

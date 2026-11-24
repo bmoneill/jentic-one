@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from jentic_one.shared.auth.grant_policy import (
+    AFTER_EXPIRY_DESCRIPTION,
     MAX_IDLE_PERIOD_SECONDS,
     MAX_QUOTA,
     MIN_IDLE_PERIOD_SECONDS,
+    WARNING_DESCRIPTION,
+    AfterExpiry,
     GrantEndReason,
 )
 from jentic_one.shared.schemas import ServedApiRef
@@ -51,11 +54,7 @@ _BINDING_EXPIRES_AT_DESCRIPTION = (
     " rules; an owner renews it by setting a later time or null."
 )
 
-_BINDING_IDLE_WARNING_DESCRIPTION = (
-    "Warn the agent's owner before the idle limit is reached: once a day a job raises a"
-    " `credential_grant.idle_expiring` event when the binding will go idle within 48"
-    " hours (for idle limits of 4 days or more), once per idle period. Off unless set."
-)
+_BINDING_IDLE_WARNING_DESCRIPTION = WARNING_DESCRIPTION
 
 _BINDING_QUOTA_DESCRIPTION = (
     "How many calls the binding allows before it ends (1 is single use); each authorized"
@@ -281,6 +280,11 @@ class CredentialBindingResponse(BaseModel):
         description=_BINDING_IDLE_WARNING_DESCRIPTION,
         examples=[False],
     )
+    after_expiry: AfterExpiry = Field(
+        default=AfterExpiry.HOLD,
+        description=AFTER_EXPIRY_DESCRIPTION,
+        examples=["hold"],
+    )
     max_quota: int | None = Field(
         default=None,
         description=_BINDING_QUOTA_DESCRIPTION + " Null for unlimited calls.",
@@ -357,10 +361,20 @@ class GrantPolicyLimitsResponse(BaseModel):
 
 
 class EndingSoonBindingResponse(CredentialBindingResponse):
-    """A binding whose idle limit will end it soon unless the agent uses it."""
+    """A binding whose end date or idle limit will end it soon."""
 
     agent_name: str = Field(
         description="Name of the agent the credential is bound to.", examples=[_EX_AGENT_NAME]
+    )
+    ends_at: datetime = Field(
+        description="When the binding ends (RFC 3339): the nearer of its end date and its"
+        " idle deadline, of those due a warning.",
+        examples=[_EX_EXPIRES_AT],
+    )
+    ending: Literal["end_date", "idle"] = Field(
+        description="Which limit ends it at `ends_at`: its end date (`end_date`) or its idle"
+        " limit unless the agent uses it first (`idle`).",
+        examples=["end_date"],
     )
 
 
@@ -368,7 +382,7 @@ class EndingSoonBindingListResponse(BaseModel):
     """Bindings that will soon reach their idle limit."""
 
     data: list[EndingSoonBindingResponse] = Field(
-        description="Bindings with the idle warning on that end soon if unused, soonest first."
+        description="Bindings with the warning on that end soon, soonest first."
     )
 
 
@@ -572,6 +586,11 @@ class CredentialBindingPatchRequest(BaseModel):
         description=_BINDING_IDLE_WARNING_DESCRIPTION + " Leave it out to keep it as it is.",
         examples=[True],
     )
+    after_expiry: AfterExpiry | None = Field(
+        default=None,
+        description=AFTER_EXPIRY_DESCRIPTION + " Leave it out to keep it as it is.",
+        examples=["refuse"],
+    )
     max_quota: int | None = Field(
         default=None,
         ge=1,
@@ -615,6 +634,11 @@ class CredentialBindRequest(BaseModel):
         default=False,
         description=_BINDING_IDLE_WARNING_DESCRIPTION,
         examples=[False],
+    )
+    after_expiry: AfterExpiry = Field(
+        default=AfterExpiry.HOLD,
+        description=AFTER_EXPIRY_DESCRIPTION,
+        examples=["hold"],
     )
     max_quota: int | None = Field(
         default=None,

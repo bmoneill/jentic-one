@@ -625,6 +625,8 @@ class ConfirmChecks:
     max_idle_period: int | None = None
     # Whether the owner is warned before that idle limit is reached.
     idle_warning: bool = False
+    # What a call through it gets once it has ended (``hold`` or ``refuse``).
+    after_expiry: str = "hold"
     # The new binding's use count (None = unlimited; 1 is single use).
     max_quota: int | None = None
 
@@ -4351,6 +4353,7 @@ class ConnectSessionService:
         # The new binding's idle limit in seconds (None = none).
         max_idle_period: int | None = None,
         idle_warning: bool = False,
+        after_expiry: str = "hold",
         max_quota: int | None = None,
     ) -> ConfirmResult:
         """Confirm scopes + permissions and kick off the vendor-side flow.
@@ -4538,6 +4541,7 @@ class ConnectSessionService:
                         expires_at=expires_at,
                         max_idle_period=max_idle_period,
                         idle_warning=idle_warning,
+                        after_expiry=after_expiry,
                         max_quota=max_quota,
                     )
             except (BindingSuspendedError, BindingExpiredError) as exc:
@@ -4779,6 +4783,7 @@ class ConnectSessionService:
         expires_at: datetime | None = None,
         max_idle_period: int | None = None,
         idle_warning: bool = False,
+        after_expiry: str = "hold",
         max_quota: int | None = None,
     ) -> tuple[str, bool]:
         async with guard_binding_write(
@@ -4799,6 +4804,7 @@ class ConnectSessionService:
                 expires_at=expires_at,
                 max_idle_period=max_idle_period,
                 idle_warning=idle_warning,
+                after_expiry=after_expiry,
                 max_quota=max_quota,
             )
 
@@ -4811,6 +4817,7 @@ class ConnectSessionService:
         expires_at: datetime | None = None,
         max_idle_period: int | None = None,
         idle_warning: bool = False,
+        after_expiry: str = "hold",
         max_quota: int | None = None,
     ) -> bool:
         """Bind the agent (idempotent) and re-check it is still usable; True if newly bound.
@@ -4828,6 +4835,7 @@ class ConnectSessionService:
                 expires_at=expires_at,
                 max_idle_period=max_idle_period,
                 idle_warning=idle_warning,
+                after_expiry=after_expiry,
                 max_quota=max_quota,
             )
         async with self._ctx.admin_db.session() as admin_session:
@@ -4911,6 +4919,7 @@ class ConnectSessionService:
                 expires_at=variant.checks.expires_at,
                 max_idle_period=variant.checks.max_idle_period,
                 idle_warning=variant.checks.idle_warning,
+                after_expiry=variant.checks.after_expiry,
                 max_quota=variant.checks.max_quota,
             )
         cas_fields: dict[str, Any] = {"agent_id": agent_id} if late_bound else {}
@@ -5018,6 +5027,7 @@ class ConnectSessionService:
             expires_at=variant.checks.expires_at,
             max_idle_period=variant.checks.max_idle_period,
             idle_warning=variant.checks.idle_warning,
+            after_expiry=variant.checks.after_expiry,
             max_quota=variant.checks.max_quota,
         )
         cas_fields: dict[str, Any] = {"agent_id": agent_id} if late_bound else {}
@@ -5113,6 +5123,7 @@ class ConnectSessionService:
             ),
             "max_idle_period": variant.checks.max_idle_period,
             "idle_warning": variant.checks.idle_warning,
+            "after_expiry": variant.checks.after_expiry,
             "max_quota": variant.checks.max_quota,
         }
         cas_fields: dict[str, Any] = {"agent_id": agent_id} if late_bound else {}
@@ -5280,6 +5291,7 @@ class ConnectSessionService:
                         expires_at=variant.checks.expires_at,
                         max_idle_period=variant.checks.max_idle_period,
                         idle_warning=variant.checks.idle_warning,
+                        after_expiry=variant.checks.after_expiry,
                         max_quota=variant.checks.max_quota,
                     )
             except (BindingSuspendedError, BindingExpiredError) as exc:
@@ -6036,6 +6048,7 @@ class ConnectSessionService:
                             ),
                             max_idle_period=change.get("max_idle_period"),
                             idle_warning=bool(change.get("idle_warning", False)),
+                            after_expiry=str(change.get("after_expiry") or "hold"),
                             max_quota=change.get("max_quota"),
                         )
         except (BindingSuspendedError, BindingExpiredError) as exc:

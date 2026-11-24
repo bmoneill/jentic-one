@@ -3029,6 +3029,8 @@ describe('AgentsPage — access ending soon', () => {
 			idle_warning: true,
 			serves: [],
 			last_used_by_api: [],
+			ends_at: idleEnd,
+			ending: 'idle',
 		};
 	}
 
@@ -3046,6 +3048,31 @@ describe('AgentsPage — access ending soon', () => {
 		const link = within(row).getByRole('link', { name: /^Review/ });
 		expect(link.getAttribute('href')).toBe('/agents?agent=agnt_active_1');
 		await checkA11y(section);
+	});
+
+	it('lists a binding whose end date is near, without "unless used"', async () => {
+		const end = new Date(Date.now() + 30 * 3_600_000).toISOString();
+		worker.use(
+			http.get('/agents/credentials\\:ending-soon', () =>
+				HttpResponse.json({
+					data: [
+						{
+							...endingSoon('Gmail', 30),
+							max_idle_period: null,
+							idle_expires_at: null,
+							expires_at: end,
+							ends_at: end,
+							ending: 'end_date',
+						},
+					],
+				}),
+			),
+		);
+		renderPage();
+		const section = await screen.findByRole('region', { name: 'Waiting for you' });
+		const row = within(section).getByTestId('waiting-ending-soon');
+		expect(row).toHaveTextContent('has access to Gmail that expires in 1 day');
+		expect(row).not.toHaveTextContent('unless used');
 	});
 
 	it('lists a call held because access ended as its own row', async () => {

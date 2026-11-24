@@ -10,6 +10,7 @@
 import {
 	AgentsService,
 	CredentialsService,
+	type AfterExpiry,
 	IntegrationsService,
 	PermissionRuleSetsService,
 	getToken,
@@ -153,7 +154,7 @@ export async function bindCredentialToAgentBlocked(
 	credentialId: string,
 	policy: BindingPolicy = {},
 ): Promise<void> {
-	const { expiresAt, maxIdlePeriod, idleWarning, maxQuota } = policy;
+	const { expiresAt, maxIdlePeriod, idleWarning, maxQuota, afterExpiry } = policy;
 	try {
 		await AgentsService.bindAgentCredential({
 			agentId,
@@ -163,6 +164,8 @@ export async function bindCredentialToAgentBlocked(
 				...(maxIdlePeriod != null ? { max_idle_period: maxIdlePeriod } : {}),
 				...(idleWarning ? { idle_warning: true } : {}),
 				...(maxQuota != null ? { max_quota: maxQuota } : {}),
+				// Left out, the binding holds the first call after it ends.
+				...(afterExpiry === 'refuse' ? { after_expiry: afterExpiry as AfterExpiry } : {}),
 			},
 		});
 	} catch (err) {
@@ -178,10 +181,12 @@ export interface BindingPolicy {
 	expiresAt?: string | null;
 	/** The idle limit in seconds. */
 	maxIdlePeriod?: number | null;
-	/** Warn the owner before the idle limit is reached. */
+	/** Warn the owner before the access ends (its end date or idle limit). */
 	idleWarning?: boolean;
 	/** How many calls it allows (1 is single use). */
 	maxQuota?: number | null;
+	/** What a call gets once the access has ended (left out: hold). */
+	afterExpiry?: 'hold' | 'refuse';
 }
 
 /** What a renewal changes: a field left out stays as it is; `null` clears that limit. */
@@ -189,16 +194,18 @@ export interface BindingRenewal {
 	expiresAt?: string | null;
 	/** The idle limit in seconds. */
 	maxIdlePeriod?: number | null;
-	/** Whether the owner is warned before the idle limit is reached. */
+	/** Whether the owner is warned before the access ends (its end date or idle limit). */
 	idleWarning?: boolean;
 	/** The use count (1 is single use); `null` removes it. Every renewal restores the uses left. */
 	maxQuota?: number | null;
+	/** What a call gets once the access has ended. */
+	afterExpiry?: 'hold' | 'refuse';
 }
 
 /**
  * Renew a binding (`PATCH /agents/{id}/credentials/{cid}`): re-certify it,
  * restarting its idle clock, and set, move or clear its limits (an empty
- * renewal is "still needed"). A renewal that sends no end date runs the
+ * renewal re-certifies it). A renewal that sends no end date runs the
  * binding again for as long as it was granted for, capped at the org's
  * maximum, so it resolves to the binding's new end date (null: none).
  * Renewing restores an expired binding; it never resumes a suspended one.
@@ -221,6 +228,9 @@ export async function renewCredentialBinding(
 					: {}),
 				...(renewal.idleWarning !== undefined ? { idle_warning: renewal.idleWarning } : {}),
 				...(renewal.maxQuota !== undefined ? { max_quota: renewal.maxQuota } : {}),
+				...(renewal.afterExpiry !== undefined
+					? { after_expiry: renewal.afterExpiry as AfterExpiry }
+					: {}),
 			},
 		});
 		return binding.expires_at ?? null;
@@ -449,8 +459,9 @@ export async function listOpenConnectRequests(): Promise<ConnectSessionSummaryRe
 
 /**
  * Bindings of the viewer's agents (every agent's, for an `org:admin`) whose
- * owner asked to be warned and that will reach their idle limit within the
- * warning window unless used, soonest first. The live state behind "Ending
+ * owner asked to be warned and that will reach their end date, or their idle
+ * limit unless used, within the warning window, soonest first (`ends_at`,
+ * `ending`). The live state behind "Ending
  * soon" in "Waiting for you".
  */
 export async function listBindingsEndingSoon(): Promise<EndingSoonBindingResponse[]> {

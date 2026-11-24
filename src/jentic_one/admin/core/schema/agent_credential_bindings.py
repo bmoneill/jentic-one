@@ -94,13 +94,22 @@ class AgentCredentialBinding(AuditableMixin, AdminBase):
     # When the binding was granted or last renewed (PATCH): restarts the idle
     # clock without counting as a use.
     renewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
-    # Opt-in warning to the agent's owner before the idle limit is reached
-    # (always off by default), and when the daily job last sent it — cleared
-    # by a use or a renewal, so each idle period warns at most once.
+    # Opt-in warning to the agent's owner before the binding ends — its idle
+    # limit or its end date (always off by default). ``idle_warned_at`` marks
+    # the idle warning (cleared by a use or a renewal, so each idle period
+    # warns at most once); ``expiry_warned_at`` marks the end-date warning
+    # (cleared by a renewal, so each end date warns once).
     idle_warning: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
     idle_warned_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    expiry_warned_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # What a call through the binding gets once it has ended: ``hold`` keeps
+    # the first such call for the owner to renew and run; ``refuse`` answers a
+    # plain 403 telling the agent to ask its owner (``AfterExpiry``).
+    after_expiry: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="hold", server_default=text("'hold'")
+    )
     # Use count (NULL = unlimited): the binding ends once ``quota_remaining``
     # reaches zero. The broker takes one use per authorized call with an
     # atomic decrement; a renewal restores it to ``max_quota``.

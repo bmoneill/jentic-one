@@ -214,10 +214,104 @@ async def test_a_renewal_clears_the_marker(admin_db: _MemoryDb) -> None:
     scanner = BindingIdleWarningScanner(admin_db)
     assert await scanner.sweep(now=_NOW) == 1
 
-    # "Still needed": a renewal that changes nothing else.
+    # A renewal that changes nothing else.
     async with admin_db.transaction() as session:
         await AgentCredentialBindingRepository.renew(
             session, agent_id="agt_idle", credential_id="crd_renewed", policy={}, now=_NOW
         )
     assert await _warned_at(admin_db, "crd_renewed") is None
     assert await scanner.sweep(now=_NOW + timedelta(days=6)) == 1
+
+
+async def _bind_until(
+    db: _MemoryDb, credential_id: str, *, granted_days: int, left: timedelta
+) -> None:
+    """A binding granted for ``granted_days`` with no idle limit, ending in ``left``."""
+    granted = _NOW + left - timedelta(days=granted_days)
+    async with db.transaction() as session:
+        session.add(
+            AgentCredentialBinding(
+                agent_id="agt_idle",
+                credential_id=credential_id,
+                created_by="usr_owner",
+                bound_at=granted,
+                renewed_at=granted,
+                expires_at=_NOW + left,
+                idle_warning=True,
+            )
+        )
+
+
+async def _end_date_events(db: _MemoryDb) -> list[Event]:
+    async with db.session() as session:
+        return await EventRepository.list_all(
+            session, event_type=[EventType.CREDENTIAL_GRANT_EXPIRING]
+        )
+
+
+async def test_warns_once_before_the_end_date(admin_db: _MemoryDb) -> None:
+    await _bind_until(admin_db, "crd_ending", granted_days=30, left=timedelta(hours=40))
+    scanner = BindingIdleWarningScanner(admin_db)
+
+    assert await scanner.sweep(now=_NOW) == 1
+    (event,) = await _end_date_events(admin_db)
+    assert event.requires_action is True
+    assert event.created_by == "agt_idle"
+    assert event.data["credential_id"] == "crd_ending"
+    assert datetime.fromisoformat(event.data["expires_at"]) == _NOW + timedelta(hours=40)
+    assert "ends on" in event.summary
+    assert await _events(admin_db) == []
+
+    # A use does not move the end date, so it does not warn again.
+    async with admin_db.transaction() as session:
+        await BindingUseRepository.record_use(
+            session,
+            agent_id="agt_idle",
+            credential_id="crd_ending",
+            now=_NOW + timedelta(hours=1),
+            min_interval=timedelta(hours=1),
+        )
+    assert await scanner.sweep(now=_NOW + timedelta(hours=24)) == 0
+
+    # A renewal sets a new end date, which warns once more when it nears.
+    async with admin_db.transaction() as session:
+        await AgentCredentialBindingRepository.renew(
+            session,
+            agent_id="agt_idle",
+            credential_id="crd_ending",
+            policy={"expires_at": _NOW + timedelta(days=30)},
+            now=_NOW,
+        )
+    assert await scanner.sweep(now=_NOW + timedelta(days=29)) == 1
+    assert len(await _end_date_events(admin_db)) == 2
+
+
+@pytest.mark.parametrize(
+    ("granted_days", "left"),
+    [
+        pytest.param(30, timedelta(hours=49), id="outside-window"),
+        pytest.param(3, timedelta(hours=24), id="granted-under-4-days"),
+        pytest.param(30, -timedelta(hours=1), id="already-ended"),
+    ],
+)
+async def test_skips_end_dates_not_due(
+    admin_db: _MemoryDb, granted_days: int, left: timedelta
+) -> None:
+    await _bind_until(admin_db, "crd_quiet", granted_days=granted_days, left=left)
+
+    assert await BindingIdleWarningScanner(admin_db).sweep(now=_NOW) == 0
+    assert await _end_date_events(admin_db) == []
+
+
+async def test_warns_about_both_deadlines_separately(admin_db: _MemoryDb) -> None:
+    await _bind(
+        admin_db,
+        "crd_both",
+        idle_days=14,
+        left=timedelta(hours=30),
+        expires_at=_NOW + timedelta(hours=40),
+    )
+
+    assert await BindingIdleWarningScanner(admin_db).sweep(now=_NOW) == 2
+    assert len(await _events(admin_db)) == 1
+    assert len(await _end_date_events(admin_db)) == 1

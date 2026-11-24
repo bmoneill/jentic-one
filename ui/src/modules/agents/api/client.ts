@@ -207,6 +207,7 @@ function bindingToEntity(r: CredentialBindingResponse): CredentialBindingEntity 
 		maxIdlePeriod: r.max_idle_period ?? null,
 		idleExpiresAt: r.idle_expires_at ?? null,
 		idleWarning: r.idle_warning ?? false,
+		afterExpiry: r.after_expiry ?? 'hold',
 		maxQuota: r.max_quota ?? null,
 		quotaRemaining: r.quota_remaining ?? null,
 		renewedAt: r.renewed_at ?? null,

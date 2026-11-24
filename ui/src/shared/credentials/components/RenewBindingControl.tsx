@@ -5,9 +5,9 @@
  * moment of saving. "No expiry" (in Custom…) clears the end date, behind the
  * "No expiry" warning (unless an idle limit still ends it). The idle row
  * below it starts on the binding's current idle limit and is sent when it
- * changes, and so does "End after one use" below that. A binding with an idle
- * limit or a use count also offers "Still needed": a renewal that restarts its
- * idle clock and restores its uses. A renewal that chooses no end date runs
+ * changes, and so do "End after one use" below that and, at the bottom, the
+ * warning before access ends and what happens after it. Every renewal restarts
+ * the idle clock and restores the uses. A renewal that chooses no end date runs
  * the binding again for as long as it was granted for, capped at the org's
  * maximum (the server works it out), so the confirmation names the new end.
  * Renewing restores an expired binding; it never resumes a suspended one.
@@ -34,9 +34,15 @@ import {
 	idleLimitError,
 	idleLimitFromSeconds,
 	idleSeconds,
-	idleWarning,
 	type IdleLimit,
 } from '@/shared/credentials/lib/idleLimit';
+import {
+	afterExpiryFrom,
+	expiryWarnable,
+	expiryWarning,
+	type AfterExpiry,
+} from '@/shared/credentials/lib/accessEnd';
+import { AccessEndFields } from '@/shared/credentials/components/AccessEndFields';
 import { IdleLimitField } from '@/shared/credentials/components/IdleLimitField';
 import { SingleUseField } from '@/shared/credentials/components/SingleUseField';
 import { choosesNoExpiry, durationChosen } from '@/shared/credentials/lib/bindingExpiry';
@@ -58,12 +64,12 @@ export interface RenewBindingControlProps {
 	expired: boolean;
 	/** The binding's current idle limit in seconds; null without one. */
 	maxIdlePeriod?: number | null;
-	/** Whether its owner is warned before that idle limit is reached. */
+	/** Whether its owner is warned before it ends (its end date or idle limit). */
 	idleWarning?: boolean;
+	/** What a call through it gets once it has ended (`hold` or `refuse`). */
+	afterExpiry?: string | null;
 	/** Its use count (1 is single use); null without one. Renewing restores the uses left. */
 	maxQuota?: number | null;
-	/** Which limit ended it (`end_date`, `idle`), when it has ended. */
-	expiredReason?: string | null;
 	/** Fit into a list row: no visible label. */
 	compact?: boolean;
 	/** After a renewal lands. */
@@ -91,8 +97,8 @@ export function RenewBindingControl({
 	expired,
 	maxIdlePeriod = null,
 	idleWarning: warnedBefore = false,
+	afterExpiry: afterExpiryBefore = null,
 	maxQuota = null,
-	expiredReason = null,
 	compact = false,
 	onRenewed,
 	testIdPrefix = 'renew-binding',
@@ -103,20 +109,28 @@ export function RenewBindingControl({
 	const confirm = useNoExpiryConfirm();
 	const fieldRef = useRef<HTMLSelectElement>(null);
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
-	const [idle, setIdle] = useState<IdleLimit | null>(() =>
-		idleLimitFromSeconds(maxIdlePeriod, warnedBefore),
-	);
+	const [idle, setIdle] = useState<IdleLimit | null>(() => idleLimitFromSeconds(maxIdlePeriod));
+	const [warn, setWarn] = useState(warnedBefore);
+	const afterBefore = afterExpiryFrom(afterExpiryBefore);
+	const [after, setAfter] = useState<AfterExpiry>(afterBefore);
+	// The end date the access would have if saved now.
+	const end: Date | 'never' | null = durationChosen(duration)
+		? expiresAtFromDuration(duration)
+		: expiresAt
+			? new Date(expiresAt)
+			: 'never';
 
 	const idleNow = idleSeconds(idle);
-	const warnNow = idleWarning(idle);
+	const warnable = expiryWarnable(end, idleNow);
+	const warnNow = expiryWarning(warn, end, idleNow);
 	const limitChanged = idleNow !== (maxIdlePeriod ?? null);
-	const warnChanged = warnNow !== warnedBefore;
-	// The idle row (the limit or its warning) differs from the binding's.
-	const idleChanged = limitChanged || warnChanged;
+	// With nothing to warn about, the box is disabled and its value left alone.
+	const warnChanged = warnable && warnNow !== warnedBefore;
+	const afterChanged = after !== afterBefore;
 	const [uses, setUses] = useState<number | null>(maxQuota);
 	const usesChanged = uses !== maxQuota;
-	// Any limit other than the end date changed.
-	const limitsChanged = idleChanged || usesChanged;
+	// Anything other than the end date changed.
+	const limitsChanged = limitChanged || warnChanged || afterChanged || usesChanged;
 	const idleInvalid = idleLimitError(idle, limits.idle.maxSeconds) !== null;
 	// A choice the org's maximum refuses blocks saving rather than being dropped.
 	const durationInvalid =
@@ -150,6 +164,7 @@ export function RenewBindingControl({
 				...(limitChanged ? { maxIdlePeriod: idleNow } : {}),
 				...(warnChanged ? { idleWarning: warnNow } : {}),
 				...(usesChanged ? { maxQuota: uses } : {}),
+				...(afterChanged ? { afterExpiry: after } : {}),
 			},
 			{
 				onSuccess: (end) => {
@@ -167,7 +182,9 @@ export function RenewBindingControl({
 						);
 					} else {
 						done(
-							usesChanged ? 'Access limits saved' : 'Idle limit saved',
+							limitChanged && !usesChanged
+								? 'Idle limit saved'
+								: 'Access limits saved',
 							`${isolateText(agentName)}'s access was re-certified${renewedUntil(end)}.`,
 						);
 					}
@@ -176,32 +193,12 @@ export function RenewBindingControl({
 		);
 	};
 
-	// Re-certify with no new choices: restarts the idle clock, restores the
-	// uses, and runs the end date again for as long as it was granted for.
-	const stillNeeded = (): void => {
-		renew.mutate(
-			{ agentId, credentialId },
-			{
-				onSuccess: (end) =>
-					done(
-						'Access re-certified',
-						(maxQuota != null
-							? `${isolateText(agentName)} can use this access again`
-							: `${isolateText(agentName)}'s idle limit starts again from now`) +
-							`${renewedUntil(end)}.`,
-					),
-			},
-		);
-	};
-	const endDatePassed = expiredReason === 'end_date' || (expired && expiredReason == null);
-	const offerStillNeeded = (maxIdlePeriod != null || maxQuota != null) && !endDatePassed;
-
 	const label = expired ? 'Renew for' : expiresAt ? 'Change expiry to' : 'Set an expiry';
 	const action =
 		!durationChosen(duration) && limitsChanged
-			? usesChanged
-				? 'Save limits'
-				: 'Save idle limit'
+			? limitChanged && !usesChanged && !warnChanged && !afterChanged
+				? 'Save idle limit'
+				: 'Save limits'
 			: clearing
 				? 'Remove expiry'
 				: expired
@@ -236,27 +233,24 @@ export function RenewBindingControl({
 				maxSeconds={limits.idle.maxSeconds}
 				value={idle}
 				onChange={setIdle}
-				end={
-					durationChosen(duration)
-						? expiresAtFromDuration(duration)
-						: expiresAt
-							? new Date(expiresAt)
-							: 'never'
-				}
+				end={end}
 				disabled={renew.isPending}
 				testIdPrefix={testIdPrefix}
 			/>
 			<SingleUseField
 				value={uses}
 				onChange={setUses}
-				end={
-					durationChosen(duration)
-						? expiresAtFromDuration(duration)
-						: expiresAt
-							? new Date(expiresAt)
-							: 'never'
-				}
+				end={end}
 				idleSeconds={idleNow}
+				disabled={renew.isPending}
+				testIdPrefix={testIdPrefix}
+			/>
+			<AccessEndFields
+				warn={warn}
+				onWarnChange={setWarn}
+				warnable={warnable}
+				afterExpiry={after}
+				onAfterExpiryChange={setAfter}
 				disabled={renew.isPending}
 				testIdPrefix={testIdPrefix}
 			/>
@@ -273,22 +267,6 @@ export function RenewBindingControl({
 					<RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
 					{action}
 				</Button>
-				{offerStillNeeded && (
-					<Button
-						size="sm"
-						variant="ghost"
-						disabled={renew.isPending}
-						onClick={stillNeeded}
-						data-testid={`${testIdPrefix}-still-needed`}
-						aria-label={
-							maxQuota != null
-								? `Still needed: restore the uses for ${isolateText(agentName)}`
-								: `Still needed: restart the idle limit for ${isolateText(agentName)}`
-						}
-					>
-						Still needed
-					</Button>
-				)}
 			</div>
 			{renew.error && <ErrorAlert message={renew.error} />}
 			<NoExpiryConfirmDialog

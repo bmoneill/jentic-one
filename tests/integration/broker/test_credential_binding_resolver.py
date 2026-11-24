@@ -94,6 +94,7 @@ async def _bind(
     renewed_at: datetime | None = None,
     max_quota: int | None = None,
     quota_remaining: int | None = None,
+    after_expiry: str = "hold",
 ) -> None:
     async with admin_db.session() as session:
         session.add(
@@ -109,6 +110,7 @@ async def _bind(
                 renewed_at=renewed_at,
                 max_quota=max_quota,
                 quota_remaining=quota_remaining,
+                after_expiry=after_expiry,
             )
         )
         await session.commit()
@@ -618,3 +620,33 @@ async def test_a_used_up_binding_is_refused_and_says_why(
     assert result.binding_expired is True
     assert result.expired_reason == "uses"
     assert result.expired_credential_id == cred_id
+
+
+@pytest.mark.parametrize(("after_expiry", "holds"), [("hold", True), ("refuse", False)])
+async def test_an_ended_binding_says_whether_it_holds_the_call(
+    admin_db: DatabaseSession,
+    control_db: DatabaseSession,
+    clean_tables: None,
+    after_expiry: str,
+    holds: bool,
+) -> None:
+    """``after_expiry`` decides whether the execute route files a renewal hold."""
+    cred_id = await _seed_credential(
+        control_db, name="acme", vendor="acme.com", api_name="pets-api", version="v1"
+    )
+    agent_id = await _seed_agent(admin_db)
+    await _bind(
+        admin_db,
+        agent_id=agent_id,
+        credential_id=cred_id,
+        expires_at=_NOW - timedelta(minutes=1),
+        after_expiry=after_expiry,
+    )
+
+    result = await CredentialBindingResolver(admin_db, control_db, clock=_clock).derive_credentials(
+        agent_id=agent_id, vendor="acme.com", name="pets-api", version="v1"
+    )
+
+    assert result.binding_expired is True
+    assert result.expired_credential_id == cred_id
+    assert result.expired_holds is holds

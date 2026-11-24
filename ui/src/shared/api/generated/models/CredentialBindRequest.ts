@@ -2,10 +2,15 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { AfterExpiry } from './AfterExpiry';
 /**
  * Request body for directly binding a credential to an agent.
  */
 export type CredentialBindRequest = {
+    /**
+     * What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent's owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew.
+     */
+    after_expiry?: AfterExpiry;
     /**
      * ID of the credential to bind to the agent.
      */
@@ -15,7 +20,7 @@ export type CredentialBindRequest = {
      */
     expires_at?: (string | null);
     /**
-     * Warn the agent's owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set.
+     * Warn the agent's owner before the binding ends: once a day a job raises a `credential_grant.expiring` event when its end date is within 48 hours (for a binding granted for 4 days or more), and a `credential_grant.idle_expiring` event when it will go idle within 48 hours (for idle limits of 4 days or more); each once per end date or idle period. Off unless set.
      */
     idle_warning?: boolean;
     /**

@@ -2,12 +2,17 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { AfterExpiry } from './AfterExpiry';
 import type { GrantEndReason } from './GrantEndReason';
 import type { ServedApiRef } from './ServedApiRef';
 /**
  * Direct agent↔credential binding summary for the /me response (theme 5 phase 1).
  */
 export type CredentialBindingEntry = {
+    /**
+     * What a call through the binding gets once it has ended: `hold` holds the first call for the owner to renew; `refuse` answers `403 credential_binding_expired` (ask your owner to renew).
+     */
+    after_expiry?: AfterExpiry;
     /**
      * When the credential was bound (RFC 3339).
      */
@@ -33,7 +38,7 @@ export type CredentialBindingEntry = {
      */
     idle_expires_at?: (string | null);
     /**
-     * Whether the owner is warned before the idle limit is reached.
+     * Whether the owner is warned before the binding ends (its end date or idle limit).
      */
     idle_warning?: boolean;
     /**

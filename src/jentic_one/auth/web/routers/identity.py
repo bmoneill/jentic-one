@@ -16,6 +16,7 @@ from jentic_one.auth.web.schemas.identity import (
     MeResponse,
     MeUser,
 )
+from jentic_one.shared.auth.grant_policy import AfterExpiry
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.models import ActorStatus
 from jentic_one.shared.web import get_current_identity
@@ -101,6 +102,7 @@ async def _resolve_agent(request: Request, identity: Identity, agent_svc: AgentS
                 expired_reason=cb.expired_reason,
                 max_idle_period=cb.max_idle_period,
                 idle_warning=cb.idle_warning,
+                after_expiry=AfterExpiry(cb.after_expiry),
                 max_quota=cb.max_quota,
                 quota_remaining=cb.quota_remaining,
                 idle_expires_at=cb.idle_expires_at,

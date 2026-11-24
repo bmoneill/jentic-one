@@ -1332,12 +1332,14 @@ def _review_url(ctx: Context, request: Request, approval_id: str) -> str:
 def _renewable(ctx: Context, identity: Identity, exc: CredentialBindingExpiredError) -> bool:
     """Whether an ended binding's call can be held for renewal instead of refused.
 
-    Only an agent's call through a binding the resolver named, and only where
-    a held request can be kept (the platform keyset encrypts it).
+    Only an agent's call through a binding the resolver named and set to hold
+    after it ends (``after_expiry`` ``hold``), and only where a held request
+    can be kept (the platform keyset encrypts it).
     """
     return (
         identity.actor_type == ActorType.AGENT
         and bool(exc.ended_credential_id)
+        and exc.holds_for_renewal
         and ctx.has_encryption_keyset
     )
 
@@ -1353,6 +1355,7 @@ def _renewal_refusal(
         instance=exc.instance,
     )
     refusal.ended_credential_id = exc.ended_credential_id
+    refusal.holds_for_renewal = exc.holds_for_renewal
     return refusal
 
 

@@ -262,8 +262,8 @@ function BoundAgentRow({
 					expired={expired}
 					maxIdlePeriod={row.max_idle_period ?? null}
 					idleWarning={row.idle_warning ?? false}
+					afterExpiry={row.after_expiry ?? null}
 					maxQuota={row.max_quota ?? null}
-					expiredReason={row.expired_reason ?? null}
 					onRenewed={onToggleRenew}
 					testIdPrefix="bound-agent-renew-control"
 				/>

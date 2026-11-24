@@ -12,8 +12,8 @@
  *     A call held because the agent's access ended gets its own row ("needs
  *     fresh access to …"), linking to the same review page.
  *   - access ending soon — a binding whose owner asked to be warned will
- *     reach its idle limit within two days unless the agent uses it. Review
- *     opens the agent, whose API tile renews it ("Still needed").
+ *     reach its end date, or its idle limit unless the agent uses it, within
+ *     two days. Review opens the agent, whose API tile renews it.
  *
  * Either link may never reach anyone, so the page reads the live state
  * (open connect sessions, pending approvals) instead of relying on it. One row
@@ -28,12 +28,12 @@ import { AppLink, Tooltip, UserText } from '@/shared/ui';
 import { ROUTE_PATHS } from '@/shared/app';
 import { useActorDirectory } from '@/shared/hooks';
 import { formatTimestamp } from '@/shared/lib/utils';
+import { bindingExpiryLabel } from '@/shared/credentials/lib/bindingExpiry';
 import {
 	useBindingsEndingSoon,
 	useOpenConnectRequests,
 	type EndingSoonBindingResponse,
 } from '@/shared/credentials/api';
-import { bindingExpiryLabel } from '@/shared/credentials/lib/bindingExpiry';
 import {
 	groupConnectRequestsByAgent,
 	describeConnectAsks,
@@ -310,26 +310,36 @@ function groupByAgent(rows: readonly EndingSoonBindingResponse[]): AgentEndingSo
 	return [...groups.values()];
 }
 
-/** "access to Stripe ends in 1 day unless used", or a count for several. */
+/**
+ * When one binding ends, by the limit due a warning: "Expires in 1 day" for
+ * its end date, "Ends in 1 day unless used" for its idle limit.
+ */
+function endsLabel(binding: EndingSoonBindingResponse): string {
+	const label =
+		binding.ending === 'idle'
+			? bindingExpiryLabel({
+					expiresAt: null,
+					expired: false,
+					maxIdlePeriod: binding.max_idle_period ?? null,
+					idleExpiresAt: binding.ends_at,
+				})
+			: bindingExpiryLabel({ expiresAt: binding.ends_at, expired: false });
+	return label ?? 'Ends soon';
+}
+
+/** "access to Stripe that expires in 1 day", or a count for several. */
 function describeEndingSoon(bindings: readonly EndingSoonBindingResponse[]): string {
-	if (bindings.length > 1)
-		return `has access to ${bindings.length} credentials ending soon unless used`;
+	if (bindings.length > 1) {
+		const unlessUsed = bindings.every((b) => b.ending === 'idle') ? ' unless used' : '';
+		return `has access to ${bindings.length} credentials ending soon${unlessUsed}`;
+	}
 	const [binding] = bindings;
-	const label = bindingExpiryLabel({
-		expiresAt: binding.expires_at ?? null,
-		expired: binding.expired ?? false,
-		expiredReason: binding.expired_reason ?? null,
-		maxIdlePeriod: binding.max_idle_period ?? null,
-		idleExpiresAt: binding.idle_expires_at ?? null,
-	});
-	const name = binding.name ?? 'a credential';
-	return label
-		? `has access to ${name} that ${label.charAt(0).toLowerCase()}${label.slice(1)}`
-		: `has access to ${name} ending soon unless used`;
+	const label = endsLabel(binding);
+	return `has access to ${binding.name ?? 'a credential'} that ${label.charAt(0).toLowerCase()}${label.slice(1)}`;
 }
 
 function EndingSoonRow({ group }: { group: AgentEndingSoon }) {
-	const soonest = group.bindings[0]?.idle_expires_at;
+	const soonest = group.bindings[0];
 	return (
 		<WaitingRow
 			name={group.agentName}
@@ -340,13 +350,16 @@ function EndingSoonRow({ group }: { group: AgentEndingSoon }) {
 				href={ROUTE_PATHS.agentTab(group.agentId)}
 				variant="tonal"
 				size="sm"
-				title={soonest ? `Ends if unused by ${formatTimestamp(soonest)}` : undefined}
+				title={
+					soonest
+						? soonest.ending === 'idle'
+							? `Ends if unused by ${formatTimestamp(soonest.ends_at)}`
+							: `Ends ${formatTimestamp(soonest.ends_at)}`
+						: undefined
+				}
 			>
 				Review
-				<span className="sr-only">
-					{' '}
-					{group.agentName}&apos;s access that ends soon unless used
-				</span>
+				<span className="sr-only"> {group.agentName}&apos;s access that ends soon</span>
 			</AppLink>
 		</WaitingRow>
 	);

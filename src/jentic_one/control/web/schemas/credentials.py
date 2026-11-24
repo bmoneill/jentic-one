@@ -12,7 +12,7 @@ from jentic_one.control.web.schemas.permission_rules import (
     PermissionRuleReadSchema,
     PermissionRuleSchema,
 )
-from jentic_one.shared.auth.grant_policy import GrantEndReason
+from jentic_one.shared.auth.grant_policy import AfterExpiry, GrantEndReason
 from jentic_one.shared.models.credentials import CredentialLocation, CredentialType
 from jentic_one.shared.schemas import APIReference as APIReferenceResponse
 from jentic_one.shared.schemas import APIReferenceRequest
@@ -1085,7 +1085,15 @@ class CredentialAgentResponse(BaseModel):
     idle_warning: bool = Field(
         default=False,
         examples=[False],
-        description="Whether the agent's owner is warned before the idle limit is reached.",
+        description="Whether the agent's owner is warned before the binding ends (its end"
+        " date or idle limit).",
+    )
+    after_expiry: AfterExpiry = Field(
+        default=AfterExpiry.HOLD,
+        examples=["hold"],
+        description="What a call through the binding gets once it has ended: `hold` holds"
+        " the first call for the owner to renew; `refuse` answers"
+        " `403 credential_binding_expired`.",
     )
     max_quota: int | None = Field(
         default=None,

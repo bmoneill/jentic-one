@@ -58,8 +58,10 @@ export interface ApiTileModel {
 	/** Idle limit in seconds, and when it ends the binding if unused. */
 	maxIdlePeriod?: number | null;
 	idleExpiresAt?: string | null;
-	/** Whether the owner is warned before the idle limit is reached. */
+	/** Whether the owner is warned before it ends (its end date or idle limit). */
 	idleWarning?: boolean;
+	/** What a call through it gets once it has ended: `hold` or `refuse`. */
+	afterExpiry?: string | null;
 	/** The use count (1 is single use) and the uses left; null without one. */
 	maxQuota?: number | null;
 	quotaRemaining?: number | null;
@@ -246,6 +248,7 @@ export function composeApiTiles(
 			maxIdlePeriod: binding.maxIdlePeriod ?? null,
 			idleExpiresAt: binding.idleExpiresAt ?? null,
 			idleWarning: binding.idleWarning ?? false,
+			afterExpiry: binding.afterExpiry ?? 'hold',
 			maxQuota: binding.maxQuota ?? null,
 			quotaRemaining: binding.quotaRemaining ?? null,
 			awaitingConsent: credentialAwaitsConsent(credential),

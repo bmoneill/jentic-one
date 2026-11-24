@@ -939,6 +939,8 @@ async def test_bindings_ending_soon_lists_warned_bindings_near_their_idle_limit(
     assert row["credential_id"] == control_credential_id
     assert row["name"] == "Binding Test Credential"
     assert row["idle_warning"] is True
+    assert row["ending"] == "idle"
+    assert row["ends_at"] == row["idle_expires_at"]
     left = datetime.fromisoformat(row["idle_expires_at"]) - datetime.now(UTC)
     assert timedelta(hours=23) < left <= timedelta(days=1)
     # The agent's owner sees it too.
@@ -950,11 +952,66 @@ async def test_bindings_ending_soon_lists_warned_bindings_near_their_idle_limit(
     await set_binding(idle_warning=False)
     assert admin_client.get(ending_soon).json()["data"] == []
 
-    # "Still needed" restarts the idle clock, which takes it off the list too.
+    # A renewal restarts the idle clock, which takes it off the list too.
     await set_binding(idle_warning=True)
     assert len(admin_client.get(ending_soon).json()["data"]) == 1
     assert admin_client.patch(f"{url}/{control_credential_id}", json={}).status_code == 200
     assert admin_client.get(ending_soon).json()["data"] == []
+
+
+def test_after_expiry_defaults_to_hold_and_changes_on_renewal(
+    admin_client: TestClient, binding_agent_id: str, control_credential_id: str
+) -> None:
+    url = f"/agents/{binding_agent_id}/credentials"
+    resp = admin_client.post(url, json={"credential_id": control_credential_id})
+    assert resp.status_code == 201
+    assert resp.json()["after_expiry"] == "hold"
+
+    # Left out, it is unchanged; a value sets it; anything else is refused.
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={"after_expiry": "refuse"})
+    assert resp.status_code == 200
+    assert resp.json()["after_expiry"] == "refuse"
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={})
+    assert resp.json()["after_expiry"] == "refuse"
+    assert (
+        _binding_row(admin_client, binding_agent_id, control_credential_id)["after_expiry"]
+        == "refuse"
+    )
+    resp = admin_client.patch(f"{url}/{control_credential_id}", json={"after_expiry": "ask"})
+    assert resp.status_code == 422
+
+
+async def test_bindings_ending_soon_lists_warned_bindings_near_their_end_date(
+    admin_client: TestClient,
+    web_context: Context,
+    binding_agent_id: str,
+    control_credential_id: str,
+) -> None:
+    url = f"/agents/{binding_agent_id}/credentials"
+    ending_soon = "/agents/credentials:ending-soon"
+    end = datetime.now(UTC) + timedelta(days=1)
+    resp = admin_client.post(
+        url,
+        json={
+            "credential_id": control_credential_id,
+            "expires_at": end.isoformat(),
+            "idle_warning": True,
+        },
+    )
+    assert resp.status_code == 201
+    # Granted for only a day: too short to warn about.
+    assert admin_client.get(ending_soon).json()["data"] == []
+
+    # Granted ten days ago, with a day left.
+    async with web_context.admin_db.transaction() as session:
+        await session.execute(
+            update(AgentCredentialBinding)
+            .where(AgentCredentialBinding.agent_id == binding_agent_id)
+            .values(renewed_at=datetime.now(UTC) - timedelta(days=9))
+        )
+    (row,) = admin_client.get(ending_soon).json()["data"]
+    assert row["ending"] == "end_date"
+    assert datetime.fromisoformat(row["ends_at"]) == datetime.fromisoformat(row["expires_at"])
 
 
 async def test_single_use_is_set_on_bind_and_restored_on_renewal(

@@ -40,7 +40,7 @@ from jentic_one.auth.web.schemas.agents import (
     GrantPolicyLimitsResponse,
     JwksUpdateRequest,
 )
-from jentic_one.shared.auth.grant_policy import UNSET
+from jentic_one.shared.auth.grant_policy import UNSET, AfterExpiry, GrantEndReason
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
 from jentic_one.shared.models import ActorType
@@ -199,13 +199,15 @@ async def list_credential_bindings_ending_soon(
     identity: Identity = get_current_identity(required_permissions=["agents:read"]),
     agent_svc: AgentService = Depends(get_agent_service),
 ) -> EndingSoonBindingListResponse:
-    """List bindings that will reach their idle limit soon unless they are used.
+    """List bindings that will reach their end date or idle limit soon.
 
-    Only bindings whose owner turned on the idle warning (`idle_warning`),
-    with an idle limit of 4 days or more, whose idle deadline (`idle_expires_at`)
-    is within the next 48 hours, and which have not been suspended or ended.
-    The same bindings get a `credential_grant.idle_expiring` event once per
-    idle period. Soonest first. Scoped like the agents list: `org:admin` sees
+    Only bindings whose owner turned on the warning (`idle_warning`) and which
+    have not been suspended or ended, where either the end date is within the
+    next 48 hours (for a binding granted for 4 days or more) or the idle
+    deadline (`idle_expires_at`) is (for an idle limit of 4 days or more).
+    `ends_at` and `ending` give the nearer of the two. The same bindings get a
+    `credential_grant.expiring` or `credential_grant.idle_expiring` event, once
+    per end date or idle period. Soonest first. Scoped like the agents list: `org:admin` sees
     every agent's bindings, anyone else their own agents'.
     """
     views = await agent_svc.list_bindings_ending_soon(identity=identity)
@@ -214,7 +216,10 @@ async def list_credential_bindings_ending_soon(
 
 def _ending_soon_response(view: EndingSoonBindingView) -> EndingSoonBindingResponse:
     return EndingSoonBindingResponse(
-        **_credential_binding_response(view).model_dump(), agent_name=view.agent_name
+        **_credential_binding_response(view).model_dump(),
+        agent_name=view.agent_name,
+        ends_at=view.ends_at,
+        ending="idle" if view.ending == GrantEndReason.IDLE else "end_date",
     )
 
 
@@ -520,6 +525,7 @@ def _credential_binding_response(view: CredentialBindingView) -> CredentialBindi
         idle_expires_at=view.idle_expires_at,
         renewed_at=view.renewed_at,
         idle_warning=view.idle_warning,
+        after_expiry=AfterExpiry(view.after_expiry),
         max_quota=view.max_quota,
         quota_remaining=view.quota_remaining,
         rule_set_id=view.rule_set_id,
@@ -619,6 +625,7 @@ async def bind_credential(
             body.max_idle_period if "max_idle_period" in body.model_fields_set else UNSET
         ),
         idle_warning=body.idle_warning,
+        after_expiry=body.after_expiry,
         max_quota=body.max_quota if "max_quota" in body.model_fields_set else UNSET,
         identity=identity,
     )
@@ -673,6 +680,7 @@ async def renew_credential_binding(
             body.max_idle_period if "max_idle_period" in body.model_fields_set else UNSET
         ),
         idle_warning=body.idle_warning if body.idle_warning is not None else UNSET,
+        after_expiry=body.after_expiry if body.after_expiry is not None else UNSET,
         max_quota=body.max_quota if "max_quota" in body.model_fields_set else UNSET,
         identity=identity,
     )

@@ -304,11 +304,14 @@ class CredentialBindingExpiredError(BrokerError):
 
     ``ended_credential_id`` names the credential whose binding ended, when the
     resolver knows it, so the execute route can hold the call for renewal
-    (D14). It is never rendered into the problem body.
+    (D14). ``holds_for_renewal`` is False for a binding set to refuse after
+    it ends (``after_expiry`` ``refuse``): the plain 403 stands. Neither is
+    rendered into the problem body.
     """
 
     default_type = "credential_binding_expired"
     ended_credential_id: str | None = None
+    holds_for_renewal: bool = True
 
 
 class CredentialPendingError(BrokerError):

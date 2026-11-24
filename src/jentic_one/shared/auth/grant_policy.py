@@ -54,7 +54,41 @@ class Unset(Enum):
 UNSET = Unset.TOKEN
 
 #: The binding columns that make up its policy, as audits record them.
-GRANT_POLICY_FIELDS = ("expires_at", "max_idle_period", "idle_warning", "max_quota")
+GRANT_POLICY_FIELDS = (
+    "expires_at",
+    "max_idle_period",
+    "idle_warning",
+    "max_quota",
+    "after_expiry",
+)
+
+
+class AfterExpiry(StrEnum):
+    """What a call through a binding gets once the binding has ended."""
+
+    HOLD = "hold"
+    """The first such call is held as a ``grant_renewal`` for the owner to renew and run."""
+    REFUSE = "refuse"
+    """A plain ``403 credential_binding_expired``: the agent asks its owner to renew."""
+
+
+#: API description of a binding's ``idle_warning`` (shared by every surface).
+WARNING_DESCRIPTION = (
+    "Warn the agent's owner before the binding ends: once a day a job raises a"
+    " `credential_grant.expiring` event when its end date is within 48 hours (for a"
+    " binding granted for 4 days or more), and a `credential_grant.idle_expiring` event"
+    " when it will go idle within 48 hours (for idle limits of 4 days or more); each"
+    " once per end date or idle period. Off unless set."
+)
+
+#: API description of a binding's ``after_expiry`` (shared by every surface).
+AFTER_EXPIRY_DESCRIPTION = (
+    "What a call through the binding gets once it has ended. `hold` (the default): the"
+    " first such call is held as a `grant_renewal` for the agent's owner to renew the"
+    " binding and run it; later calls get `403 credential_binding_expired` while that"
+    " review is pending. `refuse`: every call gets `403 credential_binding_expired`,"
+    " whose directive tells the agent to ask its owner to renew."
+)
 
 
 class GrantEndReason(StrEnum):
@@ -184,3 +218,28 @@ def idle_warning_due(
     if grant_end_reason(policy, now=now) is not None:
         return None
     return deadline
+
+
+def expiry_warning_due(
+    policy: GrantPolicy,
+    *,
+    now: datetime,
+    window: timedelta,
+    min_length: int,
+) -> datetime | None:
+    """The end date of a binding due an end-date warning, else ``None``.
+
+    Due: the binding has an end date ahead of ``now`` but within ``window``,
+    it was granted (or last renewed) at least ``min_length`` seconds before
+    that end date, so the warning means something, and no limit has ended
+    it yet. The caller checks the binding's own ``idle_warning`` flag.
+    """
+    end = _utc(policy.expires_at)
+    if end is None or not now < end <= now + window:
+        return None
+    granted = _utc(policy.renewed_at) or _utc(policy.bound_at)
+    if granted is not None and (end - granted).total_seconds() < min_length:
+        return None
+    if grant_end_reason(policy, now=now) is not None:
+        return None
+    return end

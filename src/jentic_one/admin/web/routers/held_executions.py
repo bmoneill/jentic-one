@@ -89,10 +89,15 @@ def _fields(view: HeldExecutionView, request: Request) -> dict[str, object]:
 
 
 def _renewal_policy(renewal: GrantRenewalRequest) -> GrantRenewalPolicy:
-    """The fresh policy, with an end date left out read as the renewal default."""
+    """The fresh policy, with an end date left out read as the renewal default.
+
+    ``after_expiry`` left out (or null) keeps the binding's own.
+    """
     fields = renewal.model_dump()
     if "expires_at" not in renewal.model_fields_set:
         fields.pop("expires_at")
+    if fields.get("after_expiry") is None:
+        fields.pop("after_expiry", None)
     return GrantRenewalPolicy(**fields)
 
 

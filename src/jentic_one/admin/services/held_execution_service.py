@@ -185,6 +185,7 @@ class HeldExecutionService:
             expires_at=binding.expires_at,
             max_idle_period=binding.max_idle_period,
             idle_warning=binding.idle_warning,
+            after_expiry=binding.after_expiry,
             max_quota=binding.max_quota,
             quota_remaining=binding.quota_remaining,
             can_renew=can_renew,

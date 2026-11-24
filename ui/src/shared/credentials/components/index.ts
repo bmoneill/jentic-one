@@ -49,6 +49,8 @@ export {
 } from '@/shared/credentials/components/NoExpiryConfirmDialog';
 export type { NoExpiryConfirmDialogProps } from '@/shared/credentials/components/NoExpiryConfirmDialog';
 export { RenewBindingControl } from '@/shared/credentials/components/RenewBindingControl';
+export { AccessEndFields } from '@/shared/credentials/components/AccessEndFields';
+export type { AccessEndFieldsProps } from '@/shared/credentials/components/AccessEndFields';
 export { IdleLimitField } from '@/shared/credentials/components/IdleLimitField';
 export type { IdleLimitFieldProps } from '@/shared/credentials/components/IdleLimitField';
 export { SingleUseField } from '@/shared/credentials/components/SingleUseField';

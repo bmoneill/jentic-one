@@ -632,8 +632,8 @@ export function ApiAccessSidebar({
 										expired={shown.expired ?? false}
 										maxIdlePeriod={shown.maxIdlePeriod ?? null}
 										idleWarning={shown.idleWarning ?? false}
+										afterExpiry={shown.afterExpiry ?? null}
 										maxQuota={shown.maxQuota ?? null}
-										expiredReason={shown.expiredReason ?? null}
 										testIdPrefix="sidebar-renew"
 									/>
 								)}
@@ -865,7 +865,7 @@ function expiryStatusText(tile: ApiTileModel): string {
 	}
 	const resume = tile.suspended ? ' and resumed' : '';
 	if (bindingExpiredReason(tile) === 'idle') {
-		return `${label}. Calls through this credential are refused until it is renewed${resume}; "Still needed" restores it.`;
+		return `${label}. Calls through this credential are refused until it is renewed${resume}.`;
 	}
 	const end = tile.expiresAt ? ` (${formatTimestamp(tile.expiresAt)})` : '';
 	if (tile.expired) {

@@ -20,6 +20,7 @@ from sqlalchemy import bindparam, text
 
 from jentic_one.shared.auth.grant_policy import (
     GRANT_POLICY_COLUMNS,
+    AfterExpiry,
     GrantEndReason,
     GrantPolicy,
     counts_uses,
@@ -53,7 +54,7 @@ _CANDIDATE_POLICIES = text(
 # only so a denial can tell them from a missing binding. The policy is
 # evaluated in Python against the injectable clock, never in SQL.
 _AGENT_CREDENTIALS = text(
-    f"SELECT credential_id, rule_set_id, suspended, {GRANT_POLICY_COLUMNS} "
+    f"SELECT credential_id, rule_set_id, suspended, after_expiry, {GRANT_POLICY_COLUMNS} "
     "FROM agent_credential_bindings WHERE agent_id = :agent_id"
 )
 
@@ -177,6 +178,7 @@ class CredentialBindingResolver:
         rule_sets: dict[str, str | None] = {}
         expiries: dict[str, datetime] = {}
         expired_reasons: dict[str, GrantEndReason] = {}
+        refuse_ids: set[str] = set()
         suspended_ids: set[str] = set()
         use_counted: set[str] = set()
         for row in binding_rows:
@@ -187,6 +189,8 @@ class CredentialBindingResolver:
             reason = grant_end_reason(policy, now=now)
             if reason is not None:
                 expired_reasons[row.credential_id] = reason
+                if row.after_expiry == AfterExpiry.REFUSE:
+                    refuse_ids.add(row.credential_id)
                 continue
             rule_sets[row.credential_id] = row.rule_set_id
             # A use count is checked on every call, so its derivation is never
@@ -258,6 +262,7 @@ class CredentialBindingResolver:
             expired_reason=(
                 expired_reasons[expired_covering].value if expired_covering is not None else None
             ),
+            expired_holds=expired_covering is not None and expired_covering not in refuse_ids,
             # The earliest moment a candidate binding lapses: a cache must not
             # serve this derivation at or after it.
             valid_until=min(

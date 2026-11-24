@@ -11,12 +11,14 @@ import {
 	expiresAtIso,
 	type BindingDuration,
 } from '@/shared/credentials/lib/bindingDuration';
+import { idleLimitError, idleSeconds, type IdleLimit } from '@/shared/credentials/lib/idleLimit';
 import {
-	idleLimitError,
-	idleSeconds,
-	idleWarning,
-	type IdleLimit,
-} from '@/shared/credentials/lib/idleLimit';
+	DEFAULT_AFTER_EXPIRY,
+	expiryWarnable,
+	expiryWarning,
+	type AfterExpiry,
+} from '@/shared/credentials/lib/accessEnd';
+import { AccessEndFields } from '@/shared/credentials/components/AccessEndFields';
 import { IdleLimitField } from '@/shared/credentials/components/IdleLimitField';
 import { SingleUseField } from '@/shared/credentials/components/SingleUseField';
 import {
@@ -61,6 +63,8 @@ export function PostConnectBindMore({
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	const [uses, setUses] = useState<number | null>(null);
+	const [warn, setWarn] = useState(false);
+	const [afterExpiry, setAfterExpiry] = useState<AfterExpiry>(DEFAULT_AFTER_EXPIRY);
 	// The org's defaults preselect the controls; its maximums bound them.
 	const limits = useGrantPolicyLimits();
 	usePreselectGrantDefaults(limits, (d) => {
@@ -104,8 +108,13 @@ export function PostConnectBindMore({
 				agentIds: Array.from(selected),
 				expiresAt: expiresAtIso(duration),
 				maxIdlePeriod: idleSeconds(idle),
-				idleWarning: idleWarning(idle),
+				idleWarning: expiryWarning(
+					warn,
+					expiresAtFromDuration(duration),
+					idleSeconds(idle),
+				),
 				maxQuota: uses,
+				afterExpiry,
 			},
 			{
 				onSuccess: () => {
@@ -115,6 +124,8 @@ export function PostConnectBindMore({
 					setDuration(fresh.duration);
 					setIdle(fresh.idle);
 					setUses(fresh.uses);
+					setWarn(false);
+					setAfterExpiry(DEFAULT_AFTER_EXPIRY);
 				},
 			},
 		);
@@ -164,6 +175,15 @@ export function PostConnectBindMore({
 				onChange={setUses}
 				end={expiresAtFromDuration(duration)}
 				idleSeconds={idleSeconds(idle)}
+				disabled={bindMany.isPending}
+				testIdPrefix="bind-more"
+			/>
+			<AccessEndFields
+				warn={warn}
+				onWarnChange={setWarn}
+				warnable={expiryWarnable(expiresAtFromDuration(duration), idleSeconds(idle))}
+				afterExpiry={afterExpiry}
+				onAfterExpiryChange={setAfterExpiry}
 				disabled={bindMany.isPending}
 				testIdPrefix="bind-more"
 			/>

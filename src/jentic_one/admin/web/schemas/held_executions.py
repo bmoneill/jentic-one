@@ -8,9 +8,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from jentic_one.shared.auth.grant_policy import (
+    AFTER_EXPIRY_DESCRIPTION,
     MAX_IDLE_PERIOD_SECONDS,
     MAX_QUOTA,
     MIN_IDLE_PERIOD_SECONDS,
+    AfterExpiry,
     GrantEndReason,
 )
 from jentic_one.shared.models.executions import ExecutionStatus
@@ -167,8 +169,13 @@ class HeldRenewalContextResponse(BaseModel):
     )
     idle_warning: bool = Field(
         default=False,
-        description="Whether its owner is warned before going idle.",
+        description="Whether its owner is warned before it ends (end date or idle limit).",
         examples=[False],
+    )
+    after_expiry: AfterExpiry = Field(
+        default=AfterExpiry.HOLD,
+        description="What a call through it gets once it has ended: `hold` or `refuse`.",
+        examples=["hold"],
     )
     max_quota: int | None = Field(
         default=None, description="Its use count (1 is single use).", examples=[1]
@@ -304,8 +311,13 @@ class GrantRenewalRequest(BaseModel):
     )
     idle_warning: bool = Field(
         default=False,
-        description="Warn the agent's owner before the idle limit is reached.",
+        description="Warn the agent's owner before the binding ends (its end date or idle limit).",
         examples=[False],
+    )
+    after_expiry: AfterExpiry | None = Field(
+        default=None,
+        description=AFTER_EXPIRY_DESCRIPTION + " Left out, the binding keeps its own.",
+        examples=["hold"],
     )
     max_quota: int | None = Field(
         default=None,

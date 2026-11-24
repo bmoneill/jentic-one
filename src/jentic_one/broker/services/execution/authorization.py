@@ -198,6 +198,7 @@ def _expired_binding_denial(
     instance: str,
     reason: str | None = None,
     credential_id: str | None = None,
+    holds: bool = True,
 ) -> CredentialBindingExpiredError:
     """The denial for an agent whose only binding covering the API has ended.
 
@@ -222,6 +223,7 @@ def _expired_binding_denial(
         ),
     )
     error.ended_credential_id = credential_id
+    error.holds_for_renewal = holds
     return error
 
 
@@ -340,6 +342,7 @@ async def derive_credential_bindings(
                 instance=instance,
                 reason=derivation.expired_reason,
                 credential_id=derivation.expired_credential_id,
+                holds=derivation.expired_holds,
             )
         if derivation.binding_pending:
             raise _pending_credential_denial(

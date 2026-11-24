@@ -39,12 +39,14 @@ import {
 	expiresAtIso,
 	type BindingDuration,
 } from '@/shared/credentials/lib/bindingDuration';
+import { idleLimitError, idleSeconds, type IdleLimit } from '@/shared/credentials/lib/idleLimit';
 import {
-	idleLimitError,
-	idleSeconds,
-	idleWarning,
-	type IdleLimit,
-} from '@/shared/credentials/lib/idleLimit';
+	DEFAULT_AFTER_EXPIRY,
+	expiryWarnable,
+	expiryWarning,
+	type AfterExpiry,
+} from '@/shared/credentials/lib/accessEnd';
+import { AccessEndFields } from './AccessEndFields';
 import { IdleLimitField } from './IdleLimitField';
 import { SingleUseField } from './SingleUseField';
 import {
@@ -121,6 +123,8 @@ export function VendorSelfConnectFlow({
 	const [duration, setDuration] = useState<BindingDuration | null>(null);
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	const [uses, setUses] = useState<number | null>(null);
+	const [warn, setWarn] = useState(false);
+	const [afterExpiry, setAfterExpiry] = useState<AfterExpiry>(DEFAULT_AFTER_EXPIRY);
 	// The org's defaults preselect the controls; its maximums bound them.
 	const limits = useGrantPolicyLimits();
 	usePreselectGrantDefaults(limits, (d) => {
@@ -358,8 +362,17 @@ export function VendorSelfConnectFlow({
 					? {
 							expires_at: expiresAtIso(duration) ?? null,
 							max_idle_period: idleSeconds(idle),
-							...(idleWarning(idle) ? { idle_warning: true } : {}),
+							...(expiryWarning(
+								warn,
+								expiresAtFromDuration(duration),
+								idleSeconds(idle),
+							)
+								? { idle_warning: true }
+								: {}),
 							...(uses !== null ? { max_quota: uses } : {}),
+							...(afterExpiry !== DEFAULT_AFTER_EXPIRY
+								? { after_expiry: afterExpiry }
+								: {}),
 						}
 					: {}),
 			});
@@ -525,6 +538,16 @@ export function VendorSelfConnectFlow({
 					onChange={setUses}
 					end={expiresAtFromDuration(duration)}
 					idleSeconds={idleSeconds(idle)}
+					testIdPrefix="self-connect"
+				/>
+			)}
+			{agentId && (
+				<AccessEndFields
+					warn={warn}
+					onWarnChange={setWarn}
+					warnable={expiryWarnable(expiresAtFromDuration(duration), idleSeconds(idle))}
+					afterExpiry={afterExpiry}
+					onAfterExpiryChange={setAfterExpiry}
 					testIdPrefix="self-connect"
 				/>
 			)}

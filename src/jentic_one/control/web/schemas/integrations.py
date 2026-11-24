@@ -17,7 +17,12 @@ from pydantic import (
 )
 
 from jentic_one.control.web.schemas.permission_rules import PermissionRuleSchema
-from jentic_one.shared.auth.grant_policy import MAX_QUOTA
+from jentic_one.shared.auth.grant_policy import (
+    AFTER_EXPIRY_DESCRIPTION,
+    MAX_QUOTA,
+    WARNING_DESCRIPTION,
+    AfterExpiry,
+)
 from jentic_one.shared.web import openapi_examples as ex
 from jentic_one.shared.web.sensitive import SENSITIVE
 
@@ -1235,10 +1240,12 @@ class OAuthConfirmSessionRequest(BaseModel):
     idle_warning: bool = Field(
         default=False,
         examples=[False],
-        description=(
-            "Warn the agent's owner before the new binding's idle limit is reached (a daily "
-            "`credential_grant.idle_expiring` event, for idle limits of 4 days or more)."
-        ),
+        description=WARNING_DESCRIPTION + " Applies to the new binding.",
+    )
+    after_expiry: AfterExpiry = Field(
+        default=AfterExpiry.HOLD,
+        examples=["hold"],
+        description=AFTER_EXPIRY_DESCRIPTION + " Applies to the new binding.",
     )
     max_quota: int | None = Field(
         default=None,
@@ -1307,10 +1314,12 @@ class _ReviewedConfirm(BaseModel):
     idle_warning: bool = Field(
         default=False,
         examples=[False],
-        description=(
-            "Warn the agent's owner before the new binding's idle limit is reached (a daily "
-            "`credential_grant.idle_expiring` event, for idle limits of 4 days or more)."
-        ),
+        description=WARNING_DESCRIPTION + " Applies to the new binding.",
+    )
+    after_expiry: AfterExpiry = Field(
+        default=AfterExpiry.HOLD,
+        examples=["hold"],
+        description=AFTER_EXPIRY_DESCRIPTION + " Applies to the new binding.",
     )
     max_quota: int | None = Field(
         default=None,

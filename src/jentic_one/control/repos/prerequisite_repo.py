@@ -64,6 +64,8 @@ class CredentialBoundAgentRow(NamedTuple):
     # Use count (None = unlimited) and the uses left.
     max_quota: int | None = None
     quota_remaining: int | None = None
+    # What a call through it gets once it has ended (``hold`` or ``refuse``).
+    after_expiry: str = "hold"
 
     def policy(self) -> GrantPolicy:
         """The binding's policy, against the idle clock's own use stamp."""
@@ -245,7 +247,7 @@ class PrerequisiteRepository:
             "SELECT b.id, a.id, a.name, a.status, b.bound_at, b.suspended, b.rule_set_id, "
             "b.suspended_reason, a.owner_id, b.expires_at, "
             "b.max_idle_period, b.last_used_at, b.renewed_at, b.idle_warning, "
-            "b.max_quota, b.quota_remaining "
+            "b.max_quota, b.quota_remaining, b.after_expiry "
             "FROM agent_credential_bindings b "
             "JOIN agents a ON a.id = b.agent_id "
             f"WHERE {' AND '.join(conditions)} "
@@ -281,6 +283,7 @@ class PrerequisiteRepository:
                 idle_warning=bool(row[13]),
                 max_quota=row[14],
                 quota_remaining=row[15],
+                after_expiry=row[16] or "hold",
             )
             for row in result.fetchall()
         ]

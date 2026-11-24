@@ -12,6 +12,7 @@ export type { ActorLookupEntryResponse } from './models/ActorLookupEntryResponse
 export type { ActorLookupResponse } from './models/ActorLookupResponse';
 export type { ActorSummaryResponse } from './models/ActorSummaryResponse';
 export { ActorType } from './models/ActorType';
+export { AfterExpiry } from './models/AfterExpiry';
 export type { AgentApproveRequest } from './models/AgentApproveRequest';
 export type { AgentCreateRequest } from './models/AgentCreateRequest';
 export type { AgentListResponse } from './models/AgentListResponse';
@@ -119,7 +120,7 @@ export type { EditScopeNote } from './models/EditScopeNote';
 export type { EditScopesRequest } from './models/EditScopesRequest';
 export type { EffectivePermission } from './models/EffectivePermission';
 export type { EndingSoonBindingListResponse } from './models/EndingSoonBindingListResponse';
-export type { EndingSoonBindingResponse } from './models/EndingSoonBindingResponse';
+export { EndingSoonBindingResponse } from './models/EndingSoonBindingResponse';
 export type { ErrorItem } from './models/ErrorItem';
 export type { EventLinks } from './models/EventLinks';
 export type { EventListResponse } from './models/EventListResponse';

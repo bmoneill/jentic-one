@@ -562,6 +562,12 @@ components:
       - user
       - agent
       type: string
+    AfterExpiry:
+      description: What a call through a binding gets once the binding has ended.
+      enum:
+      - hold
+      - refuse
+      type: string
     AgentApproveRequest:
       description: Optional request body for approving an agent.
       examples:
@@ -1163,7 +1169,8 @@ components:
       additionalProperties: false
       description: Confirm a ``manual_api_key`` session with the API key to store.
       examples:
-      - agent_id: agnt_6968b3984d1c238dbe7e2e29
+      - after_expiry: hold
+        agent_id: agnt_6968b3984d1c238dbe7e2e29
         digest: 2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
         expected_agent_id: agnt_6968b3984d1c238dbe7e2e29
         expires_at: '2026-12-31T23:59:00Z'
@@ -1181,6 +1188,12 @@ components:
           path: /v1/charges
         revision_id: csr_6968b3983b8b91c75627bee6
       properties:
+        after_expiry:
+          $ref: '#/components/schemas/AfterExpiry'
+          default: hold
+          description: 'What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent''s owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew. Applies to the new binding.'
+          examples:
+          - hold
         agent_id:
           description: Agent to bind when the session has none; ignored if the session already has one.
           examples:
@@ -1212,7 +1225,7 @@ components:
           - 'null'
         idle_warning:
           default: false
-          description: Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+          description: 'Warn the agent''s owner before the binding ends: once a day a job raises a `credential_grant.expiring` event when its end date is within 48 hours (for a binding granted for 4 days or more), and a `credential_grant.idle_expiring` event when it will go idle within 48 hours (for idle limits of 4 days or more); each once per end date or idle period. Off unless set. Applies to the new binding.'
           examples:
           - false
           type: boolean
@@ -2883,7 +2896,8 @@ components:
       additionalProperties: false
       description: Confirm a ``manual_basic`` session with the username and password to store.
       examples:
-      - agent_id: agnt_6968b3984d1c238dbe7e2e29
+      - after_expiry: hold
+        agent_id: agnt_6968b3984d1c238dbe7e2e29
         digest: 2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
         expected_agent_id: agnt_6968b3984d1c238dbe7e2e29
         expires_at: '2026-12-31T23:59:00Z'
@@ -2902,6 +2916,12 @@ components:
         revision_id: csr_6968b3983b8b91c75627bee6
         username: svc-reporting
       properties:
+        after_expiry:
+          $ref: '#/components/schemas/AfterExpiry'
+          default: hold
+          description: 'What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent''s owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew. Applies to the new binding.'
+          examples:
+          - hold
         agent_id:
           description: Agent to bind when the session has none; ignored if the session already has one.
           examples:
@@ -2933,7 +2953,7 @@ components:
           - 'null'
         idle_warning:
           default: false
-          description: Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+          description: 'Warn the agent''s owner before the binding ends: once a day a job raises a `credential_grant.expiring` event when its end date is within 48 hours (for a binding granted for 4 days or more), and a `credential_grant.idle_expiring` event when it will go idle within 48 hours (for idle limits of 4 days or more); each once per end date or idle period. Off unless set. Applies to the new binding.'
           examples:
           - false
           type: boolean
@@ -3005,7 +3025,8 @@ components:
       additionalProperties: false
       description: Confirm a ``manual_bearer`` session with the bearer token to store.
       examples:
-      - agent_id: agnt_6968b3984d1c238dbe7e2e29
+      - after_expiry: hold
+        agent_id: agnt_6968b3984d1c238dbe7e2e29
         digest: 2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
         expected_agent_id: agnt_6968b3984d1c238dbe7e2e29
         expires_at: '2026-12-31T23:59:00Z'
@@ -3023,6 +3044,12 @@ components:
         revision_id: csr_6968b3983b8b91c75627bee6
         token: example-secret
       properties:
+        after_expiry:
+          $ref: '#/components/schemas/AfterExpiry'
+          default: hold
+          description: 'What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent''s owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew. Applies to the new binding.'
+          examples:
+          - hold
         agent_id:
           description: Agent to bind when the session has none; ignored if the session already has one.
           examples:
@@ -3054,7 +3081,7 @@ components:
           - 'null'
         idle_warning:
           default: false
-          description: Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+          description: 'Warn the agent''s owner before the binding ends: once a day a job raises a `credential_grant.expiring` event when its end date is within 48 hours (for a binding granted for 4 days or more), and a `credential_grant.idle_expiring` event when it will go idle within 48 hours (for idle limits of 4 days or more); each once per end date or idle period. Off unless set. Applies to the new binding.'
           examples:
           - false
           type: boolean
@@ -4108,7 +4135,8 @@ components:
       examples:
       - &id321
         data: &id061
-        - agent_id: agnt_6968b3984d1c238dbe7e2e29
+        - after_expiry: hold
+          agent_id: agnt_6968b3984d1c238dbe7e2e29
           agent_name: billing-assistant
           bound_at: '2026-01-15T09:30:00Z'
           expired: false
@@ -4154,7 +4182,8 @@ components:
     CredentialAgentResponse:
       description: Agent directly bound to a credential.
       examples:
-      - agent_id: agnt_6968b3984d1c238dbe7e2e29
+      - after_expiry: hold
+        agent_id: agnt_6968b3984d1c238dbe7e2e29
         agent_name: billing-assistant
         bound_at: '2026-01-15T09:30:00Z'
         expired: false
@@ -4172,6 +4201,12 @@ components:
         suspended: false
         suspended_reason: api_deleted
       properties:
+        after_expiry:
+          $ref: '#/components/schemas/AfterExpiry'
+          default: hold
+          description: 'What a call through the binding gets once it has ended: `hold` holds the first call for the owner to renew; `refuse` answers `403 credential_binding_expired`.'
+          examples:
+          - hold
         agent_id:
           description: ID of the bound agent.
           examples:
@@ -4219,7 +4254,7 @@ components:
           - 'null'
         idle_warning:
           default: false
-          description: Whether the agent's owner is warned before the idle limit is reached.
+          description: Whether the agent's owner is warned before the binding ends (its end date or idle limit).
           examples:
           - false
           type: boolean
@@ -4294,12 +4329,19 @@ components:
       description: Request body for directly binding a credential to an agent.
       examples:
       - &id279
+        after_expiry: hold
         credential_id: cred_6968b39855d91a3561684b32
         expires_at: '2026-12-31T23:59:00Z'
         idle_warning: false
         max_idle_period: 1209600
         max_quota: 1
       properties:
+        after_expiry:
+          $ref: '#/components/schemas/AfterExpiry'
+          default: hold
+          description: 'What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent''s owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew.'
+          examples:
+          - hold
         credential_id:
           description: ID of the credential to bind to the agent.
           examples:
@@ -4317,7 +4359,7 @@ components:
           - 'null'
         idle_warning:
           default: false
-          description: 'Warn the agent''s owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set.'
+          description: 'Warn the agent''s owner before the binding ends: once a day a job raises a `credential_grant.expiring` event when its end date is within 48 hours (for a binding granted for 4 days or more), and a `credential_grant.idle_expiring` event when it will go idle within 48 hours (for idle limits of 4 days or more); each once per end date or idle period. Off unless set.'
           examples:
           - false
           type: boolean
@@ -4346,6 +4388,7 @@ components:
       description: Direct agent↔credential binding summary for the /me response (theme 5 phase 1).
       examples:
       - &id124
+        after_expiry: hold
         bound_at: '2026-01-15T09:30:00Z'
         credential_id: cred_6968b39855d91a3561684b32
         expired: false
@@ -4367,6 +4410,12 @@ components:
         suspended: false
         suspended_reason: api_deleted
       properties:
+        after_expiry:
+          $ref: '#/components/schemas/AfterExpiry'
+          default: hold
+          description: 'What a call through the binding gets once it has ended: `hold` holds the first call for the owner to renew; `refuse` answers `403 credential_binding_expired` (ask your owner to renew).'
+          examples:
+          - hold
         bound_at:
           description: When the credential was bound (RFC 3339).
           examples:
@@ -4409,7 +4458,7 @@ components:
           - 'null'
         idle_warning:
           default: false
-          description: Whether the owner is warned before the idle limit is reached.
+          description: Whether the owner is warned before the binding ends (its end date or idle limit).
           examples:
           - false
           type: boolean
@@ -4493,7 +4542,8 @@ components:
       examples:
       - &id278
         data: &id064
-        - agent_id: agnt_6968b3984d1c238dbe7e2e29
+        - after_expiry: hold
+          agent_id: agnt_6968b3984d1c238dbe7e2e29
           bound_at: '2026-01-15T09:30:00Z'
           credential_id: cred_6968b39855d91a3561684b32
           expired: false
@@ -4540,11 +4590,19 @@ components:
         re-certifies ("still needed").
       examples:
       - &id281
+        after_expiry: refuse
         expires_at: '2026-12-31T23:59:00Z'
         idle_warning: true
         max_idle_period: 1209600
         max_quota: 1
       properties:
+        after_expiry:
+          anyOf:
+          - $ref: '#/components/schemas/AfterExpiry'
+          - type: 'null'
+          description: 'What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent''s owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew. Leave it out to keep it as it is.'
+          examples:
+          - refuse
         expires_at:
           description: When the binding stops authorizing calls (RFC 3339, in the future). After this moment the broker refuses the agent's calls through it with 403 `credential_binding_expired`, whatever its token. The binding keeps its permission rules; an owner renews it by setting a later time or null. Send null to clear the end date. Left out, the binding runs again for as long as it was granted for (its end date less when it was granted or last renewed), capped at the org's maximum; one with no end date takes the maximum, or keeps none without one.
           examples:
@@ -4554,7 +4612,7 @@ components:
           - string
           - 'null'
         idle_warning:
-          description: 'Warn the agent''s owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set. Leave it out to keep it as it is.'
+          description: 'Warn the agent''s owner before the binding ends: once a day a job raises a `credential_grant.expiring` event when its end date is within 48 hours (for a binding granted for 4 days or more), and a `credential_grant.idle_expiring` event when it will go idle within 48 hours (for idle limits of 4 days or more); each once per end date or idle period. Off unless set. Leave it out to keep it as it is.'
           examples:
           - true
           type:
@@ -4583,6 +4641,7 @@ components:
       description: Direct agent↔credential binding representation in API responses.
       examples:
       - &id280
+        after_expiry: hold
         agent_id: agnt_6968b3984d1c238dbe7e2e29
         bound_at: '2026-01-15T09:30:00Z'
         credential_id: cred_6968b39855d91a3561684b32
@@ -4608,6 +4667,12 @@ components:
         suspended: false
         suspended_reason: api_deleted
       properties:
+        after_expiry:
+          $ref: '#/components/schemas/AfterExpiry'
+          default: hold
+          description: 'What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent''s owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew.'
+          examples:
+          - hold
         agent_id:
           description: ID of the agent the credential is bound to.
           examples:
@@ -4660,7 +4725,7 @@ components:
           - 'null'
         idle_warning:
           default: false
-          description: 'Warn the agent''s owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set.'
+          description: 'Warn the agent''s owner before the binding ends: once a day a job raises a `credential_grant.expiring` event when its end date is within 48 hours (for a binding granted for 4 days or more), and a `credential_grant.idle_expiring` event when it will go idle within 48 hours (for idle limits of 4 days or more); each once per end date or idle period. Off unless set.'
           examples:
           - false
           type: boolean
@@ -5121,7 +5186,8 @@ components:
           - type: 'null'
           description: 'Approving a `grant_renewal` hold: the binding''s fresh policy, which replaces its old one (renewing also restarts its idle clock and restores its uses). Required to approve one; refused on any other hold.'
           examples:
-          - expires_at: '2026-02-15T09:30:00Z'
+          - after_expiry: hold
+            expires_at: '2026-02-15T09:30:00Z'
             idle_warning: false
             max_idle_period: 1209600
             max_quota: 1
@@ -6030,10 +6096,13 @@ components:
       examples:
       - &id272
         data: &id092
-        - agent_id: agnt_6968b3984d1c238dbe7e2e29
+        - after_expiry: hold
+          agent_id: agnt_6968b3984d1c238dbe7e2e29
           agent_name: invoice-reconciler
           bound_at: '2026-01-15T09:30:00Z'
           credential_id: cred_6968b39855d91a3561684b32
+          ending: end_date
+          ends_at: '2026-12-31T23:59:00Z'
           expired: false
           expired_reason: null
           expires_at: '2026-12-31T23:59:00Z'
@@ -6057,7 +6126,7 @@ components:
           suspended_reason: api_deleted
       properties:
         data:
-          description: Bindings with the idle warning on that end soon if unused, soonest first.
+          description: Bindings with the warning on that end soon, soonest first.
           examples:
           - *id092
           items:
@@ -6067,12 +6136,15 @@ components:
       - data
       type: object
     EndingSoonBindingResponse:
-      description: A binding whose idle limit will end it soon unless the agent uses it.
+      description: A binding whose end date or idle limit will end it soon.
       examples:
-      - agent_id: agnt_6968b3984d1c238dbe7e2e29
+      - after_expiry: hold
+        agent_id: agnt_6968b3984d1c238dbe7e2e29
         agent_name: invoice-reconciler
         bound_at: '2026-01-15T09:30:00Z'
         credential_id: cred_6968b39855d91a3561684b32
+        ending: end_date
+        ends_at: '2026-12-31T23:59:00Z'
         expired: false
         expired_reason: null
         expires_at: '2026-12-31T23:59:00Z'
@@ -6095,6 +6167,12 @@ components:
         suspended: false
         suspended_reason: api_deleted
       properties:
+        after_expiry:
+          $ref: '#/components/schemas/AfterExpiry'
+          default: hold
+          description: 'What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent''s owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew.'
+          examples:
+          - hold
         agent_id:
           description: ID of the agent the credential is bound to.
           examples:
@@ -6115,6 +6193,20 @@ components:
           description: ID of the bound credential.
           examples:
           - cred_6968b39855d91a3561684b32
+          type: string
+        ending:
+          description: 'Which limit ends it at `ends_at`: its end date (`end_date`) or its idle limit unless the agent uses it first (`idle`).'
+          enum:
+          - end_date
+          - idle
+          examples:
+          - end_date
+          type: string
+        ends_at:
+          description: 'When the binding ends (RFC 3339): the nearer of its end date and its idle deadline, of those due a warning.'
+          examples:
+          - '2026-12-31T23:59:00Z'
+          format: date-time
           type: string
         expired:
           default: false
@@ -6152,7 +6244,7 @@ components:
           - 'null'
         idle_warning:
           default: false
-          description: 'Warn the agent''s owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set.'
+          description: 'Warn the agent''s owner before the binding ends: once a day a job raises a `credential_grant.expiring` event when its end date is within 48 hours (for a binding granted for 4 days or more), and a `credential_grant.idle_expiring` event when it will go idle within 48 hours (for idle limits of 4 days or more); each once per end date or idle period. Off unless set.'
           examples:
           - false
           type: boolean
@@ -6242,6 +6334,8 @@ components:
       - bound_at
       - suspended
       - agent_name
+      - ends_at
+      - ending
       type: object
     ErrorItem:
       description: |-
@@ -6778,7 +6872,8 @@ components:
         When its OAuth grant lacks scopes the session asks for, the response is
         the vendor challenge for them and the bind lands with the grant.
       examples:
-      - agent_id: agnt_6968b3984d1c238dbe7e2e29
+      - after_expiry: hold
+        agent_id: agnt_6968b3984d1c238dbe7e2e29
         credential_id: cred_6968b39855d91a3561684b32
         digest: 2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae
         expected_agent_id: agnt_6968b3984d1c238dbe7e2e29
@@ -6796,6 +6891,12 @@ components:
           path: /v1/charges
         revision_id: csr_6968b3983b8b91c75627bee6
       properties:
+        after_expiry:
+          $ref: '#/components/schemas/AfterExpiry'
+          default: hold
+          description: 'What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent''s owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew. Applies to the new binding.'
+          examples:
+          - hold
         agent_id:
           description: Agent to bind when the session has none; ignored if the session already has one.
           examples:
@@ -6834,7 +6935,7 @@ components:
           - 'null'
         idle_warning:
           default: false
-          description: Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+          description: 'Warn the agent''s owner before the binding ends: once a day a job raises a `credential_grant.expiring` event when its end date is within 48 hours (for a binding granted for 4 days or more), and a `credential_grant.idle_expiring` event when it will go idle within 48 hours (for idle limits of 4 days or more); each once per end date or idle period. Off unless set. Applies to the new binding.'
           examples:
           - false
           type: boolean
@@ -7054,11 +7155,19 @@ components:
         binding runs again for as long as it was granted for, capped at the org's
         maximum (``null`` sets no end date).
       examples:
-      - expires_at: '2026-02-15T09:30:00Z'
+      - after_expiry: hold
+        expires_at: '2026-02-15T09:30:00Z'
         idle_warning: false
         max_idle_period: 1209600
         max_quota: 1
       properties:
+        after_expiry:
+          anyOf:
+          - $ref: '#/components/schemas/AfterExpiry'
+          - type: 'null'
+          description: 'What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent''s owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew. Left out, the binding keeps its own.'
+          examples:
+          - hold
         expires_at:
           description: New end date (RFC 3339, in the future); null for no end date. Left out, the binding runs again for as long as it was granted for, capped at the org's maximum.
           examples:
@@ -7069,7 +7178,7 @@ components:
           - 'null'
         idle_warning:
           default: false
-          description: Warn the agent's owner before the idle limit is reached.
+          description: Warn the agent's owner before the binding ends (its end date or idle limit).
           examples:
           - false
           type: boolean
@@ -7169,6 +7278,7 @@ components:
         operation_id: listCharges
         path: /v1/refunds
         renewal: &id113
+          after_expiry: hold
           can_renew: true
           expired_reason: idle
           expires_at: '2026-01-10T00:00:00Z'
@@ -7732,7 +7842,8 @@ components:
     HeldRenewalContextResponse:
       description: The binding a `grant_renewal` hold would renew, as it stands now.
       examples:
-      - can_renew: true
+      - after_expiry: hold
+        can_renew: true
         expired_reason: idle
         expires_at: '2026-01-10T00:00:00Z'
         idle_warning: false
@@ -7742,6 +7853,12 @@ components:
         quota_remaining: 0
         renew_on_decide: true
       properties:
+        after_expiry:
+          $ref: '#/components/schemas/AfterExpiry'
+          default: hold
+          description: 'What a call through it gets once it has ended: `hold` or `refuse`.'
+          examples:
+          - hold
         can_renew:
           default: false
           description: 'Whether the caller may grant fresh access (else it can only deny): a person who owns the agent and the credential, or an `org:admin`.'
@@ -7765,7 +7882,7 @@ components:
           - 'null'
         idle_warning:
           default: false
-          description: Whether its owner is warned before going idle.
+          description: Whether its owner is warned before it ends (end date or idle limit).
           examples:
           - false
           type: boolean
@@ -10302,7 +10419,8 @@ components:
 
         The default variant — a body without ``kind`` is this one.
       examples:
-      - agent_id: agnt_6968b3984d1c238dbe7e2e29
+      - after_expiry: hold
+        agent_id: agnt_6968b3984d1c238dbe7e2e29
         confirmed_scopes: &id157
         - repo
         - read:user
@@ -10322,6 +10440,12 @@ components:
           path: /v1/charges
         revision_id: csr_6968b3983b8b91c75627bee6
       properties:
+        after_expiry:
+          $ref: '#/components/schemas/AfterExpiry'
+          default: hold
+          description: 'What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent''s owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew. Applies to the new binding.'
+          examples:
+          - hold
         agent_id:
           description: Agent to bind when the session has none; ignored if the session already has one.
           examples:
@@ -10362,7 +10486,7 @@ components:
           - 'null'
         idle_warning:
           default: false
-          description: Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+          description: 'Warn the agent''s owner before the binding ends: once a day a job raises a `credential_grant.expiring` event when its end date is within 48 hours (for a binding granted for 4 days or more), and a `credential_grant.idle_expiring` event when it will go idle within 48 hours (for idle limits of 4 days or more); each once per end date or idle period. Off unless set. Applies to the new binding.'
           examples:
           - false
           type: boolean
@@ -11577,7 +11701,8 @@ components:
         the spec may be agent-submitted and the token endpoint receives the
         client secret.
       examples:
-      - agent_id: agnt_6968b3984d1c238dbe7e2e29
+      - after_expiry: hold
+        agent_id: agnt_6968b3984d1c238dbe7e2e29
         authorize_url: https://github.com/login/oauth/authorize
         client_id: Iv1.a1b2c3d4
         client_secret: example-secret
@@ -11601,6 +11726,12 @@ components:
         revision_id: csr_6968b3983b8b91c75627bee6
         token_url: https://github.com/login/oauth/access_token
       properties:
+        after_expiry:
+          $ref: '#/components/schemas/AfterExpiry'
+          default: hold
+          description: 'What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent''s owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew. Applies to the new binding.'
+          examples:
+          - hold
         agent_id:
           description: Agent to bind when the session has none; ignored if the session already has one.
           examples:
@@ -11664,7 +11795,7 @@ components:
           - 'null'
         idle_warning:
           default: false
-          description: Warn the agent's owner before the new binding's idle limit is reached (a daily `credential_grant.idle_expiring` event, for idle limits of 4 days or more).
+          description: 'Warn the agent''s owner before the binding ends: once a day a job raises a `credential_grant.expiring` event when its end date is within 48 hours (for a binding granted for 4 days or more), and a `credential_grant.idle_expiring` event when it will go idle within 48 hours (for idle limits of 4 days or more); each once per end date or idle period. Off unless set. Applies to the new binding.'
           examples:
           - false
           type: boolean
@@ -16420,13 +16551,15 @@ paths:
     description: '`GET`: List credential bindings ending soon.'
     get:
       description: |-
-        List bindings that will reach their idle limit soon unless they are used.
+        List bindings that will reach their end date or idle limit soon.
 
-        Only bindings whose owner turned on the idle warning (`idle_warning`),
-        with an idle limit of 4 days or more, whose idle deadline (`idle_expires_at`)
-        is within the next 48 hours, and which have not been suspended or ended.
-        The same bindings get a `credential_grant.idle_expiring` event once per
-        idle period. Soonest first. Scoped like the agents list: `org:admin` sees
+        Only bindings whose owner turned on the warning (`idle_warning`) and which
+        have not been suspended or ended, where either the end date is within the
+        next 48 hours (for a binding granted for 4 days or more) or the idle
+        deadline (`idle_expires_at`) is (for an idle limit of 4 days or more).
+        `ends_at` and `ending` give the nearer of the two. The same bindings get a
+        `credential_grant.expiring` or `credential_grant.idle_expiring` event, once
+        per end date or idle period. Soonest first. Scoped like the agents list: `org:admin` sees
         every agent's bindings, anyone else their own agents'.
       operationId: listCredentialBindingsEndingSoon
       responses:

@@ -794,6 +794,7 @@ async def confirm_connect_session(
             expires_at=policy.expires_at if policy else None,
             max_idle_period=policy.max_idle_period if policy else None,
             idle_warning=body.idle_warning,
+            after_expiry=body.after_expiry.value,
             max_quota=policy.max_quota if policy else None,
         )
     else:
@@ -865,6 +866,7 @@ def _to_variant(
         expires_at=policy.expires_at,
         max_idle_period=policy.max_idle_period,
         idle_warning=body.idle_warning,
+        after_expiry=body.after_expiry.value,
         max_quota=policy.max_quota,
     )
     if isinstance(body, ApiKeyConfirmSessionRequest):

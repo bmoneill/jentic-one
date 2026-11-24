@@ -655,34 +655,62 @@ describe('BindAgentDialog — how long the access lasts', () => {
 		});
 	});
 
-	it('sends the idle warning when it is ticked, and not under 4 days', async () => {
+	it('warns before an end date or idle limit, below the limits, and only when ticked', async () => {
+		const user = userEvent.setup();
+		renderDialog();
+		await ready(user);
+		const warning = (): HTMLElement =>
+			within(screen.getByTestId('bind-agent-idle-warning')).getByRole('checkbox');
+
+		// No end date and a three-day idle limit: nothing to warn about yet.
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), 'custom');
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-unit'), 'never');
+		await user.click(screen.getByText('Also end if unused for'));
+		await user.selectOptions(screen.getByTestId('bind-agent-idle-preset'), 'custom');
+		await user.clear(screen.getByTestId('bind-agent-idle-amount'));
+		await user.type(screen.getByTestId('bind-agent-idle-amount'), '3');
+		expect(warning()).not.toBeChecked();
+		expect(warning()).toBeDisabled();
+		expect(screen.getByTestId('bind-agent-idle-warning-hint')).toHaveTextContent(
+			'Warnings need an end date',
+		);
+
+		// The box sits below the idle row.
+		expect(
+			screen.getByTestId('bind-agent-idle').compareDocumentPosition(warning()) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		).toBeTruthy();
+
+		// An end date alone is enough to warn about.
+		await user.click(screen.getByText('Also end if unused for'));
+		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), '7d');
+		expect(warning()).toBeEnabled();
+		await user.click(screen.getByText('Warn me before this access ends'));
+		expect(warning()).toBeChecked();
+		await user.click(screen.getByTestId('bind-agent-confirm'));
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		expect(bodies[0].body).toMatchObject({ idle_warning: true });
+		expect(bodies[0].body).not.toHaveProperty('max_idle_period');
+	});
+
+	it('holds the first denied request by default, and sends "Let the agent ask"', async () => {
 		const user = userEvent.setup();
 		renderDialog();
 		await ready(user);
 		await user.selectOptions(screen.getByTestId('bind-agent-duration-preset'), '7d');
-		await user.click(screen.getByText('Also end if unused for'));
-		const warning = (): HTMLElement =>
-			within(screen.getByTestId('bind-agent-idle-warning')).getByRole('checkbox');
-		expect(warning()).not.toBeChecked();
-
-		// Three days is too short to warn about: the box is off and disabled.
-		await user.selectOptions(screen.getByTestId('bind-agent-idle-preset'), 'custom');
-		await user.clear(screen.getByTestId('bind-agent-idle-amount'));
-		await user.type(screen.getByTestId('bind-agent-idle-amount'), '3');
-		expect(warning()).toBeDisabled();
-		expect(screen.getByTestId('bind-agent-idle-warning-hint')).toHaveTextContent(
-			'Too short to warn',
+		const after = screen.getByTestId('bind-agent-after-expiry') as HTMLSelectElement;
+		expect(after.value).toBe('hold');
+		expect(screen.getByTestId('bind-agent-after-expiry-hint')).toHaveTextContent(
+			'waits for you to renew it',
 		);
-
-		await user.selectOptions(screen.getByTestId('bind-agent-idle-preset'), '14d');
-		await user.click(screen.getByText('Warn me before it ends'));
-		expect(warning()).toBeChecked();
+		await user.selectOptions(after, 'refuse');
+		expect(screen.getByTestId('bind-agent-after-expiry-hint')).toHaveTextContent(
+			'the agent asks you to renew',
+		);
 		await user.click(screen.getByTestId('bind-agent-confirm'));
 		await waitFor(() => expect(bodies).toHaveLength(1));
-		expect(bodies[0].body).toMatchObject({
-			max_idle_period: 14 * 86_400,
-			idle_warning: true,
-		});
+		expect(bodies[0].body).toMatchObject({ after_expiry: 'refuse' });
+		expect(bodies[0].body).not.toHaveProperty('idle_warning');
 	});
 
 	it('sends single use, and single use alone ends access without a warning', async () => {

@@ -2,6 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
+import type { AfterExpiry } from './AfterExpiry';
 import type { ApiLastUseResponse } from './ApiLastUseResponse';
 import type { GrantEndReason } from './GrantEndReason';
 import type { ServedApiRef } from './ServedApiRef';
@@ -9,6 +10,10 @@ import type { ServedApiRef } from './ServedApiRef';
  * Direct agent↔credential binding representation in API responses.
  */
 export type CredentialBindingResponse = {
+    /**
+     * What a call through the binding gets once it has ended. `hold` (the default): the first such call is held as a `grant_renewal` for the agent's owner to renew the binding and run it; later calls get `403 credential_binding_expired` while that review is pending. `refuse`: every call gets `403 credential_binding_expired`, whose directive tells the agent to ask its owner to renew.
+     */
+    after_expiry?: AfterExpiry;
     /**
      * ID of the agent the credential is bound to.
      */
@@ -42,7 +47,7 @@ export type CredentialBindingResponse = {
      */
     idle_expires_at?: (string | null);
     /**
-     * Warn the agent's owner before the idle limit is reached: once a day a job raises a `credential_grant.idle_expiring` event when the binding will go idle within 48 hours (for idle limits of 4 days or more), once per idle period. Off unless set.
+     * Warn the agent's owner before the binding ends: once a day a job raises a `credential_grant.expiring` event when its end date is within 48 hours (for a binding granted for 4 days or more), and a `credential_grant.idle_expiring` event when it will go idle within 48 hours (for idle limits of 4 days or more); each once per end date or idle period. Off unless set.
      */
     idle_warning?: boolean;
     /**

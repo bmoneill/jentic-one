@@ -241,6 +241,9 @@ class CredentialDerivation:
     #: limit ended it (``end_date`` or ``idle``) — for the denial's detail.
     expired_credential_id: str | None = None
     expired_reason: str | None = None
+    #: With ``binding_expired``: whether that binding holds the call for its
+    #: owner to renew (``after_expiry`` ``hold``) or refuses it (``refuse``).
+    expired_holds: bool = True
     valid_until: datetime | None = None
     cacheable: bool = True
 

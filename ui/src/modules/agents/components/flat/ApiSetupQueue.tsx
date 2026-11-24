@@ -67,6 +67,7 @@ import {
 import type { PermissionRule } from '@/shared/credentials/api/vendors-types';
 import {
 	AccessRulesStep,
+	AccessEndFields,
 	BindingDurationField,
 	IdleLimitField,
 	SingleUseField,
@@ -89,12 +90,13 @@ import {
 	expiresAtIso,
 	type BindingDuration,
 } from '@/shared/credentials/lib/bindingDuration';
+import { idleLimitError, idleSeconds, type IdleLimit } from '@/shared/credentials/lib/idleLimit';
 import {
-	idleLimitError,
-	idleSeconds,
-	idleWarning,
-	type IdleLimit,
-} from '@/shared/credentials/lib/idleLimit';
+	DEFAULT_AFTER_EXPIRY,
+	expiryWarnable,
+	expiryWarning,
+	type AfterExpiry,
+} from '@/shared/credentials/lib/accessEnd';
 import {
 	NO_DURATION_HINT,
 	choosesNoExpiry,
@@ -168,6 +170,10 @@ interface AccessDraft {
 	idle: IdleLimit | null;
 	/** The optional use count (1 = "End after one use"); null = off. */
 	uses: number | null;
+	/** Warn the owner before the access ends (off to start). */
+	warn: boolean;
+	/** What a call gets once the access has ended. */
+	afterExpiry: AfterExpiry;
 }
 
 /** Custom rules, preselected: the operator says what the agent may call. No
@@ -178,6 +184,8 @@ const DEFAULT_DRAFT: AccessDraft = {
 	duration: null,
 	idle: null,
 	uses: null,
+	warn: false,
+	afterExpiry: DEFAULT_AFTER_EXPIRY,
 };
 
 const RULES_SAVE_FAILED = "The access rules weren't saved.";
@@ -383,8 +391,13 @@ export function ApiSetupQueue({
 						// Worked out as the bind goes out: the duration runs from here.
 						expiresAt: expiresAtIso(draftFor(entry.key).duration),
 						maxIdlePeriod: idleSeconds(draftFor(entry.key).idle),
-						idleWarning: idleWarning(draftFor(entry.key).idle),
+						idleWarning: expiryWarning(
+							draftFor(entry.key).warn,
+							expiresAtFromDuration(draftFor(entry.key).duration),
+							idleSeconds(draftFor(entry.key).idle),
+						),
 						maxQuota: draftFor(entry.key).uses,
+						afterExpiry: draftFor(entry.key).afterExpiry,
 					}));
 				} catch (e) {
 					setEntries((current) =>
@@ -1095,6 +1108,20 @@ function AccessStep({
 					onChange={(uses): void => onDraftChange({ uses })}
 					end={expiresAtFromDuration(draft.duration)}
 					idleSeconds={idleSeconds(draft.idle)}
+					disabled={working}
+					testIdPrefix="queue-access"
+				/>
+			)}
+			{askDuration && (
+				<AccessEndFields
+					warn={draft.warn}
+					onWarnChange={(warn): void => onDraftChange({ warn })}
+					warnable={expiryWarnable(
+						expiresAtFromDuration(draft.duration),
+						idleSeconds(draft.idle),
+					)}
+					afterExpiry={draft.afterExpiry}
+					onAfterExpiryChange={(afterExpiry): void => onDraftChange({ afterExpiry })}
 					disabled={working}
 					testIdPrefix="queue-access"
 				/>

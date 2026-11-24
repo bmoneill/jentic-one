@@ -7,7 +7,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Discriminator, Field
 
-from jentic_one.shared.auth.grant_policy import GrantEndReason
+from jentic_one.shared.auth.grant_policy import AfterExpiry, GrantEndReason
 from jentic_one.shared.schemas import ServedApiRef
 from jentic_one.shared.web import openapi_examples as ex
 
@@ -103,8 +103,16 @@ class CredentialBindingEntry(BaseModel):
     )
     idle_warning: bool = Field(
         default=False,
-        description="Whether the owner is warned before the idle limit is reached.",
+        description="Whether the owner is warned before the binding ends (its end date or"
+        " idle limit).",
         examples=[False],
+    )
+    after_expiry: AfterExpiry = Field(
+        default=AfterExpiry.HOLD,
+        description="What a call through the binding gets once it has ended: `hold` holds"
+        " the first call for the owner to renew; `refuse` answers"
+        " `403 credential_binding_expired` (ask your owner to renew).",
+        examples=["hold"],
     )
     max_quota: int | None = Field(
         default=None,

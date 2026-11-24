@@ -88,8 +88,10 @@ class CredentialBindingView(BaseModel):
     # column ``last_used_at`` (``idle_clock_used_at`` below).
     max_idle_period: int | None = None
     renewed_at: datetime | None = None
-    # Opt-in warning to the owner before the idle limit is reached.
+    # Opt-in warning to the owner before the binding ends (idle limit or end date).
     idle_warning: bool = False
+    # What a call through the binding gets once it has ended (``AfterExpiry``).
+    after_expiry: str = "hold"
     # Use count (None = unlimited) and the uses left; a renewal restores it.
     max_quota: int | None = None
     quota_remaining: int | None = None
@@ -141,6 +143,9 @@ class CredentialBindingView(BaseModel):
 
 
 class EndingSoonBindingView(CredentialBindingView):
-    """A binding with the idle warning on whose idle limit is close (step 10)."""
+    """A binding with the warning on whose idle limit or end date is close."""
 
     agent_name: str
+    # The nearer deadline due a warning, and which limit it is.
+    ends_at: datetime
+    ending: str

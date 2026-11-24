@@ -51,6 +51,8 @@ interface ApprovalRow {
 		expires_at: string | null;
 		max_idle_period: number | null;
 		idle_warning: boolean;
+		/** What a call through it gets once it has ended; absent reads as `hold`. */
+		after_expiry?: 'hold' | 'refuse';
 		max_quota: number | null;
 		quota_remaining: number | null;
 		can_renew: boolean;

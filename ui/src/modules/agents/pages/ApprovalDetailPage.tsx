@@ -177,6 +177,7 @@ export default function ApprovalDetailPage() {
 					maxIdlePeriod: policy.max_idle_period,
 					idleWarning: policy.idle_warning,
 					maxQuota: policy.max_quota,
+					afterExpiry: policy.after_expiry,
 				},
 				{
 					onSuccess: () =>
@@ -401,6 +402,7 @@ export default function ApprovalDetailPage() {
 									agentName={agentName}
 									canRenew={approval.renewal?.can_renew ?? false}
 									renewElsewhere={approval.renewal?.renew_on_decide === false}
+									afterExpiry={approval.renewal?.after_expiry ?? null}
 									pending={decide.isPending || renewBinding.isPending}
 									onDeny={(why) => handleRenewal(null, false, why)}
 									onRenew={(policy, run, why) => handleRenewal(policy, run, why)}

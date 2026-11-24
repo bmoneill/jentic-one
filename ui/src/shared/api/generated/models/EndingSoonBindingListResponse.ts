@@ -8,7 +8,7 @@ import type { EndingSoonBindingResponse } from './EndingSoonBindingResponse';
  */
 export type EndingSoonBindingListResponse = {
     /**
-     * Bindings with the idle warning on that end soon if unused, soonest first.
+     * Bindings with the warning on that end soon, soonest first.
      */
     data: Array<EndingSoonBindingResponse>;
 };

@@ -72,6 +72,7 @@ import type { PermissionRule } from '@/shared/credentials/api/vendors-types';
 import {
 	AccessRulesStep,
 	BindingDurationField,
+	AccessEndFields,
 	IdleLimitField,
 	SingleUseField,
 	NoExpiryConfirmDialog,
@@ -83,12 +84,13 @@ import {
 	expiresAtIso,
 	type BindingDuration,
 } from '@/shared/credentials/lib/bindingDuration';
+import { idleLimitError, idleSeconds, type IdleLimit } from '@/shared/credentials/lib/idleLimit';
 import {
-	idleLimitError,
-	idleSeconds,
-	idleWarning,
-	type IdleLimit,
-} from '@/shared/credentials/lib/idleLimit';
+	DEFAULT_AFTER_EXPIRY,
+	expiryWarnable,
+	expiryWarning,
+	type AfterExpiry,
+} from '@/shared/credentials/lib/accessEnd';
 import {
 	NO_DURATION_HINT,
 	bindingExpiresSoon,
@@ -181,6 +183,9 @@ export function BindAgentDialog({
 	const [idle, setIdle] = useState<IdleLimit | null>(null);
 	// The optional use count: 1 for "End after one use", null = off.
 	const [uses, setUses] = useState<number | null>(null);
+	// Warn before the access ends (off to start), and what happens after it.
+	const [warn, setWarn] = useState(false);
+	const [afterExpiry, setAfterExpiry] = useState<AfterExpiry>(DEFAULT_AFTER_EXPIRY);
 	// The org's defaults preselect the controls; its maximums bound them.
 	const limits = useGrantPolicyLimits();
 	usePreselectGrantDefaults(limits, (d) => {
@@ -295,6 +300,8 @@ export function BindAgentDialog({
 		setDuration(fresh.duration);
 		setIdle(fresh.idle);
 		setUses(fresh.uses);
+		setWarn(false);
+		setAfterExpiry(DEFAULT_AFTER_EXPIRY);
 		setRulesFailure(null);
 		onClose();
 	};
@@ -328,8 +335,13 @@ export function BindAgentDialog({
 				rules,
 				expiresAt,
 				maxIdlePeriod: idleSeconds(idle),
-				idleWarning: idleWarning(idle),
+				idleWarning: expiryWarning(
+					warn,
+					expiresAtFromDuration(duration),
+					idleSeconds(idle),
+				),
 				maxQuota: uses,
+				afterExpiry,
 			},
 			{
 				onSuccess: ({ rulesFailed }) => {
@@ -560,6 +572,20 @@ export function BindAgentDialog({
 						onChange={setUses}
 						end={expiresAtFromDuration(duration)}
 						idleSeconds={idleSeconds(idle)}
+						disabled={busy}
+						testIdPrefix="bind-agent"
+					/>
+				)}
+				{!everyAgentBound && (
+					<AccessEndFields
+						warn={warn}
+						onWarnChange={setWarn}
+						warnable={expiryWarnable(
+							expiresAtFromDuration(duration),
+							idleSeconds(idle),
+						)}
+						afterExpiry={afterExpiry}
+						onAfterExpiryChange={setAfterExpiry}
 						disabled={busy}
 						testIdPrefix="bind-agent"
 					/>

@@ -156,8 +156,10 @@ export interface CredentialBindingEntity {
 	maxIdlePeriod?: number | null;
 	/** When the idle limit ends it if unused; null without one. */
 	idleExpiresAt?: string | null;
-	/** Whether the owner is warned before the idle limit is reached. */
+	/** Whether the owner is warned before it ends (its end date or idle limit). */
 	idleWarning?: boolean;
+	/** What a call through it gets once it has ended: `hold` or `refuse`. */
+	afterExpiry?: string | null;
 	/** How many calls it allows (1 is single use), and how many are left; null without a count. */
 	maxQuota?: number | null;
 	quotaRemaining?: number | null;

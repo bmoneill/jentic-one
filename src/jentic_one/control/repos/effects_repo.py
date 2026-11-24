@@ -76,6 +76,7 @@ class EffectsRepository:
         max_idle_period: int | None = None,
         idle_warning: bool = False,
         max_quota: int | None = None,
+        after_expiry: str = "hold",
     ) -> tuple[str, bool]:
         """Create a direct agent↔credential binding idempotently via raw SQL (admin DB).
 
@@ -93,9 +94,11 @@ class EffectsRepository:
             text(
                 "INSERT INTO agent_credential_bindings "
                 "(id, agent_id, credential_id, rule_set_id, created_by, expires_at, "
-                "max_idle_period, renewed_at, idle_warning, max_quota, quota_remaining) "
+                "max_idle_period, renewed_at, idle_warning, max_quota, quota_remaining, "
+                "after_expiry) "
                 "VALUES (:id, :agent_id, :credential_id, :rule_set_id, :created_by, :expires_at, "
-                ":max_idle_period, :renewed_at, :idle_warning, :max_quota, :max_quota) "
+                ":max_idle_period, :renewed_at, :idle_warning, :max_quota, :max_quota, "
+                ":after_expiry) "
                 "ON CONFLICT (agent_id, credential_id) DO NOTHING "
                 "RETURNING id"
             ),
@@ -109,6 +112,7 @@ class EffectsRepository:
                 "max_idle_period": max_idle_period,
                 "idle_warning": idle_warning,
                 "max_quota": max_quota,
+                "after_expiry": after_expiry,
                 # Granting starts the idle clock.
                 "renewed_at": datetime.now(UTC),
             },
