@@ -46,8 +46,15 @@ class OAuthAppRegistrationRepository:
         display_name: str,
         default_scopes: list[str] | None = None,
         created_by: str,
+        registration_id: str | None = None,
     ) -> OAuthAppRegistration:
+        """Insert an authorization-code registration and its details row.
+
+        Pass *registration_id* when the caller had to know the id up front (for
+        example to encrypt the client secret for it); otherwise one is generated.
+        """
         registration = OAuthAppRegistration(
+            **({"id": registration_id} if registration_id is not None else {}),
             name=name,
             api_vendor=api_vendor,
             flow_kind=FLOW_KIND_AUTH_CODE,

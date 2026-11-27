@@ -56,6 +56,9 @@ from jentic_one.control.services.credentials.token_endpoint import same_origin
 from jentic_one.control.services.integrations import device_authorization as df
 from jentic_one.shared.config import resolved_control_egress
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import device_code_context
+from jentic_one.shared.crypto.service import backend_name
+from jentic_one.shared.deadline import ensure_not_expired, within_encryption_deadline
 
 
 class DeviceAuthorizationConnectProvider(OAuth2Provider):
@@ -103,7 +106,9 @@ class DeviceAuthorizationConnectProvider(OAuth2Provider):
             scopes=scopes,
             egress=resolved_control_egress(ctx.config),
         )
-        encrypted_device_code = ctx.encryption.encrypt(result.device_code)
+        encrypted_device_code = await ctx.encryption.encrypt(
+            result.device_code, context=device_code_context(credential_id)
+        )
         expires_at = datetime.now(UTC) + timedelta(seconds=result.expires_in)
         flow_nonce = generate_nonce()
 
@@ -212,7 +217,11 @@ class DeviceAuthorizationConnectProvider(OAuth2Provider):
                     "does not match the origin where the credential was minted"
                 )
             token_url, client_id = details.token_endpoint, registration.client_id
-        refresh_token = await token.decrypt()
+        backend = backend_name(ctx.encryption)
+        refresh_token = await within_encryption_deadline(token.decrypt(), backend=backend)
+        # Last stop before the vendor send: once the token endpoint is called, a
+        # rotating grant must run to the end, so an expired request sends nothing.
+        ensure_not_expired()
         try:
             data = await self._post_token(
                 token_url,

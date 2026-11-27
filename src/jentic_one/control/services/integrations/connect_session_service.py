@@ -14,7 +14,7 @@ from __future__ import annotations
 import math
 import secrets
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -202,7 +202,18 @@ from jentic_one.shared.config import (
     resolved_control_egress,
 )
 from jentic_one.shared.context import Context
-from jentic_one.shared.crypto import hash_secret
+from jentic_one.shared.crypto import (
+    EncryptionAccessDeniedError,
+    EncryptionBackendError,
+    EncryptionService,
+    PreparedWrite,
+    app_registration_client_secret_context,
+    credential_client_secret_context,
+    credential_secret_scope,
+    hash_secret,
+    oauth_token_scope,
+)
+from jentic_one.shared.crypto.contexts import FIELD_ACCESS_TOKEN, FIELD_REFRESH_TOKEN
 from jentic_one.shared.db.errors import DatabaseIntegrityError
 from jentic_one.shared.db.ids import generate_ksuid
 from jentic_one.shared.db.locks import lock_credential_identity_repair
@@ -738,6 +749,24 @@ _BOUND_AGENTS_LIMIT = 200
 # ---------------------------------------------------------------------------
 
 
+class _TokenWriteBeforePoll:
+    """Prepares a credential's token write on demand, right before a vendor poll."""
+
+    def __init__(
+        self, stack: AsyncExitStack, encryption: EncryptionService, credential_id: str
+    ) -> None:
+        self._stack = stack
+        self._encryption = encryption
+        self._credential_id = credential_id
+        self.prepared: PreparedWrite | None = None
+
+    async def prepare(self) -> None:
+        if self.prepared is None:
+            self.prepared = await self._stack.enter_async_context(
+                self._encryption.prepare_write(oauth_token_scope(self._credential_id))
+            )
+
+
 @dataclass(slots=True, frozen=True)
 class _CapScope:
     """Whose open sessions a new session counts against."""
@@ -750,11 +779,11 @@ class _CapScope:
 def _session_app_from_registration(ctx: Context, registration: OAuthAppRegistration) -> SessionApp:
     """Project an admin-registered OAuth app row into the handler seam.
 
-    ``client_secret_provider`` is a lazy closure: device flow (a public
-    client) never calls it, and auth-code only invokes it once at
-    ``complete_from_callback`` time. Endpoints come off the flow-specific
-    extension row, which is eager-loaded via ``selectin`` on the ORM model,
-    so no extra DB round-trip is issued here.
+    ``client_secret_provider`` is a lazy async closure: device flow (a public
+    client) has none, and the auth-code registration path never stores a
+    copy of the secret, so it is decrypted only if a caller awaits it.
+    Endpoints come off the flow-specific extension row, which is eager-loaded
+    via ``selectin`` on the ORM model, so no extra DB round-trip is issued here.
     """
     if registration.flow_kind == "authorization_code":
         ac = registration.authorization_code_details
@@ -763,9 +792,10 @@ def _session_app_from_registration(ctx: Context, registration: OAuthAppRegistrat
             "(schema invariant broken)"
         )
         encrypted_secret = ac.encrypted_client_secret
+        secret_context = app_registration_client_secret_context(registration.id)
 
-        def _decrypt() -> str:
-            return ctx.encryption.decrypt(encrypted_secret)
+        async def _decrypt() -> str:
+            return await ctx.encryption.decrypt(encrypted_secret, context=secret_context)
 
         return SessionApp(
             flow_kind="authorization_code",
@@ -803,7 +833,7 @@ def _session_app_from_flow(flow: Any) -> SessionApp:
     if flow.kind == "authorization_code":
         secret_value: str = flow.client_secret.get_secret_value()
 
-        def _config_secret() -> str:
+        async def _config_secret() -> str:
             return secret_value
 
         return SessionApp(
@@ -4811,7 +4841,14 @@ class ConnectSessionService:
             )
         cas_fields: dict[str, Any] = {"agent_id": agent_id} if late_bound else {}
         try:
-            async with self._ctx.control_db.transaction() as session:
+            # Prepare the write key before the transaction opens: backend I/O must
+            # not hold a connection or the session row's lock. Sealing is local.
+            async with (
+                self._ctx.encryption.prepare_write(
+                    credential_secret_scope(row.credential_id)
+                ) as sealer,
+                self._ctx.control_db.transaction() as session,
+            ):
                 won = await ConnectSessionRepository.transition_state(
                     session,
                     row.id,
@@ -4823,7 +4860,7 @@ class ConnectSessionService:
                 if won:
                     await handler.write_secret(
                         session,
-                        self._ctx.encryption,
+                        sealer,
                         row=row,
                         secret=variant.secret,
                         created_by=credential_owner_id,
@@ -5051,6 +5088,11 @@ class ConnectSessionService:
 
         handler = AuthCodeFlowHandler(self._ctx)
         cas_fields: dict[str, Any] = {"agent_id": agent_id} if late_bound else {}
+        # Encrypted before the transaction: backend I/O holds no row lock.
+        encrypted_client_secret = await self._ctx.encryption.encrypt(
+            variant.client_secret.get_secret_value(),
+            context=credential_client_secret_context(row.credential_id),
+        )
         async with self._ctx.control_db.transaction() as session:
             won = await ConnectSessionRepository.transition_state(
                 session,
@@ -5067,9 +5109,7 @@ class ConnectSessionService:
                     credential_id=row.credential_id,
                     token_url=token_url,
                     client_id=variant.client_id,
-                    encrypted_client_secret=self._ctx.encryption.encrypt(
-                        variant.client_secret.get_secret_value()
-                    ),
+                    encrypted_client_secret=encrypted_client_secret,
                     authorize_url=authorize_url,
                     scope=" ".join(variant.confirmed_scopes) if variant.confirmed_scopes else None,
                     created_by=credential_owner_id,
@@ -5082,7 +5122,7 @@ class ConnectSessionService:
 
         secret = variant.client_secret
 
-        def _client_secret() -> str:
+        async def _client_secret() -> str:
             return secret.get_secret_value()
 
         app = SessionApp(
@@ -5471,13 +5511,35 @@ class ConnectSessionService:
             return
 
         handler = DeviceAuthorizationHandler(self._ctx)
-        report = await handler.advance(row.credential_id)
-        if report.kind == "pending":
-            return
-        if report.kind == "success":
-            assert report.tokens is not None
-            await self._finalise_connected(row, handler, report.tokens)
-            return
+        async with self._token_write_before_poll(row.credential_id) as token_write:
+            try:
+                report = await handler.advance(row.credential_id, before_poll=token_write.prepare)
+            except EncryptionAccessDeniedError as exc:
+                # Only an operator can restore access: end the session so the user
+                # sees the failure instead of polling until the TTL.
+                await self._mark_terminal(
+                    row.id,
+                    "failed",
+                    "Encryption backend denied access while connecting",
+                    error_code=exc.code,
+                )
+                return
+            except EncryptionBackendError as exc:
+                # Transient: nothing was polled; the next tick tries again.
+                _logger.warning(
+                    "connect_session.device_poll_backend_unavailable",
+                    session_id=row.id,
+                    backend=exc.backend,
+                )
+                return
+            if report.kind == "pending":
+                return
+            if report.kind == "success":
+                assert report.tokens is not None
+                await self._finalise_connected(
+                    row, handler, report.tokens, prepared=token_write.prepared
+                )
+                return
         # Terminal (failed / expired) — persist and stop.
         await self._mark_terminal(
             row.id,
@@ -5485,6 +5547,14 @@ class ConnectSessionService:
             report.terminal_detail or report.error_code or report.kind,
             error_code=report.error_code,
         )
+
+    @asynccontextmanager
+    async def _token_write_before_poll(
+        self, credential_id: str
+    ) -> AsyncIterator[_TokenWriteBeforePoll]:
+        """Hold a token write prepared only if the vendor is actually polled."""
+        async with AsyncExitStack() as stack:
+            yield _TokenWriteBeforePoll(stack, self._ctx.encryption, credential_id)
 
     def _ttl_seconds(self, row: ConnectSession) -> float:
         # An edit waits for a human before its consent starts, so it keeps
@@ -5523,27 +5593,43 @@ class ConnectSessionService:
             return
 
         handler = DeviceAuthorizationHandler(self._ctx)
-        report = await handler.advance(credential.id)
-        if report.kind == "pending":
-            return
-        try:
-            if report.kind == "success":
-                assert report.tokens is not None
-                await self._finalise_credential_connected(
-                    credential, handler, report.tokens, flow_nonce=report.flow_nonce
+        async with self._token_write_before_poll(credential.id) as token_write:
+            try:
+                report = await handler.advance(credential.id, before_poll=token_write.prepare)
+            except EncryptionBackendError as exc:
+                # Nothing was polled. The device code's own expiry still ends the
+                # flow if the backend stays unavailable or denied.
+                _logger.warning(
+                    "connect_credential.device_poll_backend_error",
+                    credential_id=credential.id,
+                    backend=exc.backend,
+                    error_code=exc.code,
                 )
                 return
-            # Terminal (failed / expired) — flip the credential row and clear
-            # the aux row so the scanner stops picking it up.
-            await self._mark_credential_terminal(
-                credential.id,
-                report.terminal_detail or report.error_code or report.kind,
-                flow_nonce=report.flow_nonce,
-            )
-        except _DeviceFlowSupersededError:
-            # A reconnect committed a newer challenge after this poll. Its
-            # transient state and eventual outcome belong to that flow.
-            return
+            if report.kind == "pending":
+                return
+            try:
+                if report.kind == "success":
+                    assert report.tokens is not None
+                    await self._finalise_credential_connected(
+                        credential,
+                        handler,
+                        report.tokens,
+                        flow_nonce=report.flow_nonce,
+                        prepared=token_write.prepared,
+                    )
+                    return
+                # Terminal (failed / expired) — flip the credential row and clear
+                # the aux row so the scanner stops picking it up.
+                await self._mark_credential_terminal(
+                    credential.id,
+                    report.terminal_detail or report.error_code or report.kind,
+                    flow_nonce=report.flow_nonce,
+                )
+            except _DeviceFlowSupersededError:
+                # A reconnect committed a newer challenge after this poll. Its
+                # transient state and eventual outcome belong to that flow.
+                return
 
     async def _mark_credential_terminal(
         self,
@@ -5612,6 +5698,8 @@ class ConnectSessionService:
         row: ConnectSession,
         handler: AuthFlowHandler,
         tokens: SuccessTokens,
+        *,
+        prepared: PreparedWrite | None = None,
     ) -> StatusResult:
         """Session-mode finalise: identity echo → shared write → session close.
 
@@ -5623,7 +5711,7 @@ class ConnectSessionService:
         strand a credential we can't tie back to a human.
         """
         if row.intent == INTENT_EDIT:
-            return await self._finalise_edit(row, handler, tokens)
+            return await self._finalise_edit(row, handler, tokens, prepared=prepared)
         key = _source_key(row)
         if key is None:
             # An API target on the approver's own OAuth client: no registry
@@ -5637,6 +5725,7 @@ class ConnectSessionService:
                     connected_as=None,
                     created_by=row.initiator_actor_id,
                     close_session_id=row.id,
+                    prepared=prepared,
                 )
             except TokenEndpointMovedError as exc:
                 return await self._fail_token_endpoint_moved(row, exc)
@@ -5709,6 +5798,7 @@ class ConnectSessionService:
                 connected_as=connected_as,
                 created_by=token_creator,
                 close_session_id=row.id,
+                prepared=prepared,
             )
         except TokenEndpointMovedError as exc:
             return await self._fail_token_endpoint_moved(row, exc)
@@ -5731,6 +5821,8 @@ class ConnectSessionService:
         row: ConnectSession,
         handler: AuthFlowHandler,
         tokens: SuccessTokens,
+        *,
+        prepared: PreparedWrite | None = None,
     ) -> StatusResult:
         """The vendor grant for an edit's added scopes landed: apply the held change.
 
@@ -5864,6 +5956,7 @@ class ConnectSessionService:
                             created_by=change["approved_by"],
                             close_session_id=None,
                             in_session=session,
+                            prepared=prepared,
                         )
                     change, reopen = await self._write_change(
                         session, row, change, on_rules_moved="reopen"
@@ -5951,6 +6044,7 @@ class ConnectSessionService:
         handler: AuthFlowHandler,
         tokens: SuccessTokens,
         flow_nonce: str | None = None,
+        prepared: PreparedWrite | None = None,
     ) -> StatusResult:
         """Credential-mode finalise: shared write, no session row to close.
 
@@ -5979,6 +6073,7 @@ class ConnectSessionService:
             created_by=credential.created_by,
             close_session_id=None,
             flow_nonce=flow_nonce,
+            prepared=prepared,
         )
 
         _logger.info(
@@ -6007,6 +6102,7 @@ class ConnectSessionService:
         close_session_id: str | None,
         in_session: Any | None = None,
         flow_nonce: str | None = None,
+        prepared: PreparedWrite | None = None,
     ) -> None:
         """Shared finalise write — vault token, cleanup aux, flip credential.
 
@@ -6025,16 +6121,28 @@ class ConnectSessionService:
         ``in_session`` runs the writes in the caller's transaction instead of
         a new one, so a caller that compare-and-swaps the session itself keeps
         the grant and that swap in one commit.
+
+        ``prepared`` is a token write the caller prepared before the vendor
+        exchange; without one the write is prepared here.
         """
         expires_at = (
             datetime.now(UTC) + timedelta(seconds=tokens.expires_in)
             if tokens.expires_in is not None
             else None
         )
-        encrypted_access = self._ctx.encryption.encrypt(tokens.access_token)
-        encrypted_refresh = (
-            self._ctx.encryption.encrypt(tokens.refresh_token) if tokens.refresh_token else None
-        )
+        async with AsyncExitStack() as stack:
+            if prepared is None:
+                prepared = await stack.enter_async_context(
+                    self._ctx.encryption.prepare_write(oauth_token_scope(credential_id))
+                )
+            if prepared.scope != oauth_token_scope(credential_id):
+                raise ValueError("prepared token write belongs to another credential")
+            encrypted_access = prepared.seal(tokens.access_token, field=FIELD_ACCESS_TOKEN)
+            encrypted_refresh = (
+                prepared.seal(tokens.refresh_token, field=FIELD_REFRESH_TOKEN)
+                if tokens.refresh_token
+                else None
+            )
 
         # ``granted_scopes`` is the flow-agnostic "what did the human end
         # up with" list — device flow supplies the confirmed set (vendor's
@@ -6621,28 +6729,80 @@ class ConnectSessionService:
             raise NoOpForFlowError(row.resolved_flow)
         handler = AuthCodeFlowHandler(self._ctx)
 
-        try:
-            tokens = await handler.complete_from_callback(row, code=code)
-        except RegistrationInactiveError as exc:
-            # The admin deactivated the app between confirm and the callback.
-            await self._mark_terminal(
-                row.id, "failed", str(exc), error_code="registration_inactive"
-            )
-            return StatusResult(status="failed", error_code="registration_inactive")
-        except Exception as exc:
-            # Any exchange failure ⇒ terminal-failed; the human's popup will
-            # observe the transition on the next status poll.
-            await self._mark_terminal(
-                row.id, "failed", str(exc), error_code="token_exchange_failed"
-            )
-            return StatusResult(status="failed", error_code="token_exchange_failed")
-        finally:
-            # The verifier is single-use (RFC 7636 §4.5): once the code has
-            # been exchanged — or the exchange failed — it has no further
-            # purpose, so don't leave it at rest on the session row.
+        # Prepare the token write before the code is exchanged: a backend
+        # failure then surfaces before the vendor spends the code. Backend
+        # errors propagate as themselves; the nonce stays consumed.
+        verifier_cleared = False
+
+        async def _clear_verifier() -> None:
+            # The verifier is single-use (RFC 7636 §4.5): once the code has been
+            # exchanged — or the exchange failed or never started — it has no
+            # further purpose, so don't leave it at rest on the session row.
+            nonlocal verifier_cleared
+            if verifier_cleared:
+                return
+            verifier_cleared = True
             async with self._ctx.control_db.transaction() as session:
                 await ConnectSessionRepository.update_fields(
                     session, row.id, pkce_code_verifier=None
                 )
 
-        return await self._finalise_connected(row, handler, tokens)
+        try:
+            async with self._ctx.encryption.prepare_write(
+                oauth_token_scope(row.credential_id)
+            ) as prepared:
+                try:
+                    tokens = await handler.complete_from_callback(row, code=code)
+                except EncryptionBackendError:
+                    raise
+                except RegistrationInactiveError as exc:
+                    # The admin deactivated the app between confirm and the callback.
+                    await self._mark_terminal(
+                        row.id, "failed", str(exc), error_code="registration_inactive"
+                    )
+                    return StatusResult(status="failed", error_code="registration_inactive")
+                except Exception as exc:
+                    # Any exchange failure ⇒ terminal-failed; the human's popup will
+                    # observe the transition on the next status poll.
+                    await self._mark_terminal(
+                        row.id, "failed", str(exc), error_code="token_exchange_failed"
+                    )
+                    return StatusResult(status="failed", error_code="token_exchange_failed")
+                finally:
+                    await _clear_verifier()
+
+                try:
+                    return await self._finalise_connected(row, handler, tokens, prepared=prepared)
+                except EncryptionBackendError as exc:
+                    if await self._mark_terminal(
+                        row.id,
+                        "failed",
+                        "Encryption backend could not complete the connection",
+                        error_code=exc.code,
+                    ):
+                        raise
+                    # No live session was left to fail. If finalise had already
+                    # committed the tokens and closed it, the connection stands.
+                    async with self._ctx.control_db.session() as read_session:
+                        outcome = await ConnectSessionOutcomeRepository.get_by_session_id(
+                            read_session, row.id
+                        )
+                    if outcome is None or outcome.outcome != OUTCOME_CONNECTED:
+                        raise
+                    _logger.warning(
+                        "connect_session.finalise_backend_error_after_commit",
+                        session_id=row.id,
+                        backend=exc.backend,
+                    )
+                    return StatusResult(status="connected", credential_id=row.credential_id)
+        except EncryptionBackendError as exc:
+            # Preparing the write or the exchange itself failed on the backend.
+            await self._mark_terminal(
+                row.id,
+                "failed",
+                "Encryption backend could not complete the connection",
+                error_code=exc.code,
+            )
+            raise
+        finally:
+            await _clear_verifier()

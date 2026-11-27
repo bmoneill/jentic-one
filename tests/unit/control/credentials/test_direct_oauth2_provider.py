@@ -49,6 +49,7 @@ from jentic_one.shared.config import (
     EncryptionKey,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import credential_client_secret_context
 from jentic_one.shared.models.credentials import CredentialType
 
 
@@ -182,7 +183,9 @@ async def test_complete_connect_exchanges_code() -> None:
     ctx = Context(_make_config())
     ctx._control_db = _mock_control_db()
 
-    encrypted_secret = ctx.encryption.encrypt("my-client-secret")
+    encrypted_secret = await ctx.encryption.encrypt(
+        "my-client-secret", context=credential_client_secret_context("cred_123")
+    )
 
     class FakeOCC:
         token_url = "https://idp.example.com/token"
@@ -270,7 +273,9 @@ async def test_refresh_exchanges_refresh_token() -> None:
     ctx = Context(_make_config())
     ctx._control_db = _mock_control_db()
 
-    encrypted_secret = ctx.encryption.encrypt("my-client-secret")
+    encrypted_secret = await ctx.encryption.encrypt(
+        "my-client-secret", context=credential_client_secret_context("cred_123")
+    )
 
     class FakeOCC:
         token_url = "https://idp.example.com/token"
@@ -319,7 +324,9 @@ async def test_refresh_raises_invalid_grant() -> None:
     ctx = Context(_make_config())
     ctx._control_db = _mock_control_db()
 
-    encrypted_secret = ctx.encryption.encrypt("my-client-secret")
+    encrypted_secret = await ctx.encryption.encrypt(
+        "my-client-secret", context=credential_client_secret_context("cred_123")
+    )
 
     class FakeOCC:
         token_url = "https://idp.example.com/token"
@@ -356,7 +363,9 @@ async def test_refresh_raises_token_exchange_error_on_other_failure() -> None:
     ctx = Context(_make_config())
     ctx._control_db = _mock_control_db()
 
-    encrypted_secret = ctx.encryption.encrypt("my-client-secret")
+    encrypted_secret = await ctx.encryption.encrypt(
+        "my-client-secret", context=credential_client_secret_context("cred_123")
+    )
 
     class FakeOCC:
         token_url = "https://idp.example.com/token"
@@ -392,7 +401,9 @@ async def test_post_token_raises_on_non_json_response() -> None:
     ctx = Context(_make_config())
     ctx._control_db = _mock_control_db()
 
-    encrypted_secret = ctx.encryption.encrypt("my-client-secret")
+    encrypted_secret = await ctx.encryption.encrypt(
+        "my-client-secret", context=credential_client_secret_context("cred_123")
+    )
 
     class FakeOCC:
         token_url = "https://idp.example.com/token"
@@ -758,7 +769,9 @@ async def test_complete_connect_replays_state_redirect_uri_in_exchange() -> None
     provider = _make_provider()  # configured https://app.example.com/...
     ctx = Context(_make_config())
     ctx._control_db = _mock_control_db()
-    encrypted_secret = ctx.encryption.encrypt("my-client-secret")
+    encrypted_secret = await ctx.encryption.encrypt(
+        "my-client-secret", context=credential_client_secret_context("cred_123")
+    )
 
     class FakeOCC:
         token_url = "https://idp.example.com/token"
@@ -860,7 +873,9 @@ async def test_refresh_rejects_invalid_expires_in(bad_expires_in: object) -> Non
     provider = _make_provider()
     ctx = Context(_make_config())
     ctx._control_db = _mock_control_db()
-    encrypted_secret = ctx.encryption.encrypt("my-client-secret")
+    encrypted_secret = await ctx.encryption.encrypt(
+        "my-client-secret", context=credential_client_secret_context("cred_123")
+    )
 
     class FakeOCC:
         token_url = "https://idp.example.com/token"
@@ -893,7 +908,9 @@ async def test_refresh_rejects_missing_access_token_and_maps_transport_error() -
     provider = _make_provider()
     ctx = Context(_make_config())
     ctx._control_db = _mock_control_db()
-    encrypted_secret = ctx.encryption.encrypt("my-client-secret")
+    encrypted_secret = await ctx.encryption.encrypt(
+        "my-client-secret", context=credential_client_secret_context("cred_123")
+    )
 
     class FakeOCC:
         token_url = "https://idp.example.com/token"
@@ -960,7 +977,9 @@ async def test_complete_connect_sends_derived_code_verifier() -> None:
     provider = _make_provider()
     ctx = Context(_make_config())
     ctx._control_db = _mock_control_db()
-    encrypted_secret = ctx.encryption.encrypt("my-client-secret")
+    encrypted_secret = await ctx.encryption.encrypt(
+        "my-client-secret", context=credential_client_secret_context("cred_123")
+    )
 
     class FakeOCC:
         token_url = "https://idp.example.com/token"
@@ -999,7 +1018,9 @@ async def test_complete_connect_legacy_state_sends_no_verifier() -> None:
     provider = _make_provider()
     ctx = Context(_make_config())
     ctx._control_db = _mock_control_db()
-    encrypted_secret = ctx.encryption.encrypt("my-client-secret")
+    encrypted_secret = await ctx.encryption.encrypt(
+        "my-client-secret", context=credential_client_secret_context("cred_123")
+    )
 
     class FakeOCC:
         token_url = "https://idp.example.com/token"

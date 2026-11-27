@@ -74,6 +74,10 @@ from jentic_one.shared.config import (
     VendorScopeConfig,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import (
+    app_registration_client_secret_context,
+    credential_client_secret_context,
+)
 from jentic_one.shared.db.session import DatabaseSession
 
 pytestmark = pytest.mark.integration
@@ -205,12 +209,20 @@ async def _seed_active_registration(
             catalog_api_id=_VENDOR_API_ID,
             display_name=display_name,
             client_id="shared-registration-client",
-            encrypted_client_secret=ctx.encryption.encrypt("shared-registration-secret"),
+            encrypted_client_secret="",
             authorize_url="https://idp.example.com/authorize",
             token_url="https://idp.example.com/token",
             default_scopes=["scope-a"],
             created_by=_USER_ID,
         )
+        assert registration.authorization_code_details is not None
+        registration.authorization_code_details.encrypted_client_secret = (
+            await ctx.encryption.encrypt(
+                "shared-registration-secret",
+                context=app_registration_client_secret_context(registration.id),
+            )
+        )
+        await session.flush()
     return registration
 
 
@@ -745,7 +757,9 @@ async def test_refresh_falls_back_to_embedded_client_without_registration(
             credential_id=credential_id,
             token_url="https://idp.example.com/token",
             client_id="embedded-client",
-            encrypted_client_secret=ctx.encryption.encrypt("embedded-secret"),
+            encrypted_client_secret=await ctx.encryption.encrypt(
+                "embedded-secret", context=credential_client_secret_context(credential_id)
+            ),
             created_by=_USER_ID,
         )
 

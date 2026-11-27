@@ -48,6 +48,12 @@ from jentic_one.shared.config import (
     resolved_control_egress,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    app_registration_client_secret_context,
+    credential_client_secret_context,
+)
+from jentic_one.shared.crypto.service import backend_name
+from jentic_one.shared.deadline import ensure_not_expired, within_encryption_deadline
 
 # Re-exported for existing importers of these error types through
 # ``providers.direct_oauth2`` (they now live on the shared OAuth2 base).
@@ -281,10 +287,16 @@ class DirectOAuth2Provider(OAuth2Provider):
         *,
         token: OAuthTokenView,
     ) -> RefreshResult:
-        client_id, token_url, client_secret = await self._resolve_client_material(
-            ctx, credential_id=token.credential_id
+        # Reading the client material and the refresh token can wait on the encryption
+        # backend. Bound both by the request deadline, and re-check it right before the
+        # vendor send: once the token endpoint is called, the rotation must run to the end.
+        backend = backend_name(ctx.encryption)
+        client_id, token_url, client_secret = await within_encryption_deadline(
+            self._resolve_client_material(ctx, credential_id=token.credential_id),
+            backend=backend,
         )
-        refresh_token_value = await token.decrypt()
+        refresh_token_value = await within_encryption_deadline(token.decrypt(), backend=backend)
+        ensure_not_expired()
 
         token_data = await self._refresh_token(
             token_url=token_url,
@@ -348,13 +360,19 @@ class DirectOAuth2Provider(OAuth2Provider):
                         f"oauth_app_registration {registration.id!r} is missing its "
                         "authorization_code_details extension"
                     )
-                client_secret = ctx.encryption.decrypt(ac.encrypted_client_secret)
+                client_secret = await ctx.encryption.decrypt(
+                    ac.encrypted_client_secret,
+                    context=app_registration_client_secret_context(registration.id),
+                )
                 return registration.client_id, ac.token_url, client_secret
 
             occ = await OAuthClientCredentialRepository.get_by_credential(session, credential_id)
             if occ is None:
                 raise ProviderError(f"No oauth_client_credentials for credential {credential_id!r}")
-            client_secret = ctx.encryption.decrypt(occ.encrypted_client_secret)
+            client_secret = await ctx.encryption.decrypt(
+                occ.encrypted_client_secret,
+                context=credential_client_secret_context(credential_id),
+            )
             return occ.client_id, occ.token_url, client_secret
 
     async def _exchange_code(

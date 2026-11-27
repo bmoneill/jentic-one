@@ -25,10 +25,12 @@ from jentic_one.admin.services.provider_config_service import (
 from jentic_one.control.services.credentials.providers import PipedreamProvider
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import provider_config_secret_context
 from jentic_one.shared.models.audit import AuditTargetType
 
 pytestmark = pytest.mark.integration
 
+_SECRET_CONTEXT = provider_config_secret_context("pipedream", "client_secret")
 _PLAINTEXT_SECRET = "pd-client-secret-value"  # pragma: allowlist secret
 _ROTATED_SECRET = "pd-rotated-secret-value"  # pragma: allowlist secret
 
@@ -98,7 +100,12 @@ async def test_set_persists_ciphertext_and_returns_redacted(
     assert stored["client_secret"] != _PLAINTEXT_SECRET
     assert stored["client_secret"]  # non-empty ciphertext
     # And it decrypts back to the original plaintext.
-    assert integration_context.encryption.decrypt(stored["client_secret"]) == _PLAINTEXT_SECRET
+    assert (
+        await integration_context.encryption.decrypt(
+            stored["client_secret"], context=_SECRET_CONTEXT
+        )
+        == _PLAINTEXT_SECRET
+    )
 
 
 async def test_get_returns_redacted_and_missing_raises(
@@ -152,7 +159,12 @@ async def test_partial_update_preserves_existing_secret(
     stored = await _stored_config(integration_context, "pipedream")
     assert stored["client_id"] == "client_rotated"
     # The original secret survives the partial update.
-    assert integration_context.encryption.decrypt(stored["client_secret"]) == _PLAINTEXT_SECRET
+    assert (
+        await integration_context.encryption.decrypt(
+            stored["client_secret"], context=_SECRET_CONTEXT
+        )
+        == _PLAINTEXT_SECRET
+    )
 
 
 async def test_update_can_rotate_the_secret(
@@ -163,7 +175,12 @@ async def test_update_can_rotate_the_secret(
     await service.set("pipedream", _pipedream_fields(secret=_ROTATED_SECRET), identity=_identity())
 
     stored = await _stored_config(integration_context, "pipedream")
-    assert integration_context.encryption.decrypt(stored["client_secret"]) == _ROTATED_SECRET
+    assert (
+        await integration_context.encryption.decrypt(
+            stored["client_secret"], context=_SECRET_CONTEXT
+        )
+        == _ROTATED_SECRET
+    )
 
 
 async def test_set_refreshes_registry_and_resolves(
@@ -233,7 +250,12 @@ async def test_same_origin_connect_base_url_path_update_preserves_secret(
     assert view.config["connect_base_url"] == "https://api.pipedream.com/v2"
     stored = await _stored_config(integration_context, "pipedream")
     assert stored["connect_base_url"] == "https://api.pipedream.com/v2"
-    assert integration_context.encryption.decrypt(stored["client_secret"]) == _PLAINTEXT_SECRET
+    assert (
+        await integration_context.encryption.decrypt(
+            stored["client_secret"], context=_SECRET_CONTEXT
+        )
+        == _PLAINTEXT_SECRET
+    )
 
 
 async def test_cross_origin_connect_base_url_with_new_secret_allowed(
@@ -253,7 +275,12 @@ async def test_cross_origin_connect_base_url_with_new_secret_allowed(
     )
     assert view.config["connect_base_url"] == "https://pipedream.corp.example.com/v1"
     stored = await _stored_config(integration_context, "pipedream")
-    assert integration_context.encryption.decrypt(stored["client_secret"]) == _ROTATED_SECRET
+    assert (
+        await integration_context.encryption.decrypt(
+            stored["client_secret"], context=_SECRET_CONTEXT
+        )
+        == _ROTATED_SECRET
+    )
 
 
 @pytest.mark.parametrize(

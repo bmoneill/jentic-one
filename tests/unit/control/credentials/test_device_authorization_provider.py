@@ -9,6 +9,7 @@ payload MUST omit it. That's the load-bearing invariant these tests pin.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import os
 from collections.abc import Iterator
@@ -52,6 +53,7 @@ from jentic_one.shared.config import (
     EncryptionKey,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.deadline import RequestDeadlineExpiredError, bind_request_deadline
 from jentic_one.shared.models.credentials import CredentialType
 
 
@@ -616,3 +618,43 @@ async def test_refresh_preserves_omitted_expires_in() -> None:
         result = await provider.refresh(ctx, token=token_view)
     assert result.access_token == "at_new"
     assert result.expires_at is None
+
+
+@pytest.mark.asyncio()
+@pytest.mark.parametrize("decrypt_delay_s", [0.0, 0.05], ids=["expired-before", "slow-decrypt"])
+async def test_refresh_sends_nothing_once_the_request_deadline_has_passed(
+    decrypt_delay_s: float,
+) -> None:
+    # A rotating grant must never reach the vendor after the caller's budget is
+    # gone: the refresh token read is bounded and the send boundary re-checks.
+    provider = DeviceAuthorizationConnectProvider()
+    ctx = Context(_make_config())
+    ctx._control_db = _mock_control_db()
+
+    async def slow_decrypt() -> str:
+        await asyncio.sleep(decrypt_delay_s)
+        return "old-refresh-token"
+
+    token_view = OAuthTokenView(
+        credential_id="cred_1",
+        provider="device_authorization",
+        expires_at=datetime.now(UTC),
+        decrypt=slow_decrypt,
+    )
+
+    with (
+        patch(
+            "jentic_one.control.repos.device_authorization_credential_repo."
+            "DeviceAuthorizationCredentialRepository.get_by_credential",
+            new_callable=AsyncMock,
+            return_value=_FakeDFC(client_id="public-client"),
+        ),
+        idp_transport(post=httpx.Response(200, json={"access_token": "at"})) as mock_client,
+        bind_request_deadline(0.01),
+    ):
+        if decrypt_delay_s == 0:
+            await asyncio.sleep(0.02)
+        with pytest.raises(RequestDeadlineExpiredError):
+            await provider.refresh(ctx, token=token_view)
+
+    assert mock_client == []

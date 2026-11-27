@@ -33,6 +33,8 @@ from jentic_one.shared.audit import AuditAction, AuditTargetType, record_audit_b
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.config import EgressConfig, resolved_control_egress
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import app_registration_client_secret_context
+from jentic_one.shared.db.ids import generate_ksuid
 from jentic_one.shared.models.audit import AuditReason
 from jentic_one.shared.pagination import Page, decode_cursor, encode_cursor
 from jentic_one.shared.url_validation import validate_upstream_url_async
@@ -53,14 +55,22 @@ class OAuthAppRegistrationService:
         egress = resolved_control_egress(self._ctx.config)
         authorize_url = await _validate_endpoint_url("authorize_url", payload.authorize_url, egress)
         token_url = await _validate_endpoint_url("token_url", payload.token_url, egress)
-        encrypted = self._ctx.encryption.encrypt(payload.client_secret.get_secret_value())
+        # The ciphertext is bound to the registration id, so allocate the id first
+        # and encrypt before the transaction: backend I/O never holds a connection
+        # or the new row's locks.
+        registration_id = generate_ksuid("oar")
+        encrypted_client_secret = await self._ctx.encryption.encrypt(
+            payload.client_secret.get_secret_value(),
+            context=app_registration_client_secret_context(registration_id),
+        )
         async with self._ctx.control_db.transaction() as session:
             registration = await OAuthAppRegistrationRepository.create_authorization_code(
                 session,
+                registration_id=registration_id,
                 name=payload.name,
                 api_vendor=payload.api_vendor,
                 client_id=payload.client_id,
-                encrypted_client_secret=encrypted,
+                encrypted_client_secret=encrypted_client_secret,
                 authorize_url=authorize_url,
                 token_url=token_url,
                 catalog_api_id=payload.catalog_api_id,
@@ -312,6 +322,10 @@ class OAuthAppRegistrationService:
         client_secret: str,
         identity: Identity,
     ) -> OAuthAppRegistrationView:
+        # Encrypt before the transaction so backend I/O never holds a connection.
+        encrypted = await self._ctx.encryption.encrypt(
+            client_secret, context=app_registration_client_secret_context(registration_id)
+        )
         async with self._ctx.control_db.transaction() as session:
             registration = await OAuthAppRegistrationRepository.get_by_id(session, registration_id)
             if registration is None:
@@ -319,7 +333,6 @@ class OAuthAppRegistrationService:
             if registration.flow_kind != FLOW_KIND_AUTH_CODE:
                 raise SecretRotationNotSupportedError(registration_id)
 
-            encrypted = self._ctx.encryption.encrypt(client_secret)
             details = await OAuthAppRegistrationRepository.rotate_client_secret(
                 session,
                 registration_id,

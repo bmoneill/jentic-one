@@ -8,6 +8,7 @@ column, written at finalise time — the service reads it flow-agnostically.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any, ClassVar
 
@@ -34,6 +35,7 @@ from jentic_one.control.services.integrations.flow_handlers.base import (
 from jentic_one.control.services.integrations.flow_handlers.session_app import SessionApp
 from jentic_one.shared.config import resolved_control_egress
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import device_code_context
 from jentic_one.shared.models.credentials import StoredCredentialType
 
 # Upper bound on the RFC 8628 §3.5 ``slow_down`` interval widening. Every
@@ -113,7 +115,9 @@ class DeviceAuthorizationHandler:
             scopes=confirmed_scopes,
             egress=resolved_control_egress(self._ctx.config),
         )
-        encrypted_device_code = self._ctx.encryption.encrypt(result.device_code)
+        encrypted_device_code = await self._ctx.encryption.encrypt(
+            result.device_code, context=device_code_context(row.credential_id)
+        )
         now = datetime.now(UTC)
         expires_at = now + timedelta(seconds=result.expires_in)
 
@@ -151,7 +155,12 @@ class DeviceAuthorizationHandler:
             poll_interval_seconds=result.interval,
         )
 
-    async def advance(self, credential_id: str) -> StatusReport:
+    async def advance(
+        self,
+        credential_id: str,
+        *,
+        before_poll: Callable[[], Awaitable[None]] | None = None,
+    ) -> StatusReport:
         """Drive one poll tick against the vendor.
 
         Called **only** by ``ConnectPollScanner`` — never from a request
@@ -169,6 +178,9 @@ class DeviceAuthorizationHandler:
         the outcome is terminal-failed with ``vendor_forbidden`` /
         ``vendor_error`` — no retry, no exponential backoff. Operator-
         visible failures beat silent time-wasters.
+
+        ``before_poll`` is awaited right before the vendor is polled (and only
+        then), so a caller can prepare the token write ahead of the exchange.
         """
         async with self._ctx.control_db.session() as read_session:
             dfc = await DeviceAuthorizationCredentialRepository.get_by_credential(
@@ -213,7 +225,7 @@ class DeviceAuthorizationHandler:
             return StatusReport(kind="pending")
 
         try:
-            return await self._poll_vendor(credential_id, dfc)
+            return await self._poll_vendor(credential_id, dfc, before_poll=before_poll)
         except device_authorization.DeviceAuthorizationUpstreamError as exc:
             # Non-retryable — any HTTP status the RFC 8628 mapper couldn't
             # recognise (403 revoked app, 401 misconfigured client_id,
@@ -231,6 +243,8 @@ class DeviceAuthorizationHandler:
         self,
         credential_id: str,
         dfc: DeviceAuthorizationCredential | None,
+        *,
+        before_poll: Callable[[], Awaitable[None]] | None = None,
     ) -> StatusReport:
         assert dfc is not None
         assert dfc.encrypted_device_code is not None
@@ -246,7 +260,11 @@ class DeviceAuthorizationHandler:
                 flow_nonce=dfc.flow_nonce,
             )
         client_id, token_endpoint = endpoints
-        device_code = self._ctx.encryption.decrypt(dfc.encrypted_device_code)
+        if before_poll is not None:
+            await before_poll()
+        device_code = await self._ctx.encryption.decrypt(
+            dfc.encrypted_device_code, context=device_code_context(credential_id)
+        )
         result = await device_authorization.poll_device_authorization(
             token_endpoint=token_endpoint,
             client_id=client_id,

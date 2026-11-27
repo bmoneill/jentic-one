@@ -20,7 +20,7 @@ aux row also carries transient state).
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 
@@ -28,10 +28,10 @@ from dataclasses import dataclass
 class SessionApp:
     """Normalised OAuth-app config for one connect session.
 
-    ``client_secret_provider`` is a lazy callable so device flow (a public
-    client, no secret) can pass a no-op / None-returning provider without
-    eagerly decrypting a secret it will never send. Auth-code invokes it
-    exactly once at ``complete_from_callback`` time.
+    ``client_secret_provider`` is a lazy async callable so device flow (a
+    public client, no secret) can pass ``None`` without eagerly decrypting a
+    secret it will never send. Auth-code awaits it once, at ``prepare`` time
+    on the config path.
 
     ``registration_id`` is the discriminator the handler branches on:
     * ``None`` — legacy embedded path (write to aux table with all fields).
@@ -42,7 +42,7 @@ class SessionApp:
 
     flow_kind: str
     client_id: str
-    client_secret_provider: Callable[[], str] | None
+    client_secret_provider: Callable[[], Awaitable[str]] | None
     default_scopes: list[str]
     registration_id: str | None
     # Auth-code fields (populated for authorization_code).

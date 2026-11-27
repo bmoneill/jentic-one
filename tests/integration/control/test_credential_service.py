@@ -75,6 +75,7 @@ from jentic_one.shared.config import (
     EgressConfig,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import credential_client_secret_context
 from jentic_one.shared.db.errors import DatabaseDataError, DatabaseUnavailableError
 from jentic_one.shared.db.session import DatabaseSession
 from jentic_one.shared.models.audit import AuditAction, AuditTargetType
@@ -1392,7 +1393,12 @@ async def _race_path_edit_behind_cross_origin_move(
         row = await session.get(OAuthClientCredential, cid)
         assert row is not None
         assert row.token_url == _MOVED_TOKEN_URL
-        assert integration_context.encryption.decrypt(row.encrypted_client_secret) == _MOVE_SECRET
+        assert (
+            await integration_context.encryption.decrypt(
+                row.encrypted_client_secret, context=credential_client_secret_context(cid)
+            )
+            == _MOVE_SECRET
+        )
 
 
 @pytest.mark.skipif(not _IS_SQLITE, reason="SQLite variant; Postgres has its own below")
@@ -1657,7 +1663,9 @@ async def _seed_oauth2_row(ctx: Context, *, token_url: str) -> str:
             credential_id=credential.id,
             token_url=token_url,
             client_id="client-123",
-            encrypted_client_secret=ctx.encryption.encrypt("secret-456"),
+            encrypted_client_secret=await ctx.encryption.encrypt(
+                "secret-456", context=credential_client_secret_context(credential.id)
+            ),
             created_by=_ADMIN_IDENTITY.sub,
         )
         return credential.id

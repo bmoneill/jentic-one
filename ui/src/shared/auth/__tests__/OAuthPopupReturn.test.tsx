@@ -83,6 +83,16 @@ describe('OAuthPopupReturn', () => {
 		expect(close).toHaveBeenCalledTimes(1);
 	});
 
+	it.each([
+		['try_later', 'Start a new connection when service resumes.'],
+		['contact_operator', 'Ask an operator to restore access, then start a new connection.'],
+	])('shows the recovery action for %s', (recovery, instruction) => {
+		renderWithProviders(<OAuthPopupReturn />, {
+			route: `/oauth/connected?status=error&recovery=${recovery}`,
+		});
+		expect(screen.getByText(instruction)).toBeInTheDocument();
+	});
+
 	it('treats a missing status as success (no error leak in the happy path)', () => {
 		vi.useFakeTimers();
 		vi.spyOn(window, 'close').mockImplementation(() => {});

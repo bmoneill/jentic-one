@@ -25,7 +25,7 @@ from jentic_one.control.services.credentials.typed_secrets import (
     write_basic_secret,
     write_bearer_token_secret,
 )
-from jentic_one.shared.crypto.encryption import EncryptionService
+from jentic_one.shared.crypto import PreparedWrite
 from jentic_one.shared.models.credentials import StoredCredentialType
 
 #: ``credential.provider`` for a human-entered static secret.
@@ -74,7 +74,7 @@ class ManualFlowHandler:
     async def write_secret(
         self,
         db_session: Any,
-        encryption: EncryptionService,
+        sealer: PreparedWrite,
         *,
         row: ConnectSession,
         secret: ManualSecret,
@@ -91,7 +91,7 @@ class ManualApiKeyHandler(ManualFlowHandler):
     async def write_secret(
         self,
         db_session: Any,
-        encryption: EncryptionService,
+        sealer: PreparedWrite,
         *,
         row: ConnectSession,
         secret: ManualSecret,
@@ -104,7 +104,7 @@ class ManualApiKeyHandler(ManualFlowHandler):
         assert row.scheme_location is not None and row.scheme_field_name is not None
         await write_api_key_secret(
             db_session,
-            encryption,
+            sealer,
             credential_id=row.credential_id,
             key=secret.key,
             location=row.scheme_location,
@@ -121,7 +121,7 @@ class ManualBearerHandler(ManualFlowHandler):
     async def write_secret(
         self,
         db_session: Any,
-        encryption: EncryptionService,
+        sealer: PreparedWrite,
         *,
         row: ConnectSession,
         secret: ManualSecret,
@@ -131,7 +131,7 @@ class ManualBearerHandler(ManualFlowHandler):
             raise ManualSecretMismatchError(self.kind)
         await write_bearer_token_secret(
             db_session,
-            encryption,
+            sealer,
             credential_id=row.credential_id,
             token=secret.token,
             created_by=created_by,
@@ -146,7 +146,7 @@ class ManualBasicHandler(ManualFlowHandler):
     async def write_secret(
         self,
         db_session: Any,
-        encryption: EncryptionService,
+        sealer: PreparedWrite,
         *,
         row: ConnectSession,
         secret: ManualSecret,
@@ -156,7 +156,7 @@ class ManualBasicHandler(ManualFlowHandler):
             raise ManualSecretMismatchError(self.kind)
         await write_basic_secret(
             db_session,
-            encryption,
+            sealer,
             credential_id=row.credential_id,
             username=secret.username,
             password=secret.password,

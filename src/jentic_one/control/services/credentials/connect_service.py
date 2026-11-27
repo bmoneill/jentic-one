@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+from contextlib import nullcontext
 from typing import Literal
 
 import structlog
@@ -43,6 +44,11 @@ from jentic_one.control.services.credentials.token_endpoint import (
 from jentic_one.shared.audit import AuditAction, AuditTargetType, record_audit_best_effort
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_ACCESS_TOKEN,
+    FIELD_REFRESH_TOKEN,
+    oauth_token_scope,
+)
 from jentic_one.shared.events import emit_event_best_effort
 from jentic_one.shared.models import ActorType
 from jentic_one.shared.models.events import EventSeverity, EventType
@@ -218,7 +224,6 @@ class ConnectService:
         except StateError as exc:
             raise ConnectFlowError(str(exc)) from exc
 
-        encryption = self._ctx.encryption
         created_by = state.actor_id
         # ``consume_callback_state`` guarantees ``actor_id`` is populated;
         # narrow the type for mypy.
@@ -241,104 +246,118 @@ class ConnectService:
                         f"credential provider {credential.provider!r}"
                     )
 
+            # Prepare the token write before the code exchange so any backend
+            # I/O fails before the one-time authorization code is spent.
             provider = self._ctx.providers.get(state.provider)
-            result = await provider.complete_connect(self._ctx, state=state, callback=callback)
+            write = (
+                nullcontext(None)
+                if provider.mints_from_account_ref
+                else self._ctx.encryption.prepare_write(oauth_token_scope(state.credential_id))
+            )
+            async with write as token_write:
+                result = await provider.complete_connect(self._ctx, state=state, callback=callback)
 
-            async with self._ctx.control_db.transaction() as session:
-                # Same lock as the broker refresh and a token_url edit, then
-                # re-check the endpoint: a cross-origin edit that committed
-                # while the code was being exchanged has moved the credential
-                # away from the origin this grant was minted at, and storing
-                # it would hand its refresh token to the new origin.
-                await OAuthTokenRepository.acquire_refresh_lock(session, state.credential_id)
-                credential = await CredentialRepository.get_by_id(session, state.credential_id)
-                if credential is None:
-                    raise CredentialNotFoundError(state.credential_id)
-                if credential.provider != state.provider:
-                    raise ConnectFlowError(
-                        f"State provider {state.provider!r} does not match "
-                        f"credential provider {credential.provider!r}"
+                async with self._ctx.control_db.transaction() as session:
+                    # Same lock as the broker refresh and a token_url edit, then
+                    # re-check the endpoint: a cross-origin edit that committed
+                    # while the code was being exchanged has moved the credential
+                    # away from the origin this grant was minted at, and storing
+                    # it would hand its refresh token to the new origin.
+                    await OAuthTokenRepository.acquire_refresh_lock(session, state.credential_id)
+                    credential = await CredentialRepository.get_by_id(session, state.credential_id)
+                    if credential is None:
+                        raise CredentialNotFoundError(state.credential_id)
+                    if credential.provider != state.provider:
+                        raise ConnectFlowError(
+                            f"State provider {state.provider!r} does not match "
+                            f"credential provider {credential.provider!r}"
+                        )
+                    current_token_url = await OAuthClientCredentialRepository.current_token_url(
+                        session, credential
                     )
-                current_token_url = await OAuthClientCredentialRepository.current_token_url(
-                    session, credential
-                )
-                if not minted_at_current_origin(result.token_url, current_token_url):
-                    logger.warning(
-                        "oauth_connect_discarded_token_url_moved",
+                    if not minted_at_current_origin(result.token_url, current_token_url):
+                        logger.warning(
+                            "oauth_connect_discarded_token_url_moved",
+                            credential_id=state.credential_id,
+                        )
+                        raise ConnectFlowError(
+                            "the credential's token_url moved to another origin while connecting; "
+                            "reconnect the credential"
+                        )
+
+                    existing_token = await OAuthTokenRepository.get_by_credential(
+                        session, state.credential_id
+                    )
+
+                    if result.access_token:
+                        if token_write is None:
+                            raise ConnectFlowError("Account-reference provider returned a token")
+                        encrypted_access = token_write.seal(
+                            result.access_token, field=FIELD_ACCESS_TOKEN
+                        )
+                        encrypted_refresh = (
+                            token_write.seal(result.refresh_token, field=FIELD_REFRESH_TOKEN)
+                            if result.refresh_token
+                            else None
+                        )
+
+                        if existing_token is not None:
+                            if (
+                                encrypted_refresh is None
+                                and existing_token.encrypted_refresh_token is not None
+                            ):
+                                if may_carry_refresh_token(
+                                    existing_token,
+                                    new_registration_id=credential.oauth_app_registration_id,
+                                    connected_as=None,
+                                    stored_account_ref=credential.provider_account_ref,
+                                ):
+                                    encrypted_refresh = existing_token.encrypted_refresh_token
+                                else:
+                                    logger.info(
+                                        "oauth_reconnect_dropped_prior_refresh_token",
+                                        credential_id=state.credential_id,
+                                    )
+                            await OAuthTokenRepository.replace_grant(
+                                session,
+                                state.credential_id,
+                                encrypted_access_token=encrypted_access,
+                                encrypted_refresh_token=encrypted_refresh,
+                                expires_at=result.expires_at,
+                                scope=result.scope,
+                                app_registration_id=credential.oauth_app_registration_id,
+                            )
+                        else:
+                            await OAuthTokenRepository.create(
+                                session,
+                                credential_id=state.credential_id,
+                                encrypted_access_token=encrypted_access,
+                                encrypted_refresh_token=encrypted_refresh,
+                                expires_at=result.expires_at,
+                                scope=result.scope,
+                                app_registration_id=credential.oauth_app_registration_id,
+                                created_by=created_by,
+                            )
+                    elif result.provider_account_ref:
+                        pass
+                    else:
+                        raise ConnectFlowError(
+                            "Provider returned neither access_token nor provider_account_ref"
+                        )
+
+                    if result.provider_account_ref is not None:
+                        credential.provider_account_ref = result.provider_account_ref
+
+                    # Keep the credential snapshot fresh for ordinary cache consumers.
+                    # Connect completion itself is correlated through the nonce below,
+                    # not inferred from this row's timestamp or account reference.
+                    credential.updated_at = dt.datetime.now(dt.UTC)
+                    await ConnectNonceRepository.mark_completed(
+                        session,
+                        nonce=state.nonce,
                         credential_id=state.credential_id,
                     )
-                    raise ConnectFlowError(
-                        "the credential's token_url moved to another origin while connecting; "
-                        "reconnect the credential"
-                    )
-
-                existing_token = await OAuthTokenRepository.get_by_credential(
-                    session, state.credential_id
-                )
-
-                if result.access_token:
-                    encrypted_access = encryption.encrypt(result.access_token)
-                    encrypted_refresh = (
-                        encryption.encrypt(result.refresh_token) if result.refresh_token else None
-                    )
-
-                    if existing_token is not None:
-                        if (
-                            encrypted_refresh is None
-                            and existing_token.encrypted_refresh_token is not None
-                        ):
-                            if may_carry_refresh_token(
-                                existing_token,
-                                new_registration_id=credential.oauth_app_registration_id,
-                                connected_as=None,
-                                stored_account_ref=credential.provider_account_ref,
-                            ):
-                                encrypted_refresh = existing_token.encrypted_refresh_token
-                            else:
-                                logger.info(
-                                    "oauth_reconnect_dropped_prior_refresh_token",
-                                    credential_id=state.credential_id,
-                                )
-                        await OAuthTokenRepository.replace_grant(
-                            session,
-                            state.credential_id,
-                            encrypted_access_token=encrypted_access,
-                            encrypted_refresh_token=encrypted_refresh,
-                            expires_at=result.expires_at,
-                            scope=result.scope,
-                            app_registration_id=credential.oauth_app_registration_id,
-                        )
-                    else:
-                        await OAuthTokenRepository.create(
-                            session,
-                            credential_id=state.credential_id,
-                            encrypted_access_token=encrypted_access,
-                            encrypted_refresh_token=encrypted_refresh,
-                            expires_at=result.expires_at,
-                            scope=result.scope,
-                            app_registration_id=credential.oauth_app_registration_id,
-                            created_by=created_by,
-                        )
-                elif result.provider_account_ref:
-                    pass
-                else:
-                    raise ConnectFlowError(
-                        "Provider returned neither access_token nor provider_account_ref"
-                    )
-
-                if result.provider_account_ref is not None:
-                    credential.provider_account_ref = result.provider_account_ref
-
-                # Keep the credential snapshot fresh for ordinary cache consumers.
-                # Connect completion itself is correlated through the nonce below,
-                # not inferred from this row's timestamp or account reference.
-                credential.updated_at = dt.datetime.now(dt.UTC)
-                await ConnectNonceRepository.mark_completed(
-                    session,
-                    nonce=state.nonce,
-                    credential_id=state.credential_id,
-                )
-                await session.flush()
+                    await session.flush()
         except Exception:
             await self._emit_connect_telemetry(
                 type=EventType.CREDENTIAL_CONNECTION_FAILED,

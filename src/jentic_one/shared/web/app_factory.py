@@ -25,6 +25,7 @@ from jentic_one import __version__
 from jentic_one.registry.services.import_service import ImportHandler
 from jentic_one.shared.catalog import CatalogAutoImportProtocol
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.errors import EncryptionBackendError
 from jentic_one.shared.events import emit_event_best_effort
 from jentic_one.shared.events.repeated_failure import RepeatedFailureCounter
 from jentic_one.shared.jobs.catalog_update_scanner import CatalogUpdateScanner
@@ -50,6 +51,7 @@ from jentic_one.shared.web.cache_control import AuthenticatedResponseCacheMiddle
 from jentic_one.shared.web.container import AppContainer, RouterSpec
 from jentic_one.shared.web.deps import TokenVerifier
 from jentic_one.shared.web.errors import (
+    encryption_backend_error_handler,
     request_validation_error_handler,
     state_backend_capacity_error_handler,
     unhandled_exception_handler,
@@ -321,6 +323,7 @@ def _start_worker(
             ExecutionHandler(
                 executor=upstream_executor,
                 upstream_timeout_s=ctx.config.broker.upstream_timeout_s,
+                pre_dispatch_deadline_s=ctx.config.broker.resilience.request_deadline_s,
                 credential_injector=credential_injector,
                 execution_authorizer=execution_authorizer,
                 actor_status=actor_status,
@@ -328,7 +331,7 @@ def _start_worker(
                 security_config=ctx.config.security,
                 # Same predicate the broker's hold path files under, so a held
                 # payload the broker encrypted is one this worker can decrypt.
-                encryption=ctx.encryption if ctx.has_encryption_keyset else None,
+                encryption=ctx.encryption if ctx.encryption_enabled else None,
                 repeated_failure_counter=repeated_failure_counter,
             ),
         )
@@ -643,14 +646,17 @@ def create_surface_app(
         # The process's shared-state backend closes last, after the surface's
         # own extra_lifespan (the broker's runners) has exited.
         try:
-            async with _surface_lifespan(app):
-                yield
+            await ctx.startup()
+            try:
+                async with _surface_lifespan(app):
+                    yield
+            finally:
+                await ctx.shutdown()
         finally:
             await ctx.close_state_backend()
 
     @asynccontextmanager
     async def _surface_lifespan(app: FastAPI) -> AsyncGenerator[None]:
-        await ctx.startup()
         instrument_databases(ctx)
         telemetry_handle = await _start_telemetry(ctx)
         # Container-injected lifespans enter after the surface's own
@@ -702,7 +708,6 @@ def create_surface_app(
                 await background_tasks.drain(ctx.config.services.background_task_drain_timeout_s)
                 await _stop_telemetry(telemetry_handle)
                 await _run_shutdown_handlers(app)
-                await ctx.shutdown()
 
     # ``server.public_base_url`` names the control/auth surfaces' origin; a
     # standalone broker runs on its own, so it keeps the same-origin server.
@@ -791,6 +796,7 @@ def create_surface_app(
     app.add_exception_handler(ProblemDetailException, spa_aware_problem_detail_handler)  # type: ignore[arg-type]
     app.add_exception_handler(RequestValidationError, request_validation_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(StateBackendCapacityError, state_backend_capacity_error_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(EncryptionBackendError, encryption_backend_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(Exception, unhandled_exception_handler)
     attach_http_observability(app, mount_metrics=False)
     install_openapi_metadata(app)
@@ -963,15 +969,18 @@ def create_combined_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         try:
-            async with _combined_lifespan(app):
-                yield
+            await ctx.startup()
+            try:
+                async with _combined_lifespan(app):
+                    yield
+            finally:
+                await ctx.shutdown()
         finally:
             # The process's shared-state backend closes once, last.
             await ctx.close_state_backend()
 
     @asynccontextmanager
     async def _combined_lifespan(app: FastAPI) -> AsyncGenerator[None]:
-        await ctx.startup()
         instrument_databases(ctx)
         telemetry_handle = await _start_telemetry(ctx)
         # Container-injected lifespans (default empty) — entered after
@@ -986,7 +995,6 @@ def create_combined_app(
                 await background_tasks.drain(ctx.config.services.background_task_drain_timeout_s)
                 await _stop_telemetry(telemetry_handle)
                 await _run_shutdown_handlers(app)
-                await ctx.shutdown()
 
     root = FastAPI(lifespan=lifespan, **fastapi_metadata_kwargs(ctx.config.server.public_base_url))
     root.state.ctx = ctx
@@ -1014,6 +1022,7 @@ def create_combined_app(
     root.add_exception_handler(ProblemDetailException, spa_aware_problem_detail_handler)  # type: ignore[arg-type]
     root.add_exception_handler(RequestValidationError, request_validation_error_handler)  # type: ignore[arg-type]
     root.add_exception_handler(StateBackendCapacityError, state_backend_capacity_error_handler)  # type: ignore[arg-type]
+    root.add_exception_handler(EncryptionBackendError, encryption_backend_error_handler)  # type: ignore[arg-type]
     root.add_exception_handler(Exception, unhandled_exception_handler)
 
     # The combined control-plane route table — the same assembly the

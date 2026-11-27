@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any, NamedTuple
 
@@ -88,6 +89,17 @@ from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.permission_catalog import ORG_ADMIN
 from jentic_one.shared.config import DirectOAuth2ProviderConfig, resolved_control_egress
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import EncryptionService, PreparedWrite
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    FIELD_PASSWORD,
+    FIELD_SECRET_ACCESS_KEY,
+    FIELD_SESSION_TOKEN,
+    FIELD_TOKEN_VALUE,
+    credential_client_secret_context,
+    credential_secret_scope,
+)
+from jentic_one.shared.db.ids import generate_ksuid
 from jentic_one.shared.events import emit_event_best_effort, summary_label
 from jentic_one.shared.models import ActorType
 from jentic_one.shared.models.api_identity import (
@@ -99,6 +111,7 @@ from jentic_one.shared.models.api_identity import (
 from jentic_one.shared.models.credentials import CredentialType, StoredCredentialType
 from jentic_one.shared.models.events import EventSeverity, EventType
 from jentic_one.shared.pagination import decode_cursor, encode_cursor
+from jentic_one.shared.redaction import secret_preview
 from jentic_one.shared.url_validation import validate_upstream_url_async
 
 logger = structlog.get_logger()
@@ -186,6 +199,41 @@ def _scope_reference(scope: CredentialScope) -> str:
     to ``stripe-com/2024-04-10``, which reads as a name.
     """
     return f"{scope.vendor}/{scope.name or '*'}/{scope.version or '*'}"
+
+
+_STATIC_SECRET_TYPES = frozenset(
+    {
+        CredentialType.BEARER_TOKEN,
+        CredentialType.API_KEY,
+        CredentialType.BASIC,
+        CredentialType.SIGV4,
+    }
+)
+
+
+def _update_seals_static_secret(payload: CredentialUpdate) -> bool:
+    """Whether an update writes a static secret column (so needs a prepared write)."""
+    if payload.type == CredentialType.BEARER_TOKEN:
+        return payload.token is not None
+    if payload.type == CredentialType.API_KEY:
+        return payload.key is not None
+    if payload.type == CredentialType.BASIC:
+        return payload.password is not None
+    if payload.type == CredentialType.SIGV4:
+        return payload.secret_access_key is not None or payload.session_token is not None
+    return False
+
+
+@asynccontextmanager
+async def _prepared_secret_write(
+    encryption: EncryptionService, credential_id: str, *, needed: bool
+) -> AsyncIterator[PreparedWrite | None]:
+    """A prepared write for *credential_id*'s static secrets, or ``None`` when not needed."""
+    if not needed:
+        yield None
+        return
+    async with encryption.prepare_write(credential_secret_scope(credential_id)) as sealer:
+        yield sealer
 
 
 class CredentialService(_CredentialAccessMixin):
@@ -303,9 +351,29 @@ class CredentialService(_CredentialAccessMixin):
         stored_type = to_stored(payload.type, grant_type=payload.grant_type)
         encryption = self._ctx.encryption
 
-        async with self._ctx.control_db.transaction() as session:
+        # Allocate the id and do any encryption backend I/O before the write
+        # transaction opens, so a slow backend never holds a connection or the
+        # SQLite writer lock. Sealing inside the transaction is local.
+        credential_id = generate_ksuid("cred")
+        encrypted_client_secret: str | None = None
+        if (
+            payload.type == CredentialType.OAUTH2
+            and (payload.grant_type or "client_credentials") != "device_code"
+            and payload.client_secret
+        ):
+            encrypted_client_secret = await encryption.encrypt(
+                payload.client_secret, context=credential_client_secret_context(credential_id)
+            )
+
+        async with (
+            _prepared_secret_write(
+                encryption, credential_id, needed=payload.type in _STATIC_SECRET_TYPES
+            ) as sealer,
+            self._ctx.control_db.transaction() as session,
+        ):
             credential = await CredentialRepository.create(
                 session,
+                credential_id=credential_id,
                 type=stored_type.value,
                 name=payload.name,
                 api_vendor=api_scope.vendor,
@@ -327,9 +395,10 @@ class CredentialService(_CredentialAccessMixin):
 
             if payload.type == CredentialType.BEARER_TOKEN:
                 assert payload.token
+                assert sealer is not None
                 secret = await write_bearer_token_secret(
                     session,
-                    encryption,
+                    sealer,
                     credential_id=credential.id,
                     token=SecretStr(payload.token),
                     created_by=identity.sub,
@@ -339,9 +408,10 @@ class CredentialService(_CredentialAccessMixin):
                 assert payload.key
                 assert payload.location
                 assert payload.field_name
+                assert sealer is not None
                 secret = await write_api_key_secret(
                     session,
-                    encryption,
+                    sealer,
                     credential_id=credential.id,
                     key=SecretStr(payload.key),
                     location=payload.location,
@@ -352,9 +422,10 @@ class CredentialService(_CredentialAccessMixin):
             elif payload.type == CredentialType.BASIC:
                 assert payload.username
                 assert payload.password
+                assert sealer is not None
                 secret = await write_basic_secret(
                     session,
-                    encryption,
+                    sealer,
                     credential_id=credential.id,
                     username=payload.username,
                     password=SecretStr(payload.password),
@@ -389,9 +460,7 @@ class CredentialService(_CredentialAccessMixin):
                         scopes=payload.scopes,
                     )
                 else:
-                    encrypted_secret: str | None = None
-                    if payload.client_secret:
-                        encrypted_secret = encryption.encrypt(payload.client_secret)
+                    encrypted_secret = encrypted_client_secret
 
                     if not provider_obj.managed or payload.client_id:
                         scope = " ".join(payload.scopes) if payload.scopes else None
@@ -424,9 +493,10 @@ class CredentialService(_CredentialAccessMixin):
                 assert payload.secret_access_key
                 assert payload.aws_region
                 assert payload.aws_service
+                assert sealer is not None
                 secret = await write_sigv4_secret(
                     session,
-                    encryption,
+                    sealer,
                     credential_id=credential.id,
                     access_key_id=payload.access_key_id,
                     secret_access_key=SecretStr(payload.secret_access_key),
@@ -723,7 +793,22 @@ class CredentialService(_CredentialAccessMixin):
                 await self._get_updatable(session, credential_id, payload, access_filters)
             validated_token_url = await self._validate_update_token_url(payload)
         oauth_token_dropped = False
-        async with self._ctx.control_db.transaction() as session:
+        # Encryption backend I/O happens before the write transaction opens, so a
+        # slow backend never holds a connection or the refresh lock taken below.
+        encryption = self._ctx.encryption
+        encrypted_client_secret = (
+            await encryption.encrypt(
+                payload.client_secret, context=credential_client_secret_context(credential_id)
+            )
+            if payload.type == CredentialType.OAUTH2 and payload.client_secret is not None
+            else None
+        )
+        async with (
+            _prepared_secret_write(
+                encryption, credential_id, needed=_update_seals_static_secret(payload)
+            ) as sealer,
+            self._ctx.control_db.transaction() as session,
+        ):
             if oauth2_token_affecting:
                 # Serialise with the broker's single-flight refresh, with a
                 # connect's token write and with concurrent OAuth2 client edits:
@@ -785,11 +870,10 @@ class CredentialService(_CredentialAccessMixin):
                 )
                 changed = True
 
-            encryption = self._ctx.encryption
-
             if payload.type == CredentialType.BEARER_TOKEN and payload.token is not None:
-                encrypted = encryption.encrypt(payload.token)
-                preview = encryption.preview(payload.token)
+                assert sealer is not None
+                encrypted = sealer.seal(payload.token, field=FIELD_TOKEN_VALUE)
+                preview = secret_preview(payload.token)
                 await TokenValueCredentialRepository.update_token(
                     session,
                     credential_id,
@@ -799,8 +883,9 @@ class CredentialService(_CredentialAccessMixin):
                 changed = True
 
             elif payload.type == CredentialType.API_KEY and payload.key is not None:
-                encrypted = encryption.encrypt(payload.key)
-                preview = encryption.preview(payload.key)
+                assert sealer is not None
+                encrypted = sealer.seal(payload.key, field=FIELD_API_KEY)
+                preview = secret_preview(payload.key)
                 await CustomerAPIKeyRepository.update_key(
                     session,
                     credential_id,
@@ -811,11 +896,10 @@ class CredentialService(_CredentialAccessMixin):
 
             elif payload.type == CredentialType.BASIC:
                 if payload.username is not None or payload.password is not None:
-                    encrypted_pw = (
-                        encryption.encrypt(payload.password)
-                        if payload.password is not None
-                        else None
-                    )
+                    encrypted_pw = None
+                    if payload.password is not None:
+                        assert sealer is not None
+                        encrypted_pw = sealer.seal(payload.password, field=FIELD_PASSWORD)
                     await BasicCredentialRepository.update(
                         session,
                         credential_id,
@@ -830,7 +914,11 @@ class CredentialService(_CredentialAccessMixin):
                 or payload.scopes is not None
             ):
                 oauth_token_dropped = await self._apply_oauth2_update(
-                    session, credential, payload, validated_token_url=validated_token_url
+                    session,
+                    credential,
+                    payload,
+                    validated_token_url=validated_token_url,
+                    encrypted_client_secret=encrypted_client_secret,
                 )
                 changed = True
 
@@ -841,21 +929,20 @@ class CredentialService(_CredentialAccessMixin):
                     raise InvalidCredentialInputError(
                         "access_key_id and secret_access_key must be rotated together"
                     )
-                encrypted_sig = (
-                    encryption.encrypt(payload.secret_access_key)
-                    if payload.secret_access_key is not None
-                    else None
-                )
-                sig_preview = (
-                    encryption.preview(payload.secret_access_key)
-                    if payload.secret_access_key is not None
-                    else None
-                )
-                encrypted_session = (
-                    encryption.encrypt(payload.session_token)
-                    if payload.session_token is not None
-                    else None
-                )
+                encrypted_sig: str | None = None
+                sig_preview: str | None = None
+                encrypted_session: str | None = None
+                if payload.secret_access_key is not None or payload.session_token is not None:
+                    assert sealer is not None
+                    if payload.secret_access_key is not None:
+                        encrypted_sig = sealer.seal(
+                            payload.secret_access_key, field=FIELD_SECRET_ACCESS_KEY
+                        )
+                        sig_preview = secret_preview(payload.secret_access_key)
+                    if payload.session_token is not None:
+                        encrypted_session = sealer.seal(
+                            payload.session_token, field=FIELD_SESSION_TOKEN
+                        )
                 if (
                     payload.access_key_id is not None
                     or encrypted_sig is not None
@@ -1157,6 +1244,7 @@ class CredentialService(_CredentialAccessMixin):
         payload: CredentialUpdate,
         *,
         validated_token_url: str | None,
+        encrypted_client_secret: str | None,
     ) -> bool:
         """Apply each provided OAuth2 client field independently.
 
@@ -1228,11 +1316,7 @@ class CredentialService(_CredentialAccessMixin):
         await OAuthClientCredentialRepository.update(
             session,
             credential_id,
-            encrypted_client_secret=(
-                self._ctx.encryption.encrypt(payload.client_secret)
-                if payload.client_secret is not None
-                else None
-            ),
+            encrypted_client_secret=encrypted_client_secret,
             token_url=validated_token_url,
             scope=" ".join(payload.scopes) if payload.scopes is not None else SCOPE_UNSET,
         )

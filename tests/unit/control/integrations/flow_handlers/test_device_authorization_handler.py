@@ -46,6 +46,7 @@ from jentic_one.shared.config import (
     EncryptionKey,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import EncryptionUnavailableError, device_code_context
 from jentic_one.shared.http.idp_client import idp_request
 
 _KEY_MATERIAL = base64.b64encode(os.urandom(32)).decode()
@@ -113,7 +114,7 @@ def _make_context(*, control_egress: ControlEgressConfig | None = None) -> Conte
     return ctx
 
 
-def _make_dfc(
+async def _make_dfc(
     ctx: Context,
     *,
     poll_interval_seconds: int | None = 5,
@@ -126,7 +127,11 @@ def _make_dfc(
     row = MagicMock()
     row.poll_interval_seconds = poll_interval_seconds
     row.last_polled_at = last_polled_at
-    row.encrypted_device_code = ctx.encryption.encrypt(device_code) if encrypted else None
+    row.encrypted_device_code = (
+        await ctx.encryption.encrypt(device_code, context=device_code_context("cred_1"))
+        if encrypted
+        else None
+    )
     row.token_url = "https://idp.example.com/token"
     row.client_id = "public-client"
     row.device_code_expires_at = device_code_expires_at or (
@@ -172,7 +177,7 @@ async def test_advance_returns_pending_when_atomic_claim_loses() -> None:
     # vendor call entirely.
     ctx = _make_context()
     handler = DeviceAuthorizationHandler(ctx)
-    dfc = _make_dfc(
+    dfc = await _make_dfc(
         ctx,
         poll_interval_seconds=5,
         last_polled_at=datetime.now(UTC),  # polled just now
@@ -204,7 +209,7 @@ async def test_advance_returns_expired_when_device_code_ttl_passed() -> None:
     # we already know is dead.
     ctx = _make_context()
     handler = DeviceAuthorizationHandler(ctx)
-    dfc = _make_dfc(
+    dfc = await _make_dfc(
         ctx,
         device_code_expires_at=datetime.now(UTC) - timedelta(seconds=1),
     )
@@ -223,7 +228,7 @@ async def test_advance_returns_expired_when_device_code_ttl_passed() -> None:
 async def test_advance_returns_pending_on_authorization_pending() -> None:
     ctx = _make_context()
     handler = DeviceAuthorizationHandler(ctx)
-    dfc = _make_dfc(ctx, last_polled_at=None)
+    dfc = await _make_dfc(ctx, last_polled_at=None)
     with (
         patch(
             "jentic_one.control.services.integrations.flow_handlers.device_authorization."
@@ -249,6 +254,44 @@ async def test_advance_returns_pending_on_authorization_pending() -> None:
 
 
 @pytest.mark.asyncio()
+async def test_advance_runs_before_poll_ahead_of_the_vendor_call() -> None:
+    ctx = _make_context()
+    order: list[str] = []
+
+    async def _before_poll() -> None:
+        order.append("before_poll")
+
+    async def _poll(**_: object) -> df.PollResult:
+        order.append("vendor")
+        return df.PollResult(status="pending")
+
+    p_get, p_claim, p_update = _patch_repo(await _make_dfc(ctx, last_polled_at=None))
+    with p_get, p_claim, p_update, patch.object(df, "poll_device_authorization", new=_poll):
+        await DeviceAuthorizationHandler(ctx).advance("cred_1", before_poll=_before_poll)
+    assert order == ["before_poll", "vendor"]
+
+
+@pytest.mark.asyncio()
+async def test_advance_before_poll_failure_skips_the_vendor_call() -> None:
+    ctx = _make_context()
+
+    async def _before_poll() -> None:
+        raise EncryptionUnavailableError("down", backend="test-fake")
+
+    poll = AsyncMock()
+    p_get, p_claim, p_update = _patch_repo(await _make_dfc(ctx, last_polled_at=None))
+    with (
+        p_get,
+        p_claim,
+        p_update,
+        patch.object(df, "poll_device_authorization", new=poll),
+        pytest.raises(EncryptionUnavailableError),
+    ):
+        await DeviceAuthorizationHandler(ctx).advance("cred_1", before_poll=_before_poll)
+    poll.assert_not_awaited()
+
+
+@pytest.mark.asyncio()
 async def test_advance_widens_interval_on_slow_down() -> None:
     # RFC 8628 §3.5: on ``slow_down`` the client MUST widen its poll
     # interval by at least 5s. Pin the mutation so a future rewrite
@@ -256,7 +299,7 @@ async def test_advance_widens_interval_on_slow_down() -> None:
     # gets the whole app throttled.
     ctx = _make_context()
     handler = DeviceAuthorizationHandler(ctx)
-    dfc = _make_dfc(ctx, poll_interval_seconds=5)
+    dfc = await _make_dfc(ctx, poll_interval_seconds=5)
     with (
         patch(
             "jentic_one.control.services.integrations.flow_handlers.device_authorization."
@@ -293,7 +336,7 @@ async def test_advance_widens_interval_on_slow_down() -> None:
 async def test_advance_returns_failed_on_denied() -> None:
     ctx = _make_context()
     handler = DeviceAuthorizationHandler(ctx)
-    dfc = _make_dfc(ctx)
+    dfc = await _make_dfc(ctx)
     with (
         patch(
             "jentic_one.control.services.integrations.flow_handlers.device_authorization."
@@ -323,7 +366,7 @@ async def test_advance_returns_failed_on_denied() -> None:
 async def test_advance_returns_expired_from_vendor() -> None:
     ctx = _make_context()
     handler = DeviceAuthorizationHandler(ctx)
-    dfc = _make_dfc(ctx)
+    dfc = await _make_dfc(ctx)
     with (
         patch(
             "jentic_one.control.services.integrations.flow_handlers.device_authorization."
@@ -357,7 +400,7 @@ async def test_advance_returns_success_with_granted_scopes_from_aux_row() -> Non
     # would echo an empty list back to the UI as "no permissions".
     ctx = _make_context()
     handler = DeviceAuthorizationHandler(ctx)
-    dfc = _make_dfc(ctx, granted_scopes=["repo", "read:user"])
+    dfc = await _make_dfc(ctx, granted_scopes=["repo", "read:user"])
     poll_result = df.PollResult(
         status="success",
         access_token="at_ok",
@@ -397,7 +440,7 @@ async def test_advance_maps_403_to_vendor_forbidden_terminal() -> None:
     # "vendor blocked us" apart from generic upstream noise.
     ctx = _make_context()
     handler = DeviceAuthorizationHandler(ctx)
-    dfc = _make_dfc(ctx)
+    dfc = await _make_dfc(ctx)
     with (
         patch(
             "jentic_one.control.services.integrations.flow_handlers.device_authorization."
@@ -427,7 +470,7 @@ async def test_advance_maps_403_to_vendor_forbidden_terminal() -> None:
 async def test_advance_maps_other_upstream_error_to_vendor_error_terminal() -> None:
     ctx = _make_context()
     handler = DeviceAuthorizationHandler(ctx)
-    dfc = _make_dfc(ctx)
+    dfc = await _make_dfc(ctx)
     with (
         patch(
             "jentic_one.control.services.integrations.flow_handlers.device_authorization."
@@ -461,7 +504,7 @@ async def test_advance_fails_when_shared_registration_inactive(
     # is minted through the killed app and the session terminates cleanly.
     ctx = _make_context()
     handler = DeviceAuthorizationHandler(ctx)
-    dfc = _make_dfc(ctx, last_polled_at=None)
+    dfc = await _make_dfc(ctx, last_polled_at=None)
     credential = MagicMock()
     credential.oauth_app_registration_id = "oar_1"
     _patch_credential_lookup.return_value = credential
@@ -604,8 +647,8 @@ async def test_begin_refuses_endpoint_outside_control_egress(
     set_transient.assert_not_awaited()
 
 
-def _internal_dfc(ctx: Context) -> MagicMock:
-    dfc = _make_dfc(ctx, last_polled_at=None)
+async def _internal_dfc(ctx: Context) -> MagicMock:
+    dfc = await _make_dfc(ctx, last_polled_at=None)
     dfc.token_url = f"https://{_INTERNAL_HOST}/token"
     return dfc
 
@@ -614,7 +657,7 @@ def _internal_dfc(ctx: Context) -> MagicMock:
 async def test_advance_polls_control_egress_allowlisted_endpoint_pinned() -> None:
     ctx = _make_context(control_egress=_CORP_EGRESS)
     sent: list[httpx.Request] = []
-    p_get, p_claim, p_update = _patch_repo(_internal_dfc(ctx))
+    p_get, p_claim, p_update = _patch_repo(await _internal_dfc(ctx))
     with (
         p_get,
         p_claim,
@@ -634,7 +677,7 @@ async def test_advance_refuses_endpoint_outside_control_egress(
 ) -> None:
     # The refusal is a terminal vendor_error (status 0) and no request is sent.
     ctx = _make_context(control_egress=control_egress)
-    p_get, p_claim, p_update = _patch_repo(_internal_dfc(ctx))
+    p_get, p_claim, p_update = _patch_repo(await _internal_dfc(ctx))
     with (
         p_get,
         p_claim,
@@ -662,7 +705,7 @@ async def test_poll_tarpit_reports_failed_not_hang() -> None:
                 yield b" "
 
     ctx = _make_context()
-    p_get, p_claim, p_update = _patch_repo(_make_dfc(ctx, last_polled_at=None))
+    p_get, p_claim, p_update = _patch_repo(await _make_dfc(ctx, last_polled_at=None))
     with (
         p_get,
         p_claim,

@@ -76,12 +76,21 @@ from jentic_one.shared.config import (
     PipedreamProviderConfig,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    app_registration_client_secret_context,
+    credential_client_secret_context,
+    oauth_access_token_context,
+    oauth_refresh_token_context,
+)
+from jentic_one.shared.crypto.encryption import LocalEncryptionService
+from jentic_one.shared.crypto.errors import EncryptionUnavailableError
 from jentic_one.shared.db.locks import advisory_lock_key
 from jentic_one.shared.db.session import DatabaseSession
 from jentic_one.shared.models import ActorType
 from jentic_one.shared.models.credentials import CredentialType, StoredCredentialType
 from jentic_one.shared.web import deps as shared_deps
 from jentic_one.shared.web import get_ctx
+from jentic_one.testing.encryption import FakeBackendBehaviour, FakeEncryptionBackend
 
 
 @contextmanager
@@ -187,6 +196,17 @@ async def _create_oauth2_credential(
         return credential.id
 
 
+async def _seal_registration_secret(
+    ctx: Context, registration: OAuthAppRegistration, plaintext: str
+) -> None:
+    """Encrypt a seeded registration's client secret under its (now known) id."""
+    details = registration.authorization_code_details
+    assert details is not None
+    details.encrypted_client_secret = await ctx.encryption.encrypt(
+        plaintext, context=app_registration_client_secret_context(registration.id)
+    )
+
+
 async def _attach_oauth_client(
     ctx: Context,
     credential_id: str,
@@ -194,7 +214,9 @@ async def _attach_oauth_client(
     authorize_url: str = "https://idp.example.com/authorize",
 ) -> None:
     """Attach an OAuthClientCredential row for the given credential."""
-    encrypted_secret = ctx.encryption.encrypt("test-client-secret")
+    encrypted_secret = await ctx.encryption.encrypt(
+        "test-client-secret", context=credential_client_secret_context(credential_id)
+    )
     async with ctx.control_db.transaction() as session:
         occ = OAuthClientCredential(
             id=credential_id,
@@ -392,7 +414,9 @@ async def test_direct_oauth2_replay_rejected(
     async with ctx.control_db.session() as session:
         token = await OAuthTokenRepository.get_by_credential(session, credential_id)
         assert token is not None
-        decrypted = ctx.encryption.decrypt(token.encrypted_access_token)
+        decrypted = await ctx.encryption.decrypt(
+            token.encrypted_access_token, context=oauth_access_token_context(credential_id)
+        )
         assert decrypted == "at_1"
 
 
@@ -632,7 +656,7 @@ async def test_agent_without_owner_delegation_cannot_connect(
 
 
 async def test_pipedream_connect_and_callback_stores_account_ref(
-    integration_context: Context, clean_connect_tables: None
+    integration_context: Context, clean_connect_tables: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ctx = integration_context
     credential_id = await _create_oauth2_credential(ctx, provider="my_pipedream")
@@ -671,11 +695,18 @@ async def test_pipedream_connect_and_callback_stores_account_ref(
         assert isinstance(challenge, AuthCodeChallenge)
         assert "pipedream.com" in challenge.authorize_url
 
+        local = ctx.encryption
+        assert isinstance(local, LocalEncryptionService)
+        behaviour = FakeBackendBehaviour(
+            fail_with=lambda: EncryptionUnavailableError("down", backend="fake")
+        )
+        monkeypatch.setattr(ctx, "_encryption", FakeEncryptionBackend(local, behaviour))
         result_id = await svc.complete(
             challenge.state,
             ConnectCallback(account_id="acct_pd_789"),
             browser_binding=_BINDING.value,
         )
+    assert behaviour.calls == []
     assert result_id == credential_id
 
     async with ctx.control_db.session() as session:
@@ -1015,8 +1046,12 @@ async def _connected(ctx: Context) -> str:
         await OAuthTokenRepository.create(
             session,
             credential_id=credential_id,
-            encrypted_access_token=ctx.encryption.encrypt("at-old"),
-            encrypted_refresh_token=ctx.encryption.encrypt("rt-old"),
+            encrypted_access_token=await ctx.encryption.encrypt(
+                "at-old", context=oauth_access_token_context(credential_id)
+            ),
+            encrypted_refresh_token=await ctx.encryption.encrypt(
+                "rt-old", context=oauth_refresh_token_context(credential_id)
+            ),
             created_by=_OWNER.sub,
         )
     return credential_id
@@ -1051,7 +1086,12 @@ async def _assert_reconnected(ctx: Context, credential_id: str) -> None:
     async with ctx.control_db.session() as session:
         token = await OAuthTokenRepository.get_by_credential(session, credential_id)
     assert token is not None
-    assert ctx.encryption.decrypt(token.encrypted_access_token) == "at-reconnected"
+    assert (
+        await ctx.encryption.decrypt(
+            token.encrypted_access_token, context=oauth_access_token_context(credential_id)
+        )
+        == "at-reconnected"
+    )
 
 
 async def test_connect_complete_reconnects_after_token_url_move(
@@ -1076,6 +1116,55 @@ async def test_connect_complete_reconnects_after_token_url_move(
 
     assert provider.posted_to == [_MOVED_TOKEN_URL]
     await _assert_reconnected(ctx, credential_id)
+
+
+async def test_connect_complete_prepares_token_write_before_code_exchange(
+    integration_context: Context, clean_connect_tables: None
+) -> None:
+    """An unavailable encryption backend fails the connect before the
+    authorization code is exchanged, and the stored grant is untouched."""
+    ctx = integration_context
+    provider = _RecordingOAuth2()
+    _patch_provider_registry(ctx, "my_oauth", provider)
+    credential_id = await _connected(ctx)
+
+    svc = ConnectService(ctx)
+    challenge = await svc.begin(
+        credential_id, ConnectRequest(), identity=_OWNER, browser_binding=_BINDING.claim
+    )
+    assert isinstance(challenge, AuthCodeChallenge)
+
+    local = ctx.encryption
+    assert isinstance(local, LocalEncryptionService)
+    behaviour = FakeBackendBehaviour(
+        fail_with=lambda: EncryptionUnavailableError("throttled", backend="fake")
+    )
+    ctx._encryption = FakeEncryptionBackend(local, behaviour)
+    try:
+        with pytest.raises(EncryptionUnavailableError):
+            await svc.complete(
+                challenge.state,
+                ConnectCallback(code="code-unspent"),
+                browser_binding=_BINDING.value,
+            )
+    finally:
+        ctx._encryption = local
+
+    with pytest.raises(ConnectFlowError):
+        await svc.complete(
+            challenge.state, ConnectCallback(code="code-unspent"), browser_binding=_BINDING.value
+        )
+    assert behaviour.calls == ["prepare_write"]
+    assert provider.posted_to == []
+    async with ctx.control_db.session() as session:
+        token = await OAuthTokenRepository.get_by_credential(session, credential_id)
+    assert token is not None
+    assert (
+        await ctx.encryption.decrypt(
+            token.encrypted_access_token, context=oauth_access_token_context(credential_id)
+        )
+        == "at-old"
+    )
 
 
 async def test_connect_session_finalise_reconnects_after_token_url_move(
@@ -1255,7 +1344,13 @@ async def test_reconnect_without_refresh_token_drops_previous_grants_refresh_tok
         initial = await OAuthTokenRepository.get_by_credential(session, credential_id)
         assert initial is not None
         assert initial.encrypted_refresh_token is not None
-        assert ctx.encryption.decrypt(initial.encrypted_refresh_token) == "rt_account_a"
+        assert (
+            await ctx.encryption.decrypt(
+                initial.encrypted_refresh_token,
+                context=oauth_refresh_token_context(credential_id),
+            )
+            == "rt_account_a"
+        )
         assert initial.scope == "read write"
 
     second = await svc.begin(
@@ -1278,7 +1373,13 @@ async def test_reconnect_without_refresh_token_drops_previous_grants_refresh_tok
     async with ctx.control_db.session() as session:
         replaced = await OAuthTokenRepository.get_by_credential(session, credential_id)
         assert replaced is not None
-        assert ctx.encryption.decrypt(replaced.encrypted_access_token) == "at_account_b"
+        assert (
+            await ctx.encryption.decrypt(
+                replaced.encrypted_access_token,
+                context=oauth_access_token_context(credential_id),
+            )
+            == "at_account_b"
+        )
         assert replaced.encrypted_refresh_token is None
         assert replaced.scope is None
 
@@ -1303,7 +1404,7 @@ async def test_reconnect_to_other_client_never_keeps_old_refresh_token(
             catalog_api_id="test-vendor/test-api",
             display_name="Client A",
             client_id="client-a",
-            encrypted_client_secret=ctx.encryption.encrypt("secret-a"),
+            encrypted_client_secret="",
             authorize_url="https://idp.example.com/authorize",
             token_url="https://idp.example.com/token",
             default_scopes=["read", "write"],
@@ -1316,12 +1417,14 @@ async def test_reconnect_to_other_client_never_keeps_old_refresh_token(
             catalog_api_id="test-vendor/test-api",
             display_name="Client B",
             client_id="client-b",
-            encrypted_client_secret=ctx.encryption.encrypt("secret-b"),
+            encrypted_client_secret="",
             authorize_url="https://idp.example.com/authorize",
             token_url="https://idp.example.com/token",
             default_scopes=["read", "write"],
             created_by=_OWNER.sub,
         )
+        await _seal_registration_secret(ctx, reg_a, "secret-a")
+        await _seal_registration_secret(ctx, reg_b, "secret-b")
         credential = await CredentialRepository.create(
             session,
             type=StoredCredentialType.OAUTH2_AUTHORIZATION_CODE,
@@ -1362,7 +1465,13 @@ async def test_reconnect_to_other_client_never_keeps_old_refresh_token(
         assert token_a is not None
         assert token_a.app_registration_id == reg_a.id
         assert token_a.encrypted_refresh_token is not None
-        assert ctx.encryption.decrypt(token_a.encrypted_refresh_token) == "rt_client_a"
+        assert (
+            await ctx.encryption.decrypt(
+                token_a.encrypted_refresh_token,
+                context=oauth_refresh_token_context(credential_id),
+            )
+            == "rt_client_a"
+        )
 
     async with ctx.control_db.transaction() as session:
         await CredentialRepository.set_oauth_app_registration(
@@ -1390,7 +1499,13 @@ async def test_reconnect_to_other_client_never_keeps_old_refresh_token(
     async with ctx.control_db.session() as session:
         token_b = await OAuthTokenRepository.get_by_credential(session, credential_id)
         assert token_b is not None
-        assert ctx.encryption.decrypt(token_b.encrypted_access_token) == "at_client_b"
+        assert (
+            await ctx.encryption.decrypt(
+                token_b.encrypted_access_token,
+                context=oauth_access_token_context(credential_id),
+            )
+            == "at_client_b"
+        )
         assert token_b.encrypted_refresh_token is None
         assert token_b.scope == "read"
         assert token_b.app_registration_id == reg_b.id

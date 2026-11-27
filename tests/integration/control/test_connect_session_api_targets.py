@@ -118,6 +118,12 @@ from jentic_one.shared.config import (
     VendorScopeConfig,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import (
+    credential_client_secret_context,
+    credential_secret_context,
+    oauth_access_token_context,
+)
+from jentic_one.shared.crypto.contexts import FIELD_API_KEY
 from jentic_one.shared.db.ids import generate_ksuid
 from jentic_one.shared.models import ActorType
 from jentic_one.shared.models.credentials import CredentialType
@@ -782,7 +788,13 @@ async def test_confirm_api_key_connects_binds_and_never_leaks_the_secret(env: Co
     assert credential.created_by == _OWNER_ID
     assert (key_row.location, key_row.field_name) == ("header", "X-Api-Key")
     assert key_row.encrypted_key != _SECRET
-    assert env.encryption.decrypt(key_row.encrypted_key) == _SECRET
+    assert (
+        await env.encryption.decrypt(
+            key_row.encrypted_key,
+            context=credential_secret_context(key_row.credential_id, FIELD_API_KEY),
+        )
+        == _SECRET
+    )
     assert outcome is not None and (outcome.outcome, outcome.credential_id) == (
         "connected",
         row.credential_id,
@@ -1040,7 +1052,13 @@ async def test_binding_is_kept_when_a_concurrent_confirm_wins(
                 select(CustomerAPIKey).where(CustomerAPIKey.credential_id == row.credential_id)
             )
         ).scalar_one()
-    assert env.encryption.decrypt(key_row.encrypted_key) == _SECRET
+    assert (
+        await env.encryption.decrypt(
+            key_row.encrypted_key,
+            context=credential_secret_context(key_row.credential_id, FIELD_API_KEY),
+        )
+        == _SECRET
+    )
 
 
 async def test_agent_archived_between_check_and_bind_is_refused(
@@ -1116,7 +1134,9 @@ async def _existing_credential(
                     id=credential_id,
                     token_url="https://auth.widgets.example/token",
                     client_id="mine",
-                    encrypted_client_secret=ctx.encryption.encrypt("mine-secret"),
+                    encrypted_client_secret=await ctx.encryption.encrypt(
+                        "mine-secret", context=credential_client_secret_context(credential_id)
+                    ),
                     authorize_url="https://auth.widgets.example/authorize",
                     created_by=created_by,
                 )
@@ -1125,7 +1145,9 @@ async def _existing_credential(
                 OAuthToken(
                     id=generate_ksuid("otok"),
                     credential_id=credential_id,
-                    encrypted_access_token=ctx.encryption.encrypt("access"),
+                    encrypted_access_token=await ctx.encryption.encrypt(
+                        "access", context=oauth_access_token_context(credential_id)
+                    ),
                     scope=oauth_scope,
                     created_by=created_by,
                 )
@@ -1286,7 +1308,14 @@ async def test_own_oauth_client_resolves_awaiting_app(env: Context) -> None:
     assert row is not None and (row.state, row.resolved_flow) == ("polling", "authorization_code")
     async with env.control_db.session() as session:
         occ = await OAuthClientCredentialRepository.get_by_credential(session, row.credential_id)
-    assert occ is not None and env.encryption.decrypt(occ.encrypted_client_secret) == client_secret
+    assert occ is not None
+    assert (
+        await env.encryption.decrypt(
+            occ.encrypted_client_secret,
+            context=credential_client_secret_context(row.credential_id),
+        )
+        == client_secret
+    )
     async with env.admin_db.session() as session:
         audit = (await session.execute(select(AuditEntry))).scalars().all()
     assert all(client_secret not in json.dumps(e.after, default=str) for e in audit)

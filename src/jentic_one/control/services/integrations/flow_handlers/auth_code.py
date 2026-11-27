@@ -56,6 +56,11 @@ from jentic_one.control.services.integrations.flow_handlers.base import (
 from jentic_one.control.services.integrations.flow_handlers.session_app import SessionApp
 from jentic_one.shared.config import bind_origin, resolved_control_egress
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import (
+    EncryptionContext,
+    app_registration_client_secret_context,
+    credential_client_secret_context,
+)
 from jentic_one.shared.http.idp_client import IdpResponse, IdpTransportError, idp_request
 from jentic_one.shared.models.actors import actor_type_label_from_id
 from jentic_one.shared.models.credentials import StoredCredentialType
@@ -166,7 +171,10 @@ class AuthCodeFlowHandler:
         assert app.client_secret_provider is not None, (
             "authorization_code is a confidential-client flow — client_secret required"
         )
-        encrypted_client_secret = self._ctx.encryption.encrypt(app.client_secret_provider())
+        encrypted_client_secret = await self._ctx.encryption.encrypt(
+            await app.client_secret_provider(),
+            context=credential_client_secret_context(credential_id),
+        )
         await OAuthClientCredentialRepository.create(
             db_session,
             credential_id=credential_id,
@@ -273,7 +281,8 @@ class AuthCodeFlowHandler:
 
             client_id: str
             token_url: str
-            client_secret: str
+            encrypted_client_secret: str
+            secret_context: EncryptionContext
             if credential.oauth_app_registration_id is not None:
                 registration = await OAuthAppRegistrationRepository.get_by_id(
                     session, credential.oauth_app_registration_id
@@ -289,9 +298,10 @@ class AuthCodeFlowHandler:
                     )
                 client_id = registration.client_id
                 token_url = registration.authorization_code_details.token_url
-                client_secret = self._ctx.encryption.decrypt(
+                encrypted_client_secret = (
                     registration.authorization_code_details.encrypted_client_secret
                 )
+                secret_context = app_registration_client_secret_context(registration.id)
             else:
                 occ = await OAuthClientCredentialRepository.get_by_credential(
                     session, row.credential_id
@@ -302,8 +312,12 @@ class AuthCodeFlowHandler:
                     )
                 client_id = occ.client_id
                 token_url = occ.token_url
-                client_secret = self._ctx.encryption.decrypt(occ.encrypted_client_secret)
+                encrypted_client_secret = occ.encrypted_client_secret
+                secret_context = credential_client_secret_context(row.credential_id)
 
+        client_secret = await self._ctx.encryption.decrypt(
+            encrypted_client_secret, context=secret_context
+        )
         redirect_uri = self._redirect_uri()
 
         payload = {

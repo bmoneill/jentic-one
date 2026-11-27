@@ -39,6 +39,10 @@ from jentic_one.registry.services.import_service import ImportHandler
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.permission_catalog import DEFAULT_AGENT_PERMISSIONS
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import (
+    credential_client_secret_context,
+    oauth_access_token_context,
+)
 from jentic_one.shared.db.ids import generate_ksuid
 from jentic_one.shared.models import ActorType
 from jentic_one.shared.web.deps import resolve_identity
@@ -289,7 +293,9 @@ async def existing_credential(
                     id=credential_id,
                     token_url="https://auth.vault.example/token",
                     client_id="mine",
-                    encrypted_client_secret=ctx.encryption.encrypt(client_secret),
+                    encrypted_client_secret=await ctx.encryption.encrypt(
+                        client_secret, context=credential_client_secret_context(credential_id)
+                    ),
                     authorize_url="https://auth.vault.example/authorize",
                     created_by=owner_id,
                 )
@@ -298,7 +304,9 @@ async def existing_credential(
                 OAuthToken(
                     id=generate_ksuid("otok"),
                     credential_id=credential_id,
-                    encrypted_access_token=ctx.encryption.encrypt("access"),
+                    encrypted_access_token=await ctx.encryption.encrypt(
+                        "access", context=oauth_access_token_context(credential_id)
+                    ),
                     scope=oauth_scope,
                     created_by=owner_id,
                 )

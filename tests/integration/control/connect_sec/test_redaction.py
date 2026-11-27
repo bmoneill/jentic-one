@@ -30,6 +30,12 @@ from jentic_one.control.services.credentials.state import OAUTH_CALLBACK_PATH
 from jentic_one.control.web.routers import credentials as credentials_router
 from jentic_one.shared.config import AppConfig
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import (
+    EncryptionContext,
+    credential_client_secret_context,
+    credential_secret_context,
+)
+from jentic_one.shared.crypto.contexts import FIELD_API_KEY
 from jentic_one.shared.db.session import DatabaseSession
 from jentic_one.shared.logging import configure_logging
 from jentic_one.shared.redaction import REDACTED
@@ -62,6 +68,12 @@ _CIPHERTEXT_COLUMNS = {
 }
 
 
+def _ciphertext_context(table: str, row: dict[str, Any]) -> EncryptionContext:
+    if table == "customer_api_keys":
+        return credential_secret_context(str(row["credential_id"]), FIELD_API_KEY)
+    return credential_client_secret_context(str(row["id"]))
+
+
 async def _table_rows(db: DatabaseSession) -> dict[str, list[dict[str, Any]]]:
     async with db.session() as session:
         conn = await session.connection()
@@ -90,7 +102,8 @@ async def _sweep_databases(ctx: Context, needles: tuple[str, ...]) -> list[str]:
                     expected = _CIPHERTEXT_COLUMNS.get((table, column))
                     if expected is not None:
                         assert expected not in str(value)
-                        if ctx.encryption.decrypt(str(value)) == expected:
+                        context = _ciphertext_context(table, row)
+                        if await ctx.encryption.decrypt(str(value), context=context) == expected:
                             seen_ciphertext.add((table, column))
                         continue
                     rendered = _texts(value)

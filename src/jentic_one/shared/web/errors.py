@@ -11,6 +11,7 @@ malformed request carrying a secret never has it reflected in the response.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Coroutine, Iterable, Mapping
 from typing import Any, Final
 
@@ -21,6 +22,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from jentic.problem_details import ProblemDetailException
 
+from jentic_one.shared.crypto.errors import (
+    EncryptionAccessDeniedError,
+    EncryptionBackendError,
+    EncryptionUnavailableError,
+)
 from jentic_one.shared.db.connectivity import redact_sql
 from jentic_one.shared.db.errors import DatabaseCommitOutcomeUnknownError, DatabaseUnavailableError
 from jentic_one.shared.state.backend import StateBackendCapacityError
@@ -324,4 +330,51 @@ async def state_backend_capacity_error_handler(
         content=problem.detail,
         media_type="application/problem+json",
         headers={"Retry-After": str(exc.retry_after_s)},
+    )
+
+
+async def encryption_backend_error_handler(
+    request: Request, exc: EncryptionBackendError
+) -> JSONResponse:
+    """Map an encryption backend failure to a 503 Problem Details response.
+
+    :class:`EncryptionUnavailableError` is transient (``encryption_unavailable``,
+    with ``Retry-After`` when the backend suggests a delay);
+    :class:`EncryptionAccessDeniedError` needs an operator to restore access
+    (``encryption_access_denied``). The detail names only the backend, never
+    key material or ciphertext.
+    """
+    headers: dict[str, str] = {}
+    if isinstance(exc, EncryptionAccessDeniedError):
+        detail = (
+            f"The credential encryption backend {exc.backend!r} refused the operation; "
+            "an operator must restore access."
+        )
+    else:
+        detail = (
+            f"The credential encryption backend {exc.backend!r} is temporarily unavailable; "
+            "please retry."
+        )
+        retry_after_s = exc.retry_after_s if isinstance(exc, EncryptionUnavailableError) else None
+        if retry_after_s is not None:
+            headers["Retry-After"] = str(max(1, math.ceil(retry_after_s)))
+    structlog.get_logger("jentic_one.shared.web.errors").warning(
+        "encryption_backend_error",
+        path=request.url.path,
+        problem_type=exc.code,
+        backend=exc.backend,
+        key_id=exc.key_id,
+    )
+    problem = ProblemDetailException(
+        status_code=503,
+        detail=detail,
+        type=exc.code,
+        title="Service Unavailable",
+        instance=request.url.path,
+    )
+    return JSONResponse(
+        status_code=503,
+        content=problem.detail,
+        media_type="application/problem+json",
+        headers=headers or None,
     )

@@ -50,6 +50,7 @@ from jentic_one.shared.config import (
     ServerConfig,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import credential_client_secret_context
 from jentic_one.shared.http.idp_client import idp_request
 from jentic_one.shared.redaction import redact_event
 
@@ -138,8 +139,12 @@ def _make_context(
     return ctx
 
 
+async def _static_secret() -> str:
+    return "app-secret"
+
+
 def _app() -> SessionApp:
-    def _secret() -> str:
+    async def _secret() -> str:
         return "app-secret"
 
     return SessionApp(
@@ -294,7 +299,9 @@ async def test_complete_from_callback_exchanges_code_and_returns_tokens() -> Non
     row = _row()
     occ = MagicMock()
     occ.client_id = "app-client"
-    occ.encrypted_client_secret = ctx.encryption.encrypt("app-secret")
+    occ.encrypted_client_secret = await ctx.encryption.encrypt(
+        "app-secret", context=credential_client_secret_context("cred_1")
+    )
     occ.token_url = "https://idp.example.com/token"
 
     token_response = {
@@ -352,7 +359,9 @@ async def test_complete_from_callback_raises_on_non_200() -> None:
     handler = AuthCodeFlowHandler(ctx)
     occ = MagicMock()
     occ.client_id = "app-client"
-    occ.encrypted_client_secret = ctx.encryption.encrypt("app-secret")
+    occ.encrypted_client_secret = await ctx.encryption.encrypt(
+        "app-secret", context=credential_client_secret_context("cred_1")
+    )
     occ.token_url = "https://idp.example.com/token"
     with (
         patch(
@@ -373,7 +382,9 @@ async def test_complete_from_callback_raises_when_no_access_token() -> None:
     handler = AuthCodeFlowHandler(ctx)
     occ = MagicMock()
     occ.client_id = "app-client"
-    occ.encrypted_client_secret = ctx.encryption.encrypt("app-secret")
+    occ.encrypted_client_secret = await ctx.encryption.encrypt(
+        "app-secret", context=credential_client_secret_context("cred_1")
+    )
     occ.token_url = "https://idp.example.com/token"
     with (
         patch(
@@ -388,10 +399,12 @@ async def test_complete_from_callback_raises_when_no_access_token() -> None:
         await handler.complete_from_callback(_row(), code="c")
 
 
-def _occ_for(ctx: Context, token_url: str) -> MagicMock:
+async def _occ_for(ctx: Context, token_url: str) -> MagicMock:
     occ = MagicMock()
     occ.client_id = "app-client"
-    occ.encrypted_client_secret = ctx.encryption.encrypt("app-secret")
+    occ.encrypted_client_secret = await ctx.encryption.encrypt(
+        "app-secret", context=credential_client_secret_context("cred_1")
+    )
     occ.token_url = token_url
     return occ
 
@@ -413,7 +426,7 @@ async def test_complete_from_callback_refuses_unsafe_token_url() -> None:
     # HTTP client is built, so the client secret is never sent.
     ctx = _make_context()
     handler = AuthCodeFlowHandler(ctx)
-    occ = _occ_for(ctx, "http://127.0.0.1/token")
+    occ = await _occ_for(ctx, "http://127.0.0.1/token")
     with (
         patch(_GET_BY_CREDENTIAL, new_callable=AsyncMock, return_value=occ),
         idp_transport() as mock_client,
@@ -430,7 +443,7 @@ async def test_complete_from_callback_refuses_token_host_rebinding_at_connect() 
     # answers with a blocked one. The pinned transport refuses before sending.
     ctx = _make_context()
     handler = AuthCodeFlowHandler(ctx)
-    occ = _occ_for(ctx, "https://idp.example.com/token")
+    occ = await _occ_for(ctx, "https://idp.example.com/token")
     answers = iter([_addrinfo("93.184.216.34"), _addrinfo("169.254.169.254")])
     sent = AsyncMock()
     with (
@@ -459,7 +472,7 @@ async def test_complete_from_callback_resolves_token_host_off_the_event_loop(
     # public one is resolved once, shared by the pre-flight check and the pin.
     ctx = _make_context()
     handler = AuthCodeFlowHandler(ctx)
-    occ = _occ_for(ctx, "https://idp.example.com/token")
+    occ = await _occ_for(ctx, "https://idp.example.com/token")
     loop_thread = threading.get_ident()
     lookup_threads: list[int] = []
     seen: list[httpx.Request] = []
@@ -494,7 +507,7 @@ async def test_complete_from_callback_connects_to_the_validated_address() -> Non
     # sent to the resolved public IP while Host and TLS SNI keep the vendor name.
     ctx = _make_context()
     handler = AuthCodeFlowHandler(ctx)
-    occ = _occ_for(ctx, "https://idp.example.com/token")
+    occ = await _occ_for(ctx, "https://idp.example.com/token")
     seen: list[httpx.Request] = []
 
     async def _send(_self: httpx.AsyncHTTPTransport, request: httpx.Request) -> httpx.Response:
@@ -528,7 +541,7 @@ async def test_complete_from_callback_reaches_control_egress_allowlisted_idp_pin
             allowed_private_subnets=["10.50.0.0/16"], allowed_internal_domains=[".corp.internal"]
         )
     )
-    occ = _occ_for(ctx, _INTERNAL_TOKEN_URL)
+    occ = await _occ_for(ctx, _INTERNAL_TOKEN_URL)
     seen: list[httpx.Request] = []
 
     async def _send(_self: httpx.AsyncHTTPTransport, request: httpx.Request) -> httpx.Response:
@@ -561,7 +574,7 @@ async def test_complete_from_callback_refuses_idp_outside_control_egress(
     control_egress: ControlEgressConfig | None,
 ) -> None:
     ctx = _make_context(control_egress=control_egress)
-    occ = _occ_for(ctx, _INTERNAL_TOKEN_URL)
+    occ = await _occ_for(ctx, _INTERNAL_TOKEN_URL)
     with (
         patch(_GET_BY_CREDENTIAL, new_callable=AsyncMock, return_value=occ),
         patch.object(socket, "getaddrinfo", return_value=_addrinfo("10.50.0.7")),
@@ -600,7 +613,7 @@ async def test_begin_merges_existing_query_and_overrides_security_params(
     app = SessionApp(
         flow_kind="authorization_code",
         client_id="app-client",
-        client_secret_provider=lambda: "app-secret",
+        client_secret_provider=_static_secret,
         default_scopes=[],
         registration_id=None,
         authorize_url=raw_authorize_url,
@@ -648,7 +661,7 @@ async def test_non_200_token_response_never_logs_raw_secret_bearing_body(
 ) -> None:
     ctx = _make_context()
     handler = AuthCodeFlowHandler(ctx)
-    occ = _occ_for(ctx, "https://idp.example.com/token")
+    occ = await _occ_for(ctx, "https://idp.example.com/token")
 
     with (
         patch(_GET_BY_CREDENTIAL, new_callable=AsyncMock, return_value=occ),
@@ -677,7 +690,7 @@ async def test_complete_from_callback_rejects_malformed_or_zero_expires_in(
 ) -> None:
     ctx = _make_context()
     handler = AuthCodeFlowHandler(ctx)
-    occ = _occ_for(ctx, "https://idp.example.com/token")
+    occ = await _occ_for(ctx, "https://idp.example.com/token")
     with (
         patch(_GET_BY_CREDENTIAL, new_callable=AsyncMock, return_value=occ),
         idp_transport(
@@ -702,7 +715,7 @@ async def test_complete_from_callback_preserves_omitted_or_numeric_string_expire
 ) -> None:
     ctx = _make_context()
     handler = AuthCodeFlowHandler(ctx)
-    occ = _occ_for(ctx, "https://idp.example.com/token")
+    occ = await _occ_for(ctx, "https://idp.example.com/token")
     with (
         patch(_GET_BY_CREDENTIAL, new_callable=AsyncMock, return_value=occ),
         idp_transport(post=httpx.Response(200, json=payload)),
@@ -715,7 +728,7 @@ async def test_complete_from_callback_preserves_omitted_or_numeric_string_expire
 async def test_exchange_oversized_body_fails_closed() -> None:
     ctx = _make_context()
     handler = AuthCodeFlowHandler(ctx)
-    occ = _occ_for(ctx, "https://idp.example.com/token")
+    occ = await _occ_for(ctx, "https://idp.example.com/token")
     huge = httpx.Response(200, json={"access_token": "at", "pad": "x" * (512 * 1024)})
     with (
         patch(_GET_BY_CREDENTIAL, new_callable=AsyncMock, return_value=occ),
@@ -735,7 +748,7 @@ async def test_exchange_drip_feed_fails_closed_at_total_deadline() -> None:
 
     ctx = _make_context()
     handler = AuthCodeFlowHandler(ctx)
-    occ = _occ_for(ctx, "https://idp.example.com/token")
+    occ = await _occ_for(ctx, "https://idp.example.com/token")
     transport = httpx.MockTransport(lambda request: httpx.Response(200, stream=_Drip()))
     with (
         patch(_GET_BY_CREDENTIAL, new_callable=AsyncMock, return_value=occ),

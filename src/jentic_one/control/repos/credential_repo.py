@@ -93,8 +93,10 @@ class CredentialRepository:
         provider_account_ref: str | None = None,
         server_variables: dict[str, str] | None = None,
         state: str = "connected",
+        credential_id: str | None = None,
     ) -> Credential:
         credential = Credential(
+            **({"id": credential_id} if credential_id is not None else {}),
             type=type,
             name=name,
             api_vendor=api_vendor,

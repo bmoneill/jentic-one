@@ -93,6 +93,7 @@ from jentic_one.control.web.schemas.permission_rules import (
 )
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.errors import EncryptionAccessDeniedError, EncryptionBackendError
 from jentic_one.shared.models.credentials import CredentialType
 from jentic_one.shared.web import get_ctx, get_current_identity
 from jentic_one.shared.web import openapi_examples as ex
@@ -270,12 +271,8 @@ async def list_credentials(
 # type), we 302-redirect the popup to a tiny public SPA route that owns the
 # user-facing "you can close this" experience and runs window.close().
 #
-# Only a coarse status travels in the query string — never a reason. The
-# parent SPA learns the real outcome by polling GET /credentials/{id}; the
-# actual cause (missing state, connect failure, provider error) is recorded
-# via structured logging for operators. ``status=error`` carries no detail
-# so no PII / IDs / provider-internal text can leak through the redirect URL
-# (which is visible in browser history, referrer headers, and server logs).
+# Only the status and an optional fixed recovery action travel in the URL.
+# The parent reads the authoritative outcome from the API.
 #
 # Served same-origin in every deploy mode (the SPA bundle is mounted under
 # ``SPA_MOUNT_PATH``, see shared/web/static.py), so a root-absolute path reaches
@@ -292,6 +289,14 @@ def _oauth_callback_success() -> RedirectResponse:
     # 303 See Other: force the popup to GET the SPA return route regardless of
     # how it arrived, and avoid any body on the API origin.
     return RedirectResponse(f"{_CONNECT_RETURN_PATH}?status=ok", status_code=303)
+
+
+def _oauth_encryption_error(exc: EncryptionBackendError) -> RedirectResponse:
+    # Only bounded, public recovery actions may appear in browser history.
+    recovery = "contact_operator" if isinstance(exc, EncryptionAccessDeniedError) else "try_later"
+    return RedirectResponse(
+        f"{_CONNECT_RETURN_PATH}?status=error&recovery={recovery}", status_code=303
+    )
 
 
 def _oauth_callback_error() -> RedirectResponse:
@@ -446,6 +451,8 @@ async def _complete_oauth_callback(
             result = await session_svc.complete_from_callback(
                 raw_state=raw_state, code=code, browser_binding=binding
             )
+        except EncryptionBackendError as exc:
+            return _oauth_encryption_error(exc)
         except StateError as exc:
             _logger.warning(
                 "oauth_callback.connect_session.state_invalid",
@@ -475,6 +482,8 @@ async def _complete_oauth_callback(
 
     try:
         credential_id = await svc.complete(raw_state, callback, browser_binding=binding)
+    except EncryptionBackendError as exc:
+        return _oauth_encryption_error(exc)
     except ConnectFlowError as exc:
         # ``error_type`` names the underlying cause (e.g.
         # ``StateBrowserMismatchError`` for a callback from another browser),

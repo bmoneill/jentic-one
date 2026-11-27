@@ -17,7 +17,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 from pydantic import SecretStr
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from jentic_one.control.core.schema.authorization_code_app_registration_details import (
     AuthorizationCodeAppRegistrationDetails,
@@ -64,8 +64,15 @@ from jentic_one.shared.config import (
     DirectOAuth2ProviderConfig,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import EncryptionUnavailableError, LocalEncryptionService
+from jentic_one.shared.crypto.contexts import (
+    app_registration_client_secret_context,
+    oauth_access_token_context,
+    oauth_refresh_token_context,
+)
 from jentic_one.shared.db.session import DatabaseSession
 from jentic_one.shared.models import ActorType
+from jentic_one.testing.encryption import FakeBackendBehaviour, FakeEncryptionBackend
 
 pytestmark = pytest.mark.integration
 
@@ -155,7 +162,10 @@ async def test_create_authorization_code_persists_all_fields(
     assert details is not None
     assert details.encrypted_client_secret != _TEST_SECRET_PLAINTEXT
     assert (
-        integration_context.encryption.decrypt(details.encrypted_client_secret)
+        await integration_context.encryption.decrypt(
+            details.encrypted_client_secret,
+            context=app_registration_client_secret_context(view.id),
+        )
         == _TEST_SECRET_PLAINTEXT
     )
 
@@ -738,7 +748,10 @@ async def test_rotate_client_secret_updates_secret_and_timestamp(
         details = await session.get(AuthorizationCodeAppRegistrationDetails, reg.id)
     assert details is not None
     assert (
-        integration_context.encryption.decrypt(details.encrypted_client_secret)
+        await integration_context.encryption.decrypt(
+            details.encrypted_client_secret,
+            context=app_registration_client_secret_context(reg.id),
+        )
         == _TEST_SECRET_ROTATED
     )
     assert details.secret_last_rotated_at is not None
@@ -870,8 +883,12 @@ async def test_update_auth_code_refuses_cross_origin_token_url_and_protects_live
         await OAuthTokenRepository.create(
             session,
             credential_id=credential.id,
-            encrypted_access_token=integration_context.encryption.encrypt("at-live"),
-            encrypted_refresh_token=integration_context.encryption.encrypt("rt-live"),
+            encrypted_access_token=await integration_context.encryption.encrypt(
+                "at-live", context=oauth_access_token_context(credential.id)
+            ),
+            encrypted_refresh_token=await integration_context.encryption.encrypt(
+                "rt-live", context=oauth_refresh_token_context(credential.id)
+            ),
             created_by="usr_alice",
         )
 
@@ -964,8 +981,12 @@ async def test_update_device_flow_refuses_cross_origin_token_endpoint_and_protec
         await OAuthTokenRepository.create(
             session,
             credential_id=credential.id,
-            encrypted_access_token=integration_context.encryption.encrypt("at-dev-live"),
-            encrypted_refresh_token=integration_context.encryption.encrypt("rt-dev-live"),
+            encrypted_access_token=await integration_context.encryption.encrypt(
+                "at-dev-live", context=oauth_access_token_context(credential.id)
+            ),
+            encrypted_refresh_token=await integration_context.encryption.encrypt(
+                "rt-dev-live", context=oauth_refresh_token_context(credential.id)
+            ),
             created_by="usr_alice",
         )
 
@@ -1020,3 +1041,40 @@ async def test_update_device_flow_refuses_cross_origin_token_endpoint_and_protec
 
     assert "https://attacker.example.com/token" not in posted_urls
     assert "https://idp.example.com/v2/token" in posted_urls
+
+
+async def test_create_authorization_code_encrypts_before_writing(
+    integration_context: Context, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The secret is encrypted for a pre-allocated id before the transaction opens.
+
+    A backend failure therefore leaves no row behind and never held a connection.
+    """
+    inner = integration_context.encryption
+    assert isinstance(inner, LocalEncryptionService)
+    behaviour = FakeBackendBehaviour(
+        fail_with=lambda: EncryptionUnavailableError("down", backend="test-fake")
+    )
+    monkeypatch.setattr(integration_context, "_encryption", FakeEncryptionBackend(inner, behaviour))
+    svc = OAuthAppRegistrationService(integration_context)
+    payload = AuthorizationCodeRegistrationCreate(
+        name="Encrypt First",
+        api_vendor="example-com",
+        catalog_api_id="example-com/api",
+        display_name="Example",
+        client_id="cid-encrypt-first",
+        client_secret=SecretStr(_TEST_SECRET_PLAINTEXT),
+        authorize_url="https://accounts.google.com/o/oauth2/auth",
+        token_url="https://oauth2.googleapis.com/token",
+        default_scopes=[],
+    )
+
+    with pytest.raises(EncryptionUnavailableError):
+        await svc.create_authorization_code(payload, identity=_ADMIN)
+
+    async with integration_context.control_db.session() as session:
+        found = await session.scalar(
+            select(OAuthAppRegistration).where(OAuthAppRegistration.name == "Encrypt First")
+        )
+    assert found is None
+    assert behaviour.calls == ["encrypt"]

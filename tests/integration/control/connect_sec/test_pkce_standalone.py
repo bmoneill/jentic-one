@@ -29,6 +29,10 @@ from jentic_one.control.services.integrations import identity_echo
 from jentic_one.control.web.routers import credentials as credentials_router
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import (
+    app_registration_client_secret_context,
+    oauth_access_token_context,
+)
 from jentic_one.shared.db.ids import generate_ksuid
 from tests.integration.control.connect_sec.support import (
     AGENT_ID,
@@ -134,7 +138,7 @@ async def _shared_registration(ctx: Context) -> str:
             name="Shared Vault OAuth App",
             api_vendor=VENDOR,
             client_id="shared-vault-client",
-            encrypted_client_secret=ctx.encryption.encrypt("shared-vault-secret"),
+            encrypted_client_secret="",
             authorize_url="https://auth.vault.example/authorize",
             token_url="https://auth.vault.example/token",
             catalog_api_id=f"{VENDOR}/{NAME}",
@@ -142,6 +146,11 @@ async def _shared_registration(ctx: Context) -> str:
             default_scopes=["read"],
             created_by=OWNER_ID,
         )
+        assert reg.authorization_code_details is not None
+        reg.authorization_code_details.encrypted_client_secret = await ctx.encryption.encrypt(
+            "shared-vault-secret", context=app_registration_client_secret_context(reg.id)
+        )
+        await session.flush()
         return reg.id
 
 
@@ -218,7 +227,12 @@ async def test_code_minted_for_one_flow_cannot_complete_another_flow_on_the_same
         async with env.control_db.session() as session:
             token_u1 = await OAuthTokenRepository.get_by_credential(session, cred_u1)
             assert token_u1 is not None
-            assert env.encryption.decrypt(token_u1.encrypted_access_token) == "at-u1"
+            assert (
+                await env.encryption.decrypt(
+                    token_u1.encrypted_access_token, context=oauth_access_token_context(cred_u1)
+                )
+                == "at-u1"
+            )
 
 
 async def test_standalone_and_session_paths_send_pkce_to_the_same_idp(

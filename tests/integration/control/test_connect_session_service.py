@@ -20,7 +20,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import ANY, AsyncMock, patch
 from urllib.parse import parse_qs, urlsplit
 
 import httpx
@@ -139,7 +139,14 @@ from jentic_one.shared.config import (
     VendorScopeConfig,
 )
 from jentic_one.shared.context import Context
-from jentic_one.shared.crypto import hash_secret
+from jentic_one.shared.crypto import (
+    EncryptionAccessDeniedError,
+    EncryptionUnavailableError,
+    LocalEncryptionService,
+    hash_secret,
+    oauth_access_token_context,
+    oauth_refresh_token_context,
+)
 from jentic_one.shared.db.errors import DatabaseIntegrityError
 from jentic_one.shared.db.ids import generate_ksuid
 from jentic_one.shared.db.session import DatabaseSession
@@ -148,6 +155,7 @@ from jentic_one.shared.models.credentials import CredentialType
 from jentic_one.shared.models.events import EventSeverity, EventType
 from jentic_one.shared.pagination import InvalidCursorError, encode_cursor
 from jentic_one.shared.web.deps import resolve_identity
+from jentic_one.testing.encryption import FakeBackendBehaviour, FakeEncryptionBackend
 from jentic_one.wiring import InProcessCatalogAutoImporter
 from tests.harness.http_doubles import spec_client
 
@@ -1088,7 +1096,7 @@ async def test_advance_polling_credential_advances_a_re_connect_of_a_connected_c
     # The load-bearing assertion: we ACTUALLY called
     # ``DeviceAuthorizationHandler.advance`` — the previous
     # ``state != "pending"`` gate would have returned before this.
-    advance_mock.assert_awaited_once_with(credential.id)
+    advance_mock.assert_awaited_once_with(credential.id, before_poll=ANY)
 
 
 async def test_standalone_device_finalise_uses_the_polled_generation(
@@ -1485,6 +1493,73 @@ async def test_complete_from_callback_refuses_state_replay(
     # Vendor token endpoint MUST have been hit exactly once — the
     # second attempt failed the nonce-consume gate before any HTTP.
     assert post_calls == 1
+
+
+async def test_complete_from_callback_backend_outage_makes_no_vendor_call(
+    integration_context: Context,
+    seed_test_vendors: None,
+    seed_agent: None,
+    clean_session_tables: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The token write is prepared before the code is exchanged. A backend
+    # outage there surfaces as itself, the vendor is never called, and the
+    # consumed nonce stays spent: a repeated callback is refused.
+    ctx = integration_context
+    svc = ConnectSessionService(ctx)
+    created = await svc.create_session(
+        vendor_key="testauth", agent_id=_AGENT_ID, identity=_USER_IDENTITY
+    )
+    confirmed = await svc.confirm(
+        created.session_id,
+        revision_id=await _revision(ctx, created.session_id),
+        poll_token=created.poll_token,
+        confirmed_scopes=["scope-a"],
+        permission_rules=[],
+        identity=_USER_IDENTITY,
+        browser_binding=_BINDING.claim,
+    )
+    assert isinstance(confirmed, AuthCodeConfirmResult)
+    raw_state = _state_from_authorize_url(confirmed.authorize_url)
+
+    inner = ctx.encryption
+    assert isinstance(inner, LocalEncryptionService)
+    behaviour = FakeBackendBehaviour(
+        fail_with=lambda: EncryptionUnavailableError("down", backend="test-fake")
+    )
+    monkeypatch.setattr(ctx, "_encryption", FakeEncryptionBackend(inner, behaviour))
+
+    post_calls = 0
+
+    def _vendor(request: httpx.Request) -> httpx.Response:
+        nonlocal post_calls
+        post_calls += 1
+        return httpx.Response(200, json={"access_token": "at_ok", "scope": "scope-a"})
+
+    with patch(
+        "jentic_one.shared.http.idp_client.build_always_pinned_transport",
+        return_value=httpx.MockTransport(_vendor),
+    ):
+        with pytest.raises(EncryptionUnavailableError):
+            await svc.complete_from_callback(
+                raw_state=raw_state, code="the-code", browser_binding=_BINDING.value
+            )
+        assert behaviour.calls == ["prepare_write"]
+        behaviour.fail_with = None
+        with pytest.raises(StateReplayedError):
+            await svc.complete_from_callback(
+                raw_state=raw_state, code="the-code", browser_binding=_BINDING.value
+            )
+
+    assert post_calls == 0
+    async with ctx.control_db.session() as session:
+        row = await ConnectSessionRepository.get_by_id(session, created.session_id)
+        assert row is None
+        outcome = await ConnectSessionOutcomeRepository.get_by_session_id(
+            session, created.session_id
+        )
+        assert outcome is not None
+        assert outcome.error_code == "encryption_unavailable"
 
 
 # ---------------------------------------------------------------------------
@@ -4590,8 +4665,12 @@ async def _seed_connected_testdev_credential(
             OAuthToken(
                 id=generate_ksuid("otok"),
                 credential_id=credential_id,
-                encrypted_access_token=ctx.encryption.encrypt(f"at_{name}"),
-                encrypted_refresh_token=ctx.encryption.encrypt(f"rt_{name}"),
+                encrypted_access_token=await ctx.encryption.encrypt(
+                    f"at_{name}", context=oauth_access_token_context(credential_id)
+                ),
+                encrypted_refresh_token=await ctx.encryption.encrypt(
+                    f"rt_{name}", context=oauth_refresh_token_context(credential_id)
+                ),
                 scope=scope,
                 created_by=_USER_ID,
             )
@@ -4817,3 +4896,54 @@ async def test_review_deleted_agent_between_reads(
         assert [s for s in admin_statements if "FROM agents WHERE id =" in s] == []
     finally:
         await _cleanup_test_agents(ctx, "agnt_qdel_")
+
+
+@pytest.mark.parametrize(
+    ("error", "expect_state"),
+    [
+        (EncryptionAccessDeniedError("denied", backend="test-fake"), None),
+        (EncryptionUnavailableError("down", backend="test-fake"), "polling"),
+    ],
+    ids=["access-denied-ends-the-session", "unavailable-keeps-polling"],
+)
+async def test_device_poll_backend_error_is_handled_by_the_session(
+    integration_context: Context,
+    seed_test_vendors: None,
+    seed_agent: None,
+    clean_session_tables: None,
+    error: Exception,
+    expect_state: str | None,
+) -> None:
+    # A backend failure while preparing the token write before a vendor poll:
+    # access denied ends the session with its error code (the user sees it);
+    # a transient outage leaves the session polling for the next tick.
+    ctx = integration_context
+    svc = ConnectSessionService(ctx)
+    created = await svc.create_session(
+        vendor_key="testdev", agent_id=_AGENT_ID, identity=_USER_IDENTITY
+    )
+    with patch.object(df, "begin_device_authorization", new=AsyncMock(return_value=_DEVICE_BEGIN)):
+        await svc.confirm(
+            created.session_id,
+            revision_id=await _revision(ctx, created.session_id),
+            poll_token=created.poll_token,
+            confirmed_scopes=["read:user"],
+            permission_rules=[_READ_RULE],
+            identity=_USER_IDENTITY,
+        )
+
+    with patch.object(DeviceAuthorizationHandler, "advance", new=AsyncMock(side_effect=error)):
+        await svc.advance_polling_session(created.session_id)
+
+    async with ctx.control_db.session() as session:
+        row = await ConnectSessionRepository.get_by_id(session, created.session_id)
+        outcome = await ConnectSessionOutcomeRepository.get_by_session_id(
+            session, created.session_id
+        )
+    if expect_state is None:
+        assert row is None
+        assert outcome is not None
+        assert outcome.error_code == "encryption_access_denied"
+    else:
+        assert row is not None and row.state == expect_state
+        assert outcome is None

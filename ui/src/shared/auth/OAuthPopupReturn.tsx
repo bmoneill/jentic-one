@@ -50,7 +50,7 @@ function hasScriptOpener(): boolean {
  *     close the browser refused) we surface an explicit manual affordance
  *     instead of a dead-end static page (#601).
  *
- * Only a coarse `?status=ok|error` arrives — never a reason. Lives outside the
+ * The redirect carries a coarse status and an optional recovery action. Lives outside the
  * AuthGuard: the popup has no guaranteed session and we never read anything
  * privileged here.
  */
@@ -105,9 +105,22 @@ export function OAuthPopupReturn() {
 	}, [isError]);
 
 	const title = isError ? 'Sign-in failed' : 'Sign-in complete';
-	const message = isError
+	let message = isError
 		? 'Something went wrong. You can close this window and try again.'
 		: 'You can close this window.';
+	let errorHint = 'Start again from the browser where you began connecting.';
+	if (isError) {
+		switch (params.get('recovery')) {
+			case 'try_later':
+				message = 'The encryption service is temporarily unavailable.';
+				errorHint = 'Start a new connection when service resumes.';
+				break;
+			case 'contact_operator':
+				message = 'The encryption service denied access to the key.';
+				errorHint = 'Ask an operator to restore access, then start a new connection.';
+				break;
+		}
+	}
 	// Same-tab fallbacks have no opener to close them, so always offer the
 	// affordance there; popups only show it once an auto-close was refused.
 	const showAffordance = sameTab || closeBlocked;
@@ -124,14 +137,7 @@ export function OAuthPopupReturn() {
 		<AuthCard as="div" centered className="overflow-hidden" role={isError ? 'alert' : 'status'}>
 			<h1 className="font-heading text-foreground-name text-lg font-semibold">{title}</h1>
 			<p className="text-muted-foreground mt-2 text-sm">{message}</p>
-			{isError && (
-				// The redirect only says `status=error`, whatever the cause, so the
-				// hint stays generic: retrying from the browser that started the
-				// connect fixes the common cases (wrong browser, expired sign-in).
-				<p className="text-muted-foreground mt-2 text-xs">
-					Start again from the browser where you began connecting.
-				</p>
-			)}
+			{isError && <p className="text-muted-foreground mt-2 text-xs">{errorHint}</p>}
 
 			{showAffordance && (
 				<div className="mt-5 flex flex-col items-stretch gap-2">

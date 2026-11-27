@@ -48,6 +48,12 @@ from jentic_one.shared.config import (
     VendorScopeConfig,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import (
+    app_registration_client_secret_context,
+    credential_client_secret_context,
+    oauth_access_token_context,
+    oauth_refresh_token_context,
+)
 from jentic_one.shared.models.credentials import CredentialType, StoredCredentialType
 from tests.integration.control.connect_sec.support import (
     AGENT_ID,
@@ -97,13 +103,22 @@ async def _create_registration(ctx: Context, *, name: str = "Shared Vault App") 
             catalog_api_id=_CATALOG_API_ID,
             display_name=name,
             client_id="shared-vault-client",
-            encrypted_client_secret=ctx.encryption.encrypt("shared-vault-secret"),
+            encrypted_client_secret="",
             authorize_url="https://auth.vault.example/authorize",
             token_url="https://auth.vault.example/token",
             default_scopes=["read", "write"],
             created_by=OWNER_ID,
         )
+        assert reg.authorization_code_details is not None
+        reg.authorization_code_details.encrypted_client_secret = await ctx.encryption.encrypt(
+            "shared-vault-secret", context=app_registration_client_secret_context(reg.id)
+        )
+        await session.flush()
         return reg.id
+
+
+async def _shared_vault_secret() -> str:
+    return "shared-vault-secret"
 
 
 def _state_from_authorize_url(authorize_url: str) -> str:
@@ -204,7 +219,7 @@ async def _reconnect_session_for_credential(
     app = SessionApp(
         flow_kind="authorization_code",
         client_id="shared-vault-client",
-        client_secret_provider=lambda: "shared-vault-secret",
+        client_secret_provider=_shared_vault_secret,
         default_scopes=["read", "write"],
         authorize_url="https://auth.vault.example/authorize",
         token_url="https://auth.vault.example/token",
@@ -271,9 +286,19 @@ async def test_session_reconnect_same_account_keeps_refresh_token(
     async with env.control_db.session() as session:
         token = await OAuthTokenRepository.get_by_credential(session, credential_id)
         assert token is not None
-        assert env.encryption.decrypt(token.encrypted_access_token) == "at-alice-2"
+        assert (
+            await env.encryption.decrypt(
+                token.encrypted_access_token, context=oauth_access_token_context(credential_id)
+            )
+            == "at-alice-2"
+        )
         assert token.encrypted_refresh_token is not None
-        assert env.encryption.decrypt(token.encrypted_refresh_token) == "rt-alice-1"
+        assert (
+            await env.encryption.decrypt(
+                token.encrypted_refresh_token, context=oauth_refresh_token_context(credential_id)
+            )
+            == "rt-alice-1"
+        )
         assert token.scope is None
         assert token.app_registration_id == reg_id
 
@@ -310,7 +335,12 @@ async def test_session_reconnect_different_account_drops_refresh_token(
     async with env.control_db.transaction() as session:
         token = await OAuthTokenRepository.get_by_credential(session, credential_id)
         assert token is not None
-        assert env.encryption.decrypt(token.encrypted_access_token) == "at-bob-1"
+        assert (
+            await env.encryption.decrypt(
+                token.encrypted_access_token, context=oauth_access_token_context(credential_id)
+            )
+            == "at-bob-1"
+        )
         assert token.encrypted_refresh_token is None
         assert token.scope is None
         token.expires_at = expired_at
@@ -380,7 +410,9 @@ async def test_migrating_off_a_registration_clears_app_registration_id(
                 id=credential_id,
                 token_url="https://auth.vault.example/token",
                 client_id="embedded-client",
-                encrypted_client_secret=env.encryption.encrypt("embedded-secret"),
+                encrypted_client_secret=await env.encryption.encrypt(
+                    "embedded-secret", context=credential_client_secret_context(credential_id)
+                ),
                 authorize_url="https://auth.vault.example/authorize",
                 created_by=OWNER_ID,
             )
@@ -406,7 +438,12 @@ async def test_migrating_off_a_registration_clears_app_registration_id(
     async with env.control_db.session() as session:
         token = await OAuthTokenRepository.get_by_credential(session, credential_id)
         assert token is not None
-        assert env.encryption.decrypt(token.encrypted_access_token) == "at-embedded-2"
+        assert (
+            await env.encryption.decrypt(
+                token.encrypted_access_token, context=oauth_access_token_context(credential_id)
+            )
+            == "at-embedded-2"
+        )
         assert token.app_registration_id is None
         assert token.encrypted_refresh_token is None
         assert token.scope == "read"

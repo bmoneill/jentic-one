@@ -38,6 +38,11 @@ from jentic_one.control.services.integrations.connect_session_service import (
 )
 from jentic_one.control.web.deps import get_connect_service, get_connect_session_service
 from jentic_one.control.web.routers import credentials as credentials_router
+from jentic_one.shared.crypto import (
+    EncryptionAccessDeniedError,
+    EncryptionBackendError,
+    EncryptionUnavailableError,
+)
 from jentic_one.shared.web import get_ctx
 from jentic_one.shared.web.static import SPA_MOUNT_PATH
 
@@ -229,3 +234,15 @@ def test_redirect_target_tracks_spa_mount_path(monkeypatch: pytest.MonkeyPatch) 
     parts = urlsplit(location)
     assert parts.path == "/console/oauth/connected", location
     assert parse_qs(parts.query).get("status") == ["ok"], location
+
+
+@pytest.mark.parametrize(
+    ("error", "recovery"),
+    [(EncryptionUnavailableError, "try_later"), (EncryptionAccessDeniedError, "contact_operator")],
+)
+def test_encryption_failure_redirects_with_public_recovery_action(
+    error: type[EncryptionBackendError], recovery: str
+) -> None:
+    app = _build_app(complete_mock=AsyncMock(side_effect=error("private", backend="private")))
+    response = _get(app, {"state": "valid-state", "code": "the-code"})
+    assert _location(response) == f"{_RETURN_PATH}?status=error&recovery={recovery}"

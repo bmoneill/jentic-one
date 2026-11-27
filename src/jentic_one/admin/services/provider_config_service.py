@@ -16,6 +16,7 @@ from jentic_one.shared.audit import record_audit
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.config import PipedreamProviderConfig, resolved_control_egress
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import provider_config_secret_context
 from jentic_one.shared.models.audit import AuditAction, AuditTargetType
 from jentic_one.shared.url import is_loopback_url
 from jentic_one.shared.url_validation import validate_upstream_url_async
@@ -107,7 +108,7 @@ class ProviderConfigService:
 
         base: dict[str, Any] = {}
         if existing is not None:
-            base = self._ctx.decrypt_provider_config(existing.config_json)
+            base = await self._ctx.decrypt_provider_config(name, existing.config_json)
             base.pop("kind", None)
 
         merged = dict(base)
@@ -152,7 +153,9 @@ class ProviderConfigService:
         for field in _SECRET_FIELDS:
             value = stored.get(field)
             if isinstance(value, str) and value:
-                stored[field] = self._ctx.encryption.encrypt(value)
+                stored[field] = await self._ctx.encryption.encrypt(
+                    value, context=provider_config_secret_context(name, field)
+                )
 
         async with self._ctx.admin_db.transaction() as session:
             record = await ProviderConfigRepository.upsert(

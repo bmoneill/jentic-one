@@ -80,13 +80,20 @@ async def env(
     ctx = integration_context
     monkeypatch.setattr(ctx.config.control.connect, "manual_flows_enabled", True)
     monkeypatch.setattr(ctx.config.vendors, "entries", {})
-    ctx.config.credentials.providers.setdefault(
-        "direct_oauth2",
-        DirectOAuth2ProviderConfig(
-            redirect_uri="https://app.example.com/credentials/oauth/callback"
-        ),
-    )
+    if "direct_oauth2" not in ctx.config.credentials.providers:
+        # setitem (not setdefault): undone after the test, so the session-wide
+        # config never leaks this provider into unrelated tests.
+        monkeypatch.setitem(
+            ctx.config.credentials.providers,
+            "direct_oauth2",
+            DirectOAuth2ProviderConfig(
+                redirect_uri="https://app.example.com/credentials/oauth/callback"
+            ),
+        )
     await _wipe(ctx)
+    # The Context built its provider registry at startup, before the entry above
+    # existed; rebuild it so a test that runs first on its worker can resolve it.
+    await ctx.refresh_providers()
     async with ctx.admin_db.session() as session:
         for user_id in (OWNER_ID, OTHER_OWNER_ID):
             await session.execute(

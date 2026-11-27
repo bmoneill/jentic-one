@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import CursorResult, select
+from sqlalchemy import CursorResult, literal, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from jentic_one.control.core.schema.connect_nonces import ConnectNonce
+from jentic_one.control.core.schema.credentials import Credential
 
 
 class ConnectNonceRepository:
@@ -27,14 +28,16 @@ class ConnectNonceRepository:
         if expires_at <= datetime.now(UTC):
             return False
 
+        # Terminal cleanup can delete the provisional credential and cascade
+        # its nonce. A later callback then has no owner and must still lose.
+        owner = (
+            select(literal(nonce), Credential.id, literal(expires_at), literal(created_by))
+            .where(Credential.id == credential_id)
+            .with_for_update(read=True, key_share=True)
+        )
         stmt = (
             pg_insert(ConnectNonce)
-            .values(
-                nonce=nonce,
-                credential_id=credential_id,
-                expires_at=expires_at,
-                created_by=created_by,
-            )
+            .from_select(["nonce", "credential_id", "expires_at", "created_by"], owner)
             .on_conflict_do_nothing(index_elements=["nonce"])
         )
         cursor_result: CursorResult[tuple[()]] = await session.execute(stmt)  # type: ignore[assignment]
