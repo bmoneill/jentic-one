@@ -26,8 +26,13 @@ from jentic_one.broker.core.directives import (
     credential_server_variable_mismatch_directive,
     suggested_permission_rules,
 )
+from jentic_one.broker.core.encryption_errors import (
+    encryption_access_denied_error,
+    encryption_unavailable_error,
+)
 from jentic_one.broker.core.errors import (
     AmbiguousCredentialMatchError,
+    CredentialEncryptionUnavailableError,
     CredentialNeedsReconnectError,
     CredentialRefreshTransientError,
     CredentialUndecryptableError,
@@ -62,7 +67,13 @@ from jentic_one.shared.access_guidance import ConnectTarget
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.broker.protocols import ConnectableRegistrationSourceProtocol
 from jentic_one.shared.context import Context
-from jentic_one.shared.crypto import DecryptionError
+from jentic_one.shared.crypto import (
+    DecryptionError,
+    EncryptionAccessDeniedError,
+    EncryptionUnavailableError,
+)
+from jentic_one.shared.crypto.service import backend_name
+from jentic_one.shared.deadline import within_encryption_deadline
 from jentic_one.shared.events import (
     emit_credential_access,
     emit_event_best_effort,
@@ -168,7 +179,12 @@ class CredentialService:
                         resolved=resolved, caller=identity.sub
                     )
 
-                result = inject_auth(resolved, ctx=self._ctx, access_token=access_token)
+                # Decrypting the secret columns waits on the encryption backend; bound it
+                # (and the token read above, which bounds itself) by the request deadline.
+                result = await within_encryption_deadline(
+                    inject_auth(resolved, ctx=self._ctx, access_token=access_token),
+                    backend=backend_name(self._ctx.encryption),
+                )
             except (DecryptionError, RefreshUndecryptableError) as exc:
                 # A blob resolved by id/name but its ciphertext will not
                 # decrypt: the encryption key that produced it is gone (a
@@ -218,6 +234,45 @@ class CredentialService:
                         ),
                     ),
                 ) from exc
+            except EncryptionUnavailableError as exc:
+                # Transient backend failure: the stored value is intact and the
+                # request was not dispatched, so the agent may retry.
+                raise self._encryption_unavailable(resolved, api, exc) from None
+            except EncryptionAccessDeniedError as exc:
+                # The backend refused the key: only an operator can restore
+                # access. Name the backend, never key material.
+                await self._emit_credential_failure(
+                    type=EventType.CREDENTIAL_UNDECRYPTABLE,
+                    summary=(
+                        f"Credential {summary_label(resolved.name, resolved.credential_id)} "
+                        f"for '{api.vendor}' cannot be read: encryption backend "
+                        f"'{exc.backend}' denied access"
+                    ),
+                    identity=identity,
+                    credential_owner=resolved.created_by,
+                    requires_action=True,
+                    data={
+                        "credential_id": resolved.credential_id,
+                        "api_vendor": api.vendor,
+                        "reason": "encryption_access_denied",
+                        "backend": exc.backend,
+                    },
+                )
+                raise encryption_access_denied_error(
+                    exc,
+                    detail=(
+                        f"The encryption backend '{exc.backend}' denied access to "
+                        f"credential '{resolved.credential_id}' for '{api.vendor}'"
+                    ),
+                    extra={
+                        "credential_id": resolved.credential_id,
+                        "api_vendor": api.vendor,
+                    },
+                    parameters={
+                        "credential_id": resolved.credential_id,
+                        "vendor": api.vendor,
+                    },
+                ) from None
 
             async with self._ctx.admin_db.transaction() as session:
                 await emit_credential_access(
@@ -445,6 +500,20 @@ class CredentialService:
                 type="ambiguous_credential",
                 extra={"candidates": [c.model_dump(mode="json") for c in exc.candidates]},
             ) from exc
+
+    @staticmethod
+    def _encryption_unavailable(
+        resolved: ResolvedCredential, api: APIReference, exc: EncryptionUnavailableError
+    ) -> CredentialEncryptionUnavailableError:
+        """Build the retryable 503 for a transient encryption backend failure."""
+        return encryption_unavailable_error(
+            exc,
+            detail=(
+                f"The encryption backend '{exc.backend}' is temporarily unavailable; "
+                f"credential '{resolved.credential_id}' for '{api.vendor}' could not be read"
+            ),
+            extra={"credential_id": resolved.credential_id, "api_vendor": api.vendor},
+        )
 
     async def _emit_credential_failure(
         self,

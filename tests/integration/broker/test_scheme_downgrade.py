@@ -39,6 +39,10 @@ from jentic_one.registry.services.revision_service import RevisionService
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.permission_catalog import DEFAULT_AGENT_PERMISSIONS
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_TOKEN_VALUE,
+    credential_secret_context,
+)
 from jentic_one.shared.models import ActorType, ApiRevisionSourceType, StoredCredentialType
 from jentic_one.shared.models.events import EventType
 from jentic_one.wiring import InProcessRegistryResolver, install_broker_registry_resolver
@@ -231,7 +235,9 @@ async def _seed_bound_bearer_credential(
         session.add(
             TokenValueCredential(
                 credential_id=cred_id,
-                encrypted_token_value=ctx.encryption.encrypt(_BEARER_VALUE),
+                encrypted_token_value=await ctx.encryption.encrypt(
+                    _BEARER_VALUE, context=credential_secret_context(cred_id, FIELD_TOKEN_VALUE)
+                ),
             )
         )
         await AgentPermissionRuleRepository.replace_user_rules(

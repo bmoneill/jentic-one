@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from jentic_one.shared.db.protocols import TransactionalDatabase
+from jentic_one.shared.deadline import RequestDeadlineExpiredError
 from jentic_one.shared.models.jobs import JobKind
 
 
@@ -17,6 +18,16 @@ class NonRetryableJobError(Exception):
     other handler exception keeps the ``worker.max_attempts`` retry budget, so
     raise this only for a failure that is a pure function of the job's input
     (e.g. a payload or document that fails validation).
+    """
+
+
+class DispatchAbandonedError(RequestDeadlineExpiredError):
+    """An execution handler gave up after injecting credentials, before the upstream call.
+
+    Nothing was sent. Credential injection already recorded ``credential.accessed``,
+    which a re-claim normally reads as evidence the call went out, so the worker
+    records the abandonment on the job; a re-claim then counts only evidence
+    written after it.
     """
 
 

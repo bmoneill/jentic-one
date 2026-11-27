@@ -66,6 +66,7 @@ from jentic_one.shared.broker.execution import ErrorOrigin
 from jentic_one.shared.broker.protocols import IdentityMismatch
 from jentic_one.shared.config import AppConfig
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import EncryptionBackendError
 from jentic_one.shared.db.errors import (
     DatabaseCommitOutcomeUnknownError,
     DatabaseUnavailableError,
@@ -82,6 +83,7 @@ from jentic_one.shared.state.backend import StateBackendCapacityError
 from jentic_one.shared.web.app_factory import spa_aware_problem_detail_handler
 from jentic_one.shared.web.errors import (
     DB_COMMIT_OUTCOME_UNKNOWN_DETAIL,
+    encryption_backend_error_handler,
     request_validation_error_handler,
     state_backend_capacity_error_handler,
     unhandled_exception_handler,
@@ -687,6 +689,7 @@ def test_every_registered_http_handler_has_a_classification_contract(
         RequestValidationError: handle_validation,
         WebSocketRequestValidationError: websocket_request_validation_exception_handler,
         ProblemDetailException: spa_aware_problem_detail_handler,
+        EncryptionBackendError: encryption_backend_error_handler,
         StateBackendCapacityError: state_backend_capacity_error_handler,
         Exception: unhandled_exception_handler,
         BrokerError: handle_broker_error,
@@ -696,6 +699,7 @@ def test_every_registered_http_handler_has_a_classification_contract(
     assert {
         handle_validation: 422,
         request_validation_error_handler: 422,
+        encryption_backend_error_handler: 503,
         state_backend_capacity_error_handler: 503,
         handle_database_unavailable: 503,
         unhandled_exception_handler: 500,

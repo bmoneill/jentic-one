@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 import structlog
-from sqlalchemy import delete, exists, or_, select, update
+from sqlalchemy import and_, delete, exists, or_, select, update
 from sqlalchemy.exc import StatementError
 from sqlalchemy.sql import func
 
@@ -29,6 +29,7 @@ from jentic_one.shared.db.connectivity import (
 from jentic_one.shared.db.errors import DatabaseCommitOutcomeUnknownError
 from jentic_one.shared.events import emit_event, valid_trace_id_or_none
 from jentic_one.shared.jobs.handlers import (
+    DispatchAbandonedError,
     JobHandlerRegistry,
     JobResultPayload,
     NonRetryableJobError,
@@ -67,6 +68,9 @@ _COMPLETION_RETRY_BASE_S = 0.05
 # Payload marker stamped on a still-running execution job when its handler has
 # returned and _complete_job could not persist the result.
 _DISPATCHED_PAYLOAD_KEY = "_dispatched"
+#: Set (ISO-8601 UTC) when a claim abandoned the dispatch after injecting credentials
+#: and before the upstream call. Re-claim ignores dispatch evidence written before it.
+_ABANDONED_BEFORE_SEND_KEY = "_abandoned_before_send_at"
 # Bounds the in-memory fallback set of dispatched job IDs awaiting completion.
 _MAX_TRACKED_DISPATCHED_JOBS = 1024
 
@@ -465,7 +469,9 @@ class WorkerLoop:
             # still unreachable this raises a connection-loss error to the
             # caller (the run loop owns the outage warning and backoff); the
             # job stays RUNNING and is reclaimed after its visibility timeout.
-            await self._handle_failure(job, error)
+            await self._handle_failure(
+                job, error, abandoned_before_send=isinstance(exc, DispatchAbandonedError)
+            )
             return
 
         if kind == JobKind.EXECUTION:
@@ -760,7 +766,13 @@ class WorkerLoop:
                 cred_clause = cred_clause & (Event.created_at >= created_at)
             event_clauses.append(cred_clause)
 
-        predicates = [exists().where(or_(*event_clauses))]
+        event_evidence = or_(*event_clauses)
+        abandoned_at = _abandoned_before_send_at(payload)
+        if abandoned_at is not None:
+            # An earlier claim gave up before sending: its credential access and
+            # events are not dispatch evidence. Only what came after can be.
+            event_evidence = and_(event_evidence, Event.created_at > abandoned_at)
+        predicates = [exists().where(event_evidence)]
         if isinstance(execution_id, str) and execution_id:
             predicates.insert(0, exists().where(ExecutionRecord.id == execution_id))
         return bool((await session.execute(select(or_(*predicates)))).scalar_one())
@@ -819,7 +831,9 @@ class WorkerLoop:
             except Exception:
                 logger.warning("emit_event_failed", job_id=job_id)
 
-    async def _handle_failure(self, job: Any, error: str) -> None:
+    async def _handle_failure(
+        self, job: Any, error: str, *, abandoned_before_send: bool = False
+    ) -> None:
         """Requeue a failed job with backoff, or dead-letter it past the budget.
 
         ``attempts`` was incremented at claim time, so it is the count of claims
@@ -831,6 +845,10 @@ class WorkerLoop:
 
         Approved executions never retry: an approval releases one run, so a
         handler failure moves the job straight to ``FAILED``.
+
+        ``abandoned_before_send`` (the handler raised :class:`DispatchAbandonedError`)
+        stamps the requeued payload with when the dispatch was abandoned, so the
+        re-claim does not read this claim's ``credential.accessed`` as a send.
 
         Every transition applies only while this worker still holds the claim:
         the row is ``RUNNING`` with the ``attempts`` value stamped by this
@@ -865,7 +883,18 @@ class WorkerLoop:
             return
 
         delay_s = _backoff_s(attempts, self._config)
-        requeue_at = datetime.now(UTC) + timedelta(seconds=delay_s)
+        now = datetime.now(UTC)
+        requeue_at = now + timedelta(seconds=delay_s)
+        values: dict[str, Any] = {
+            "status": JobStatus.QUEUED,
+            "error": error[:_ERROR_MAX_LEN],
+            "visible_at": requeue_at,
+        }
+        if abandoned_before_send:
+            raw_payload = getattr(job, "payload", None)
+            payload = dict(raw_payload) if isinstance(raw_payload, dict) else {}
+            payload[_ABANDONED_BEFORE_SEND_KEY] = now.isoformat()
+            values["payload"] = payload
         async with self._db.transaction() as session:
             result = await session.execute(
                 update(Job)
@@ -874,11 +903,7 @@ class WorkerLoop:
                     Job.status == JobStatus.RUNNING,
                     Job.attempts == job.attempts,
                 )
-                .values(
-                    status=JobStatus.QUEUED,
-                    error=error[:_ERROR_MAX_LEN],
-                    visible_at=requeue_at,
-                )
+                .values(**values)
             )
         if not result.rowcount:  # type: ignore[attr-defined]
             logger.info("job_requeue_skipped_claim_lost", job_id=job.id, attempts=attempts)
@@ -1050,3 +1075,15 @@ class WorkerLoop:
         self._running = False
         self._wake.set()
         return drained
+
+
+def _abandoned_before_send_at(payload: dict[str, Any]) -> datetime | None:
+    """When an earlier claim abandoned the dispatch before sending, if it did."""
+    raw = payload.get(_ABANDONED_BEFORE_SEND_KEY)
+    if not isinstance(raw, str):
+        return None
+    try:
+        stamp = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return stamp if stamp.tzinfo is not None else stamp.replace(tzinfo=UTC)

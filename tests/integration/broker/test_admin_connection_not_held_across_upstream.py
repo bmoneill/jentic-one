@@ -54,6 +54,10 @@ from jentic_one.control.core.schema.customer_api_keys import CustomerAPIKey
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.config import EgressConfig, WorkerConfig
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    credential_secret_context,
+)
 from jentic_one.shared.db.session import DatabaseSession
 from jentic_one.shared.db.utils import insert_append_only_row
 from jentic_one.shared.jobs.execution_handler import ExecutionHandler
@@ -279,7 +283,9 @@ async def seeded_credential(integration_context: Context) -> AsyncGenerator[str,
             CustomerAPIKey(
                 id=f"key-{_CREDENTIAL_ID}",
                 credential_id=_CREDENTIAL_ID,
-                encrypted_key=integration_context.encryption.encrypt(secret),
+                encrypted_key=await integration_context.encryption.encrypt(
+                    secret, context=credential_secret_context(_CREDENTIAL_ID, FIELD_API_KEY)
+                ),
                 location="header",
                 field_name="X-Api-Key",
             )

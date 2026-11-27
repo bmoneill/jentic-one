@@ -25,7 +25,7 @@ from jentic_one.mcp import approvals
 from jentic_one.mcp.tools import CallEnv, dispatch_mcp_tool_call
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.config import AuthConfig, EncryptionConfig, ServerConfig
-from jentic_one.shared.crypto.encryption import EncryptionService
+from jentic_one.shared.crypto import LocalEncryptionService
 from jentic_one.shared.jobs.hold import HELD_AGENT_DIRECTIVE, HELD_EXPLAINED_AGENT_DIRECTIVE
 from jentic_one.shared.models import ActorType
 
@@ -62,7 +62,7 @@ def _env(
     server.mcp.broker_url = "http://127.0.0.1:8100"
     ctx.config.server = server
     ctx.instance_id = None
-    ctx.encryption = EncryptionService(
+    ctx.encryption = LocalEncryptionService(
         EncryptionConfig.model_validate(
             {"active_id": "v1", "entries": [{"id": "v1", "material": _KEY}]}
         )

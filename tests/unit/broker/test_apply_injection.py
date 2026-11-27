@@ -27,7 +27,8 @@ from jentic_one.broker.web.routers.execute import (
     _captured_cookie,
 )
 from jentic_one.shared.config import EncryptionConfig
-from jentic_one.shared.crypto.encryption import EncryptionService
+from jentic_one.shared.crypto import LocalEncryptionService
+from jentic_one.shared.crypto.contexts import cookie_context, held_payload_context
 from jentic_one.shared.http.injection import (
     clear_upstream_cookie_scopes,
     format_cookie_scope_key,
@@ -48,7 +49,7 @@ from jentic_one.shared.jobs.protocols import (
 from tests.unit.fake_tx import SessionScope
 
 _URL = "https://api.example.com/v1/things?page=2"
-_ENCRYPTION = EncryptionService(
+_ENCRYPTION = LocalEncryptionService(
     EncryptionConfig.model_validate(
         {
             "active_id": "v1",
@@ -90,7 +91,7 @@ def _request(*, cookies: list[str] | None = None, scope_key: str | None = None) 
 
 def _keyed_ctx(*, keyset: bool = True) -> Any:
     """The two ``Context`` members ``_captured_cookie`` reads."""
-    return SimpleNamespace(has_encryption_keyset=keyset, encryption=_ENCRYPTION if keyset else None)
+    return SimpleNamespace(encryption_enabled=keyset, encryption=_ENCRYPTION if keyset else None)
 
 
 # --- sync router ------------------------------------------------------------
@@ -135,23 +136,28 @@ def test_sync_cookie_creds_set_when_no_inbound_cookie() -> None:
 # --- async capture ----------------------------------------------------------
 
 
-def test_async_payload_keeps_the_cookie_only_as_ciphertext() -> None:
+async def test_async_payload_keeps_the_cookie_only_as_ciphertext() -> None:
     request = _request(cookies=["sid=agent-session"])
     payload = _async_job_payload(
         ExecuteRequestContext(upstream_url=_URL, method="POST", trace_id="ab" * 16),
         execution_id="exec_1",
         origin="api",
         headers=replay_headers(request.headers),
-        inbound_cookie_enc=_captured_cookie(request, _keyed_ctx()),
+        inbound_cookie_enc=await _captured_cookie(request, _keyed_ctx(), execution_id="exec_1"),
     )
     assert "agent-session" not in json.dumps(payload)
     assert "cookie" not in payload["headers"]
-    assert _ENCRYPTION.decrypt(payload[INBOUND_COOKIE_PAYLOAD_KEY]) == "sid=agent-session"
+    assert (
+        await _ENCRYPTION.decrypt(
+            payload[INBOUND_COOKIE_PAYLOAD_KEY], context=cookie_context(execution_id="exec_1")
+        )
+        == "sid=agent-session"
+    )
 
 
-def test_async_payload_without_a_cookie_has_no_cookie_key() -> None:
+async def test_async_payload_without_a_cookie_has_no_cookie_key() -> None:
     request = _request()
-    assert _captured_cookie(request, _keyed_ctx()) is None
+    assert await _captured_cookie(request, _keyed_ctx(), execution_id="exec_1") is None
     payload = _async_job_payload(
         ExecuteRequestContext(upstream_url=_URL, method="POST", trace_id="ab" * 16),
         execution_id="exec_1",
@@ -161,9 +167,11 @@ def test_async_payload_without_a_cookie_has_no_cookie_key() -> None:
     assert INBOUND_COOKIE_PAYLOAD_KEY not in payload
 
 
-def test_async_capture_without_a_keyset_fails_closed() -> None:
+async def test_async_capture_without_a_keyset_fails_closed() -> None:
     with pytest.raises(AsyncCookieEncryptionUnavailableError):
-        _captured_cookie(_request(cookies=["sid=1"]), _keyed_ctx(keyset=False))
+        await _captured_cookie(
+            _request(cookies=["sid=1"]), _keyed_ctx(keyset=False), execution_id="exec_1"
+        )
 
 
 # --- sync / async parity ----------------------------------------------------
@@ -222,12 +230,18 @@ async def _async_outbound(
         execution_id="exec_parity",
         origin="api",
         headers=replay_headers(request.headers),
-        inbound_cookie_enc=_captured_cookie(request, _keyed_ctx()),
+        inbound_cookie_enc=await _captured_cookie(
+            request, _keyed_ctx(), execution_id="exec_parity"
+        ),
         auth_token_sha256="abcd" * 16,
         auth_method="access_token",
     )
     if held:
-        payload = {ENCRYPTED_PAYLOAD_KEY: _ENCRYPTION.encrypt(json.dumps(payload))}
+        payload = {
+            ENCRYPTED_PAYLOAD_KEY: await _ENCRYPTION.encrypt(
+                json.dumps(payload), context=held_payload_context(execution_id="exec_parity")
+            )
+        }
     executor = _RecordingExecutor()
     handler = ExecutionHandler(
         executor=executor,
@@ -242,6 +256,7 @@ async def _async_outbound(
         payload=payload,
         created_by="agnt_parity",
         actor_type="agent",
+        job_execution_id="exec_parity",
     )
     sent = executor.last_request
     assert sent is not None
@@ -412,14 +427,18 @@ async def test_async_captured_cookie_filters_foreign_pairs_and_survives_worker_s
         api_name="example",
         api_version="1",
     )
-    captured = _captured_cookie(
+    captured = await _captured_cookie(
         request,
         _keyed_ctx(),
+        execution_id="exec_worker_sep",
         upstream_url=ctx_req.upstream_url,
         server_variables_unresolved=ctx_req.server_variables_unresolved,
     )
     assert captured is not None
-    assert _ENCRYPTION.decrypt(captured) == "sid=allowed-session"
+    assert (
+        await _ENCRYPTION.decrypt(captured, context=cookie_context(execution_id="exec_worker_sep"))
+        == "sid=allowed-session"
+    )
 
     payload = _async_job_payload(
         ctx_req,
@@ -451,6 +470,7 @@ async def test_async_captured_cookie_filters_foreign_pairs_and_survives_worker_s
         payload=payload,
         created_by="agnt_parity",
         actor_type="agent",
+        job_execution_id="exec_worker_sep",
     )
     sent = executor.last_request
     assert sent is not None

@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 from collections.abc import AsyncIterator
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -22,7 +24,9 @@ from jentic_one.broker.adapters.runners.base import (
 from jentic_one.broker.adapters.runners.deadline import DeadlineRunner
 from jentic_one.broker.core.errors import DeadlineExceededError
 from jentic_one.broker.services.execution.pipeline import build_runner
+from jentic_one.broker.web.routers.execute import _ensure_predispatch_budget
 from jentic_one.shared.broker.execution import ErrorOrigin
+from jentic_one.shared.deadline import RequestDeadlineExpiredError, bind_request_deadline
 
 
 class _SlowRunner:
@@ -133,3 +137,38 @@ async def test_build_runner_enforces_deadline() -> None:
 
     with pytest.raises(DeadlineExceededError):
         await composed.run(_request())
+
+
+@pytest.mark.asyncio
+async def test_slow_credentials_do_not_shrink_the_upstream_budget_buffered() -> None:
+    """Each stage fits its own budget; their sum exceeds one budget. The call still succeeds."""
+    inner = _SlowRunner(delay_s=0.05)
+    runner = DeadlineRunner(inner, deadline_s=0.2)
+
+    with bind_request_deadline(0.2):
+        await asyncio.sleep(0.17)  # credentials used most of the request deadline
+        result = await runner.run(_request())  # the upstream needs 50 ms: its own budget is 200
+
+    assert result.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_slow_credentials_do_not_shrink_the_upstream_budget_streaming() -> None:
+    inner = _SlowRunner(delay_s=0.05)
+    runner = DeadlineRunner(inner, deadline_s=0.2)
+
+    with bind_request_deadline(0.2):
+        await asyncio.sleep(0.17)
+        async with runner.stream(_request()) as result:
+            assert result.status_code == 200
+
+
+def test_the_dispatch_cutoff_refuses_a_call_whose_request_deadline_has_passed() -> None:
+
+    ctx = MagicMock()
+    ctx.config.credentials.encryption.backend = "local"
+    with bind_request_deadline(0.000001):
+        time.sleep(0.01)
+        with pytest.raises(RequestDeadlineExpiredError):
+            _ensure_predispatch_budget(ctx)
+    _ensure_predispatch_budget(ctx)  # no deadline bound: never refuses

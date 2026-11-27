@@ -53,6 +53,10 @@ from jentic_one.shared.auth.permission_catalog import (
 from jentic_one.shared.broker.protocols import ResolveResult
 from jentic_one.shared.config import WorkerConfig
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    credential_secret_context,
+)
 from jentic_one.shared.db.ids import generate_ksuid
 from jentic_one.shared.jobs.execution_handler import ExecutionHandler
 from jentic_one.shared.jobs.handlers import JobHandlerRegistry
@@ -119,7 +123,10 @@ async def _seed_bound_agent(ctx: Context) -> tuple[str, str]:
             CustomerAPIKey(
                 id=generate_ksuid("key"),
                 credential_id=credential.id,
-                encrypted_key=ctx.encryption.encrypt("SECRET"),  # pragma: allowlist secret
+                encrypted_key=await ctx.encryption.encrypt(
+                    "SECRET",  # pragma: allowlist secret
+                    context=credential_secret_context(credential.id, FIELD_API_KEY),
+                ),
                 location="header",
                 field_name="X-Api-Key",
             )

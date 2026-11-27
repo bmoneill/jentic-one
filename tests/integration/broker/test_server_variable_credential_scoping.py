@@ -35,6 +35,10 @@ from jentic_one.registry.services.inspect.registry_service import RegistryServic
 from jentic_one.registry.services.revision_service import RevisionService
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    credential_secret_context,
+)
 from jentic_one.shared.db.session import DatabaseSession
 from jentic_one.shared.models import ActorType, ApiRevisionSourceType, StoredCredentialType
 from jentic_one.shared.url import apply_server_variables
@@ -124,7 +128,9 @@ async def _seed_api_key(
             CustomerAPIKey(
                 id=f"key-{cred_id}",
                 credential_id=cred_id,
-                encrypted_key=ctx.encryption.encrypt(secret),
+                encrypted_key=await ctx.encryption.encrypt(
+                    secret, context=credential_secret_context(cred_id, FIELD_API_KEY)
+                ),
                 location="header",
                 field_name="X-Api-Key",
             )

@@ -76,6 +76,10 @@ from jentic_one.shared.auth.permission_catalog import (
 )
 from jentic_one.shared.config import AppConfig, BrokerConfig, EgressConfig, WorkerConfig
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    credential_secret_context,
+)
 from jentic_one.shared.jobs.execution_handler import ExecutionHandler
 from jentic_one.shared.jobs.handlers import JobHandlerRegistry
 from jentic_one.shared.jobs.hold import PROBLEM_CONTENT_TYPE
@@ -374,7 +378,10 @@ async def _seed_world(ctx: Context) -> None:
             CustomerAPIKey(
                 id="key_1807_widgets",
                 credential_id=_CRED_ID,
-                encrypted_key=ctx.encryption.encrypt("Bearer upstream-secret-1807"),
+                encrypted_key=await ctx.encryption.encrypt(
+                    "Bearer upstream-secret-1807",
+                    context=credential_secret_context(_CRED_ID, FIELD_API_KEY),
+                ),
                 location="header",
                 field_name="Authorization",
             )
@@ -459,7 +466,7 @@ async def _running_planes(
                 actor_status=build_worker_actor_status(ctx),
                 egress=EgressConfig(allowed_private_subnets=["127.0.0.0/8"]),
                 security_config=ctx.config.security,
-                encryption=ctx.encryption if ctx.has_encryption_keyset else None,
+                encryption=ctx.encryption if ctx.encryption_enabled else None,
             )
             handlers = JobHandlerRegistry()
             handlers.register(JobKind.EXECUTION, exec_handler)

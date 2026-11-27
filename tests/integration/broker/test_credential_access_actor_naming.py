@@ -23,6 +23,10 @@ from jentic_one.control.core.schema.customer_api_keys import CustomerAPIKey
 from jentic_one.shared.auth.api_key_resolver import AGENT_API_KEY_PREFIX, ApiKeyResolver
 from jentic_one.shared.auth.permission_catalog import BROKER_EXECUTE_PERMISSION
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    credential_secret_context,
+)
 from jentic_one.shared.models import StoredCredentialType
 from jentic_one.shared.models.events import EventType
 
@@ -114,9 +118,10 @@ async def seeded_agent_and_credential(
                 api_version=_API_VERSION,
             )
         )
-        encrypted = integration_context.encryption.encrypt(
-            "sk-live-123"
-        )  # pragma: allowlist secret
+        encrypted = await integration_context.encryption.encrypt(
+            "sk-live-123",  # pragma: allowlist secret
+            context=credential_secret_context(_CREDENTIAL_ID, FIELD_API_KEY),
+        )
         session.add(
             CustomerAPIKey(
                 id=f"key-{_CREDENTIAL_ID}",

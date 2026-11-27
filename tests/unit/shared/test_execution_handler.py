@@ -12,6 +12,7 @@ session that has no real backing is fine for these pure-logic unit tests.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import re
 from collections.abc import Iterator
@@ -24,14 +25,17 @@ import structlog
 from sqlalchemy.exc import OperationalError
 
 from jentic_one.shared.config import EncryptionConfig
-from jentic_one.shared.crypto.encryption import EncryptionService
+from jentic_one.shared.crypto import EncryptionContext, LocalEncryptionService
+from jentic_one.shared.crypto.contexts import cookie_context
 from jentic_one.shared.db.errors import DatabaseIntegrityError, DatabaseUnavailableError
+from jentic_one.shared.deadline import RequestDeadlineExpiredError
 from jentic_one.shared.http.injection import (
     clear_upstream_cookie_scopes,
     get_current_cookie_scope,
     record_upstream_set_cookie,
 )
 from jentic_one.shared.jobs.execution_handler import ExecutionHandler
+from jentic_one.shared.jobs.handlers import DispatchAbandonedError
 from jentic_one.shared.jobs.hold import INBOUND_COOKIE_PAYLOAD_KEY
 from jentic_one.shared.jobs.protocols import (
     ActorAuthority,
@@ -334,7 +338,7 @@ async def test_queued_3xx_body_not_persisted_with_query_credential(
     assert result.content_type is None
 
 
-_COOKIE_ENCRYPTION = EncryptionService(
+_COOKIE_ENCRYPTION = LocalEncryptionService(
     EncryptionConfig.model_validate(
         {
             "active_id": "v1",
@@ -342,6 +346,14 @@ _COOKIE_ENCRYPTION = EncryptionService(
         }
     )
 )
+
+_COOKIE_EXEC_ID = "exec_cookie"
+
+
+async def _seal_cookie(cookie: str) -> str:
+    return await _COOKIE_ENCRYPTION.encrypt(
+        cookie, context=cookie_context(execution_id=_COOKIE_EXEC_ID)
+    )
 
 
 @pytest.mark.asyncio
@@ -369,10 +381,11 @@ async def test_handler_appends_cookie_creds_to_the_captured_inbound_cookie() -> 
         "job-cookie",
         SessionScope(_FakeSession()),
         payload=_payload(
-            **{INBOUND_COOKIE_PAYLOAD_KEY: _COOKIE_ENCRYPTION.encrypt("sid=agent; theme=dark")}
+            **{INBOUND_COOKIE_PAYLOAD_KEY: await _seal_cookie("sid=agent; theme=dark")}
         ),
         created_by="usr_test",
         actor_type="user",
+        job_execution_id=_COOKIE_EXEC_ID,
     )
 
     req = executor.last_request
@@ -393,9 +406,10 @@ async def test_handler_without_injector_still_sends_the_scoped_cookie() -> None:
     await handler.execute(
         "job-cookie-noinj",
         SessionScope(_FakeSession()),
-        payload=_payload(**{INBOUND_COOKIE_PAYLOAD_KEY: _COOKIE_ENCRYPTION.encrypt("sid=agent")}),
+        payload=_payload(**{INBOUND_COOKIE_PAYLOAD_KEY: await _seal_cookie("sid=agent")}),
         created_by="usr_test",
         actor_type="user",
+        job_execution_id=_COOKIE_EXEC_ID,
     )
 
     req = executor.last_request
@@ -444,9 +458,10 @@ async def test_handler_runs_upstream_in_the_callers_cookie_scope() -> None:
     await handler.execute(
         "job-cookie-scope",
         SessionScope(_FakeSession()),
-        payload=_payload(**{INBOUND_COOKIE_PAYLOAD_KEY: _COOKIE_ENCRYPTION.encrypt("sid=caller")}),
+        payload=_payload(**{INBOUND_COOKIE_PAYLOAD_KEY: await _seal_cookie("sid=caller")}),
         created_by="usr_test",
         actor_type="user",
+        job_execution_id=_COOKIE_EXEC_ID,
     )
 
     req = executor.last_request
@@ -479,9 +494,10 @@ async def test_handler_strips_a_cookie_tracked_for_another_actor() -> None:
     await handler.execute(
         "job-cookie-other",
         SessionScope(_FakeSession()),
-        payload=_payload(**{INBOUND_COOKIE_PAYLOAD_KEY: _COOKIE_ENCRYPTION.encrypt("sid=other")}),
+        payload=_payload(**{INBOUND_COOKIE_PAYLOAD_KEY: await _seal_cookie("sid=other")}),
         created_by="usr_test",
         actor_type="user",
+        job_execution_id=_COOKIE_EXEC_ID,
     )
 
     req = executor.last_request
@@ -500,9 +516,7 @@ async def test_handler_without_a_keyset_fails_closed_on_captured_cookie() -> Non
         result = await handler.execute(
             "job-cookie-nokey",
             SessionScope(_FakeSession()),
-            payload=_payload(
-                **{INBOUND_COOKIE_PAYLOAD_KEY: _COOKIE_ENCRYPTION.encrypt("sid=agent")}
-            ),
+            payload=_payload(**{INBOUND_COOKIE_PAYLOAD_KEY: await _seal_cookie("sid=agent")}),
             created_by="usr_test",
             actor_type="user",
         )
@@ -522,7 +536,7 @@ async def test_handler_without_a_keyset_fails_closed_on_captured_cookie() -> Non
 async def test_handler_with_a_different_key_fails_closed_on_captured_cookie() -> None:
     """A cookie encrypted under a key the worker no longer holds fails closed
     without dispatching the request upstream without its cookies."""
-    worker_encryption = EncryptionService(
+    worker_encryption = LocalEncryptionService(
         EncryptionConfig.model_validate(
             {
                 "active_id": "v2",
@@ -539,11 +553,10 @@ async def test_handler_with_a_different_key_fails_closed_on_captured_cookie() ->
         result = await handler.execute(
             "job-cookie-wrongkey",
             SessionScope(_FakeSession()),
-            payload=_payload(
-                **{INBOUND_COOKIE_PAYLOAD_KEY: _COOKIE_ENCRYPTION.encrypt("sid=agent")}
-            ),
+            payload=_payload(**{INBOUND_COOKIE_PAYLOAD_KEY: await _seal_cookie("sid=agent")}),
             created_by="usr_test",
             actor_type="user",
+            job_execution_id=_COOKIE_EXEC_ID,
         )
 
     assert result.body["status"] == "failed"
@@ -1604,3 +1617,128 @@ async def test_handler_audit_failure_before_dispatch_propagates(error: Exception
         )
 
     assert executor.called is False
+
+
+class _RecordingDecrypt:
+    """Records the context of every decrypt; delegates to the local service."""
+
+    def __init__(self) -> None:
+        self.contexts: list[EncryptionContext] = []
+
+    async def decrypt(self, blob: str, *, context: EncryptionContext) -> str:
+        self.contexts.append(context)
+        return await _COOKIE_ENCRYPTION.decrypt(blob, context=context)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("job_execution_id", "expected"),
+    [
+        ("exec_row", cookie_context(execution_id="exec_row")),
+        (None, cookie_context(execution_id=None, job_id="job-ctx")),
+    ],
+    ids=["execution-id", "job-id-fallback"],
+)
+async def test_handler_decrypts_the_cookie_under_the_job_row_context(
+    job_execution_id: str | None, expected: EncryptionContext
+) -> None:
+    """The cookie context uses the job row's execution id, else the job id."""
+    record_upstream_set_cookie(
+        "https://api.example.com/v1/things", "sid=agent; Path=/", actor_id="usr_test"
+    )
+    executor = _RecordingExecutor(
+        UpstreamExecResult(status_code=200, body=b"", content_type=None, duration_ms=1)
+    )
+    encryption = _RecordingDecrypt()
+    handler = ExecutionHandler(executor=executor, encryption=encryption)  # type: ignore[arg-type]
+
+    await handler.execute(
+        "job-ctx",
+        SessionScope(_FakeSession()),
+        payload=_payload(
+            execution_id="exec_payload",
+            **{
+                INBOUND_COOKIE_PAYLOAD_KEY: await _COOKIE_ENCRYPTION.encrypt(
+                    "sid=agent", context=expected
+                )
+            },
+        ),
+        created_by="usr_test",
+        actor_type="user",
+        job_execution_id=job_execution_id,
+    )
+
+    assert encryption.contexts == [expected]
+    assert executor.last_request is not None
+    assert executor.last_request.headers == {"Cookie": "sid=agent"}
+
+
+class _SlowInjector(_FakeInjector):
+    """Injection that outlasts the pre-dispatch budget (a slow token refresh, say)."""
+
+    def __init__(self, injection: InjectedAuth, delay_s: float) -> None:
+        super().__init__(injection)
+        self._delay_s = delay_s
+        self.calls = 0
+
+    async def inject(self, **kwargs: Any) -> InjectedAuth:
+        self.calls += 1
+        await asyncio.sleep(self._delay_s)
+        return await super().inject(**kwargs)
+
+
+class _SlowAuthorizer(_FakeAuthorizer):
+    async def authorize(self, request: QueuedExecutionRequest) -> QueuedExecutionVerdict:
+        await asyncio.sleep(0.1)
+        return await super().authorize(request)
+
+
+async def test_deadline_spent_during_injection_abandons_the_dispatch() -> None:
+    """Expiry after injection sends nothing and is reported as an abandoned dispatch."""
+    upstream = UpstreamExecResult(status_code=200, body=b"{}", content_type=None, duration_ms=1)
+    executor = _RecordingExecutor(upstream)
+    injector = _SlowInjector(InjectedAuth(headers={}, query_params={}, cookies={}), delay_s=0.1)
+    handler = ExecutionHandler(
+        executor=executor,
+        credential_injector=injector,
+        execution_authorizer=_FakeAuthorizer(),
+        actor_status=_FakeActorStatus(),
+        pre_dispatch_deadline_s=0.05,
+    )
+
+    with pytest.raises(DispatchAbandonedError):
+        await handler.execute(
+            "job-slow-inject",
+            SessionScope(_FakeSession()),
+            payload=_payload(),
+            created_by="usr_test",
+            actor_type="user",
+        )
+
+    assert injector.calls == 1
+    assert executor.last_request is None
+
+
+async def test_deadline_spent_before_injection_fails_retryably_without_injecting() -> None:
+    upstream = UpstreamExecResult(status_code=200, body=b"{}", content_type=None, duration_ms=1)
+    executor = _RecordingExecutor(upstream)
+    injector = _SlowInjector(InjectedAuth(headers={}, query_params={}, cookies={}), delay_s=0)
+    handler = ExecutionHandler(
+        executor=executor,
+        credential_injector=injector,
+        execution_authorizer=_SlowAuthorizer(),
+        actor_status=_FakeActorStatus(),
+        pre_dispatch_deadline_s=0.05,
+    )
+
+    with pytest.raises(RequestDeadlineExpiredError):
+        await handler.execute(
+            "job-slow-auth",
+            SessionScope(_FakeSession()),
+            payload=_payload(),
+            created_by="usr_test",
+            actor_type="user",
+        )
+
+    assert injector.calls == 0
+    assert executor.last_request is None

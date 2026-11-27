@@ -104,6 +104,10 @@ def _outcome(
     )
 
 
+async def _fake_encrypt(_value: str, **_kwargs: Any) -> str:
+    return "ciphertext"
+
+
 def _header(items: list[tuple[str, str]], name: str) -> str:
     values = [value for key, value in items if key.lower() == name.lower()]
     assert len(values) == 1
@@ -529,8 +533,8 @@ async def test_broker_held_response_omits_upstream_status_marker(
 
     monkeypatch.setattr(execute_mod, "file_hold", fake_file_hold)
     ctx = SimpleNamespace(
-        has_encryption_keyset=True,
-        encryption=SimpleNamespace(encrypt=lambda _value: "ciphertext"),
+        encryption_enabled=True,
+        encryption=SimpleNamespace(encrypt=_fake_encrypt),
         admin_db=SimpleNamespace(transaction=transaction),
         config=SimpleNamespace(
             held_executions=SimpleNamespace(ttl_seconds=60, max_pending_per_agent=10),

@@ -32,6 +32,11 @@ from jentic_one.shared.config import (
     EgressConfig,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    credential_client_secret_context,
+    oauth_access_token_context,
+    oauth_refresh_token_context,
+)
 from jentic_one.shared.db.session import DatabaseSession
 from jentic_one.shared.models import StoredCredentialType
 from jentic_one.shared.schemas import APIReference
@@ -141,14 +146,20 @@ async def _seed_expired_credential(ctx: Context) -> ResolvedCredential:
                 id=_CRED_ID,
                 token_url="https://idp.example.com/token",
                 client_id="client-lock-pool",
-                encrypted_client_secret=ctx.encryption.encrypt("client-secret"),
+                encrypted_client_secret=await ctx.encryption.encrypt(
+                    "client-secret", context=credential_client_secret_context(_CRED_ID)
+                ),
             )
         )
         session.add(
             OAuthToken(
                 credential_id=_CRED_ID,
-                encrypted_access_token=ctx.encryption.encrypt("at-0"),
-                encrypted_refresh_token=ctx.encryption.encrypt("rt-0"),
+                encrypted_access_token=await ctx.encryption.encrypt(
+                    "at-0", context=oauth_access_token_context(_CRED_ID)
+                ),
+                encrypted_refresh_token=await ctx.encryption.encrypt(
+                    "rt-0", context=oauth_refresh_token_context(_CRED_ID)
+                ),
                 expires_at=datetime.now(UTC) - timedelta(minutes=5),
             )
         )

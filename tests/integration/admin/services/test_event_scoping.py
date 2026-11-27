@@ -46,6 +46,12 @@ from jentic_one.control.services.credentials.service import (
 )
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    credential_secret_context,
+    oauth_access_token_context,
+    oauth_refresh_token_context,
+)
 from jentic_one.shared.models import ActorStatus, ActorType, InviteState, StoredCredentialType
 from jentic_one.shared.models.events import EventType
 
@@ -509,7 +515,9 @@ async def cross_owner(integration_context: Context) -> AsyncGenerator[_CrossOwne
             CustomerAPIKey(
                 id=f"key-{_CRED_OK}",
                 credential_id=_CRED_OK,
-                encrypted_key=ctx.encryption.encrypt("sk-evtscope"),
+                encrypted_key=await ctx.encryption.encrypt(
+                    "sk-evtscope", context=credential_secret_context(_CRED_OK, FIELD_API_KEY)
+                ),
                 location="header",
                 field_name="X-Api-Key",
             )
@@ -527,8 +535,12 @@ async def cross_owner(integration_context: Context) -> AsyncGenerator[_CrossOwne
             OAuthToken(
                 id=f"oat-{_CRED_OAUTH}",
                 credential_id=_CRED_OAUTH,
-                encrypted_access_token=ctx.encryption.encrypt("access"),
-                encrypted_refresh_token=ctx.encryption.encrypt("refresh"),
+                encrypted_access_token=await ctx.encryption.encrypt(
+                    "access", context=oauth_access_token_context(_CRED_OAUTH)
+                ),
+                encrypted_refresh_token=await ctx.encryption.encrypt(
+                    "refresh", context=oauth_refresh_token_context(_CRED_OAUTH)
+                ),
                 expires_at=datetime.now(UTC) - timedelta(hours=1),
             )
         )

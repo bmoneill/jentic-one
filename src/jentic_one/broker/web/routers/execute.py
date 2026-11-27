@@ -42,11 +42,18 @@ from jentic_one.broker.core.directives import (
     request_override_not_allowed_directive,
     switch_toolkit_directive,
 )
+from jentic_one.broker.core.encryption_errors import (
+    encryption_access_denied_error,
+    encryption_unavailable_error,
+    map_predispatch_error,
+)
 from jentic_one.broker.core.errors import (
     ApprovalHoldUnavailableError,
     ApprovalPendingLimitError,
     AsyncCookieEncryptionUnavailableError,
     BrokerError,
+    CredentialEncryptionAccessDeniedError,
+    CredentialEncryptionUnavailableError,
     IdempotencyConflictError,
     IdempotencyInProgressError,
     PayloadTooLargeError,
@@ -151,6 +158,19 @@ from jentic_one.shared.broker.protocols import (
 )
 from jentic_one.shared.config import UpstreamClientConfig
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import cookie_context, held_payload_context
+from jentic_one.shared.crypto.errors import (
+    EncryptionAccessDeniedError,
+    EncryptionBackendError,
+    EncryptionUnavailableError,
+)
+from jentic_one.shared.crypto.service import backend_name
+from jentic_one.shared.deadline import (
+    RequestDeadlineExpiredError,
+    bind_request_deadline,
+    ensure_not_expired,
+    within_encryption_deadline,
+)
 from jentic_one.shared.discovery.errors import DiscoveryError, OperationNotFoundError
 from jentic_one.shared.events import (
     emit_event_best_effort,
@@ -193,6 +213,7 @@ from jentic_one.shared.url_validation import validate_upstream_url_async
 from jentic_one.shared.web.background_tasks import get_background_tasks
 from jentic_one.shared.web.deps import get_ctx
 from jentic_one.shared.web.errors import (
+    encryption_backend_error_handler,
     request_validation_error_handler,
     state_backend_capacity_error_handler,
     unhandled_exception_handler,
@@ -253,6 +274,7 @@ def _unmapped_failure_recorder(
 _FIXED_STATUS_BY_HANDLER: dict[object, int] = {
     handle_validation: 422,
     request_validation_error_handler: 422,
+    encryption_backend_error_handler: 503,
     state_backend_capacity_error_handler: 503,
     handle_database_unavailable: 503,
     unhandled_exception_handler: 500,
@@ -617,6 +639,41 @@ async def _handle(
     runner: UpstreamRunner,
     idempotency: SharedStateIdempotencyStore | None,
 ) -> Response:
+    """Bind the request deadline, then run the web-edge adapter — see module docstring.
+
+    An encryption backend failure or an expired deadline that escapes a more specific
+    mapping is turned into its broker problem here, so every pre-dispatch path answers
+    with the same status, type and agent directive.
+    """
+    deadline_s = ctx.config.broker.resilience.request_deadline_s
+    with bind_request_deadline(deadline_s):
+        try:
+            return await _handle_within_deadline(
+                request,
+                method,
+                ctx,
+                identity,
+                credential_deriver,
+                agent_rule_evaluator,
+                runner,
+                idempotency,
+            )
+        except (EncryptionBackendError, RequestDeadlineExpiredError) as exc:
+            raise map_predispatch_error(
+                exc, deadline_s=deadline_s, instance=request.url.path
+            ) from None
+
+
+async def _handle_within_deadline(
+    request: Request,
+    method: str,
+    ctx: Context,
+    identity: Identity,
+    credential_deriver: CredentialDeriverProtocol,
+    agent_rule_evaluator: AgentRuleEvaluatorProtocol,
+    runner: UpstreamRunner,
+    idempotency: SharedStateIdempotencyStore | None,
+) -> Response:
     """Thin web-edge adapter — see module docstring."""
     if request.headers.get("upgrade"):
         raise UpgradeNotSupportedError(
@@ -886,6 +943,11 @@ async def _handle(
         reset_current_cookie_scope(cookie_scope_token)
 
 
+def _ensure_predispatch_budget(ctx: Context) -> None:
+    """Refuse to dispatch once the request deadline has passed (nothing has been sent)."""
+    ensure_not_expired()
+
+
 async def _execute_buffered(
     request: Request,
     ctx_req: ExecuteRequestContext,
@@ -933,6 +995,9 @@ async def _execute_buffered(
     if injection.server_variables or ctx_req.server_variable_defaults:
         await _check_egress(ctx_req.upstream_url, ctx)
 
+    # The request deadline is the cutoff for everything before dispatch. The upstream
+    # call then gets the runner's own full budget, so slow credentials cannot shrink it.
+    _ensure_predispatch_budget(ctx)
     broker = _resolve_broker(request, runner)
     return await run_execution(
         ctx_req,
@@ -1011,6 +1076,7 @@ async def _handle_streaming(
     if injection.server_variables or ctx_req.server_variable_defaults:
         await _check_egress(ctx_req.upstream_url, ctx)
 
+    _ensure_predispatch_budget(ctx)
     execution_id = mint_execution_id()
     started_at = datetime.now(UTC)
     runner_request = RunnerRequest(
@@ -1287,10 +1353,11 @@ def _async_job_payload(
     return payload
 
 
-def _captured_cookie(
+async def _captured_cookie(
     request: Request,
     ctx: Context,
     *,
+    execution_id: str,
     upstream_url: str | None = None,
     server_variables_unresolved: bool = False,
     scope_key: str | None = None,
@@ -1302,11 +1369,14 @@ def _captured_cookie(
     encryption fails, the request is refused (503) rather than queued without
     the caller's cookies. When the target URL is already resolved, foreign or
     unscoped cookie pairs are filtered at the web edge before encryption.
+
+    ``execution_id`` must be the id persisted on the job row: the worker reads
+    the cookie back under that id.
     """
     cookie = _inbound_cookie(request)
     if cookie is None:
         return None
-    if not ctx.has_encryption_keyset or getattr(ctx, "encryption", None) is None:
+    if not ctx.encryption_enabled:
         logger.error("async_execution_cookie_not_kept", reason="no_encryption_keyset")
         raise AsyncCookieEncryptionUnavailableError(
             "This call carries a Cookie header, but the deployment has no credentials "
@@ -1320,7 +1390,15 @@ def _captured_cookie(
         if cookie is None:
             return None
     try:
-        return ctx.encryption.encrypt(cookie)
+        return await _encrypt_within_deadline(ctx, cookie, execution_id=execution_id)
+    except EncryptionUnavailableError as exc:
+        logger.error("async_execution_cookie_not_kept", reason="encryption_unavailable")
+        raise _cookie_encryption_unavailable(request, exc) from None
+    except EncryptionAccessDeniedError as exc:
+        logger.error("async_execution_cookie_not_kept", reason="encryption_access_denied")
+        raise _cookie_encryption_access_denied(request, exc) from None
+    except RequestDeadlineExpiredError:
+        raise
     except Exception as exc:
         logger.error("async_execution_cookie_not_kept", reason="encryption_failed")
         raise AsyncCookieEncryptionUnavailableError(
@@ -1329,6 +1407,43 @@ def _captured_cookie(
             instance=request.url.path,
             pre_send=True,
         ) from exc
+
+
+async def _encrypt_within_deadline(ctx: Context, cookie: str, *, execution_id: str) -> str:
+    """Encrypt *cookie*, giving up when the request's deadline has no time left."""
+    return await within_encryption_deadline(
+        ctx.encryption.encrypt(cookie, context=cookie_context(execution_id=execution_id)),
+        backend=backend_name(ctx.encryption),
+    )
+
+
+def _cookie_encryption_unavailable(
+    request: Request, exc: EncryptionUnavailableError
+) -> CredentialEncryptionUnavailableError:
+    """The retryable 503 for a temporary outage while keeping a queued call's cookie."""
+    return encryption_unavailable_error(
+        exc,
+        detail=(
+            f"The encryption backend '{exc.backend}' is temporarily unavailable, so this "
+            "call's Cookie header could not be kept at rest and the call was not queued"
+        ),
+        instance=request.url.path,
+    )
+
+
+def _cookie_encryption_access_denied(
+    request: Request, exc: EncryptionAccessDeniedError
+) -> CredentialEncryptionAccessDeniedError:
+    """The 503 for a denied key request while keeping a queued call's cookie."""
+    return encryption_access_denied_error(
+        exc,
+        detail=(
+            f"The encryption backend '{exc.backend}' refused to protect this call's Cookie "
+            "header, so the call was not queued"
+        ),
+        parameters={"backend": exc.backend},
+        instance=request.url.path,
+    )
 
 
 def _review_url(ctx: Context, request: Request, approval_id: str) -> str:
@@ -1366,7 +1481,7 @@ async def _handle_hold(
     inbound ``Cookie`` and semantic headers so only semantically identical
     requests join an existing hold.
     """
-    if not ctx.has_encryption_keyset:
+    if not ctx.encryption_enabled:
         raise ApprovalHoldUnavailableError(
             "This call needs human approval, but the deployment has no credentials "
             "encryption keyset to keep the held request in (credentials.encryption)",
@@ -1389,9 +1504,10 @@ async def _handle_hold(
         allowed_credential_ids=authorization.allowed_credential_ids,
         body=body,
         headers=replay_headers(request.headers),
-        inbound_cookie_enc=_captured_cookie(
+        inbound_cookie_enc=await _captured_cookie(
             request,
             ctx,
+            execution_id=execution_id,
             upstream_url=ctx_req.upstream_url,
             server_variables_unresolved=ctx_req.server_variables_unresolved,
             scope_key=cookie_scope,
@@ -1401,8 +1517,15 @@ async def _handle_hold(
         auth_method=auth_method,
     )
     payload: dict[str, object] = {
-        ENCRYPTED_PAYLOAD_KEY: ctx.encryption.encrypt(json.dumps(raw_payload))
+        ENCRYPTED_PAYLOAD_KEY: await within_encryption_deadline(
+            ctx.encryption.encrypt(
+                json.dumps(raw_payload), context=held_payload_context(execution_id=execution_id)
+            ),
+            backend=backend_name(ctx.encryption),
+        )
     }
+    # Nothing is filed for a request whose caller has already timed out.
+    ensure_not_expired()
 
     async with stage(ServerTimingStage.PERSIST), ctx.admin_db.transaction() as session:
         try:
@@ -1538,9 +1661,10 @@ async def _handle_async(
         allowed_credential_ids=allowed_credential_ids,
         body=body,
         headers=replay_headers(request.headers),
-        inbound_cookie_enc=_captured_cookie(
+        inbound_cookie_enc=await _captured_cookie(
             request,
             ctx,
+            execution_id=execution_id,
             upstream_url=ctx_req.upstream_url,
             server_variables_unresolved=ctx_req.server_variables_unresolved,
             scope_key=cookie_scope,

@@ -82,9 +82,7 @@ async def test_credential_name_none_when_header_absent(monkeypatch: pytest.Monke
     )
     monkeypatch.setattr(
         "jentic_one.broker.services.credentials.orchestrator.inject_auth",
-        lambda resolved, *, ctx, access_token=None: MagicMock(
-            headers={}, query_params={}, cookies={}
-        ),
+        AsyncMock(return_value=MagicMock(headers={}, query_params={}, cookies={})),
     )
     audit = AsyncMock(return_value="evt_1")
     monkeypatch.setattr(
@@ -142,9 +140,7 @@ async def test_credential_name_forwarded_when_header_present(
     )
     monkeypatch.setattr(
         "jentic_one.broker.services.credentials.orchestrator.inject_auth",
-        lambda resolved, *, ctx, access_token=None: MagicMock(
-            headers={}, query_params={}, cookies={}
-        ),
+        AsyncMock(return_value=MagicMock(headers={}, query_params={}, cookies={})),
     )
     audit = AsyncMock(return_value="evt_1")
     monkeypatch.setattr(

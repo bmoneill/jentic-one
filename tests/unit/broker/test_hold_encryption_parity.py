@@ -1,7 +1,7 @@
 """Held executions and the credentials keyset: broker and worker share one predicate.
 
 A held call's payload is encrypted with the credentials keyset, so the broker
-files a hold only when ``Context.has_encryption_keyset`` is true — the same
+files a hold only when ``Context.encryption_enabled`` is true — the same
 condition the worker's execution handler is given its ``EncryptionService``
 under. Without a keyset the broker refuses the call with a typed 503 before
 anything is stored, and a worker that meets an encrypted payload it cannot
@@ -15,6 +15,7 @@ from typing import Any
 
 import pytest
 import yaml
+from pydantic import SecretStr
 from starlette.requests import Request
 
 from jentic_one.broker.core.errors import ApprovalHoldUnavailableError
@@ -25,12 +26,17 @@ from jentic_one.broker.services.execution.authorization import ExecutionAuthoriz
 from jentic_one.broker.web.routers.execute import _handle_hold
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.broker.protocols import RuleVerdict
-from jentic_one.shared.config import load_config
+from jentic_one.shared.config import EncryptionConfig, EncryptionKey, load_config
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import LocalEncryptionService
+from jentic_one.shared.crypto.contexts import held_payload_context
+from jentic_one.shared.crypto.service import EncryptionService
+from jentic_one.shared.deadline import RequestDeadlineExpiredError
 from jentic_one.shared.jobs.execution_handler import ExecutionHandler
 from jentic_one.shared.jobs.hold import ENCRYPTED_PAYLOAD_KEY
 from jentic_one.shared.jobs.protocols import UpstreamExecRequest, UpstreamExecResult
 from jentic_one.shared.models import ActorType, CredentialType, StoredCredentialType
+from jentic_one.testing.encryption import FakeBackendBehaviour, FakeEncryptionBackend
 from tests.unit.fake_tx import SessionScope
 
 _KEY = "vF7VWq2NJLr+uGDBFy9boIXfSJJIzqnTSF7iDDMKR5U="  # pragma: allowlist secret
@@ -51,8 +57,8 @@ def _ctx(tmp_path: Path, base: dict[str, Any], *, keyset: bool) -> Context:
 def test_the_keyset_predicate_follows_the_config(
     tmp_path: Path, sample_config_dict: dict[str, Any]
 ) -> None:
-    assert _ctx(tmp_path, sample_config_dict, keyset=True).has_encryption_keyset is True
-    assert _ctx(tmp_path, sample_config_dict, keyset=False).has_encryption_keyset is False
+    assert _ctx(tmp_path, sample_config_dict, keyset=True).encryption_enabled is True
+    assert _ctx(tmp_path, sample_config_dict, keyset=False).encryption_enabled is False
 
 
 def _request() -> Request:
@@ -121,3 +127,31 @@ async def test_a_worker_without_a_keyset_fails_a_held_job_instead_of_running_it(
     assert scope.opened == 0
     assert result.body["status"] == "failed"
     assert result.body["problem"]["type"] == "approval_hold_unavailable"
+
+
+async def test_a_slow_backend_cannot_hold_a_queued_job_past_its_pre_dispatch_budget() -> None:
+    """The worker starts a fresh budget at pickup: a slow keyset fails the job pre-send."""
+    entry = EncryptionConfig(
+        active_id="v1", entries=[EncryptionKey(id="v1", material=SecretStr(_KEY))]
+    )
+    inner = LocalEncryptionService(entry)
+    blob = await inner.encrypt(
+        '{"method": "GET"}', context=held_payload_context(execution_id=None, job_id="job_slow")
+    )
+    behaviour = FakeBackendBehaviour(latency_s=2.0)
+    slow: EncryptionService = FakeEncryptionBackend(inner, behaviour)
+
+    executor = _NeverCalledExecutor()
+    handler = ExecutionHandler(executor=executor, encryption=slow, pre_dispatch_deadline_s=0.05)
+
+    with pytest.raises(RequestDeadlineExpiredError):
+        await handler.execute(
+            "job_slow",
+            SessionScope(object()),
+            payload={ENCRYPTED_PAYLOAD_KEY: blob},
+            created_by="agnt_1",
+            actor_type="agent",
+            job_execution_id=None,
+        )
+
+    assert executor.called is False  # zero upstream calls; the job is retried, not failed

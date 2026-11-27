@@ -40,6 +40,11 @@ from jentic_one.shared.config import (
     EgressConfig,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    credential_client_secret_context,
+    oauth_access_token_context,
+    oauth_refresh_token_context,
+)
 from jentic_one.shared.db.session import DatabaseSession
 from jentic_one.shared.models import StoredCredentialType
 from jentic_one.shared.models.credentials import CredentialType
@@ -148,14 +153,20 @@ async def _seed(
                 id=_CRED_ID,
                 token_url="https://idp.example.com/token",
                 client_id="client-1432",
-                encrypted_client_secret=ctx.encryption.encrypt("client-secret"),
+                encrypted_client_secret=await ctx.encryption.encrypt(
+                    "client-secret", context=credential_client_secret_context(_CRED_ID)
+                ),
             )
         )
         session.add(
             OAuthToken(
                 credential_id=_CRED_ID,
-                encrypted_access_token=ctx.encryption.encrypt(access),
-                encrypted_refresh_token=ctx.encryption.encrypt(refresh),
+                encrypted_access_token=await ctx.encryption.encrypt(
+                    access, context=oauth_access_token_context(_CRED_ID)
+                ),
+                encrypted_refresh_token=await ctx.encryption.encrypt(
+                    refresh, context=oauth_refresh_token_context(_CRED_ID)
+                ),
                 expires_at=datetime.now(UTC) - timedelta(minutes=5),
             )
         )
@@ -167,8 +178,12 @@ async def _rotate(ctx: Context, *, access: str, refresh: str, expires_at: dateti
         await OAuthTokenRepository.update_tokens(
             session,
             _CRED_ID,
-            encrypted_access_token=ctx.encryption.encrypt(access),
-            encrypted_refresh_token=ctx.encryption.encrypt(refresh),
+            encrypted_access_token=await ctx.encryption.encrypt(
+                access, context=oauth_access_token_context(_CRED_ID)
+            ),
+            encrypted_refresh_token=await ctx.encryption.encrypt(
+                refresh, context=oauth_refresh_token_context(_CRED_ID)
+            ),
             expires_at=expires_at,
         )
 
@@ -181,7 +196,9 @@ async def _stored_refresh_token(ctx: Context) -> str:
     async with ctx.control_db.session() as session:
         row = await OAuthTokenRepository.get_by_credential(session, _CRED_ID)
     assert row is not None and row.encrypted_refresh_token is not None
-    return ctx.encryption.decrypt(row.encrypted_refresh_token)
+    return await ctx.encryption.decrypt(
+        row.encrypted_refresh_token, context=oauth_refresh_token_context(_CRED_ID)
+    )
 
 
 async def test_refresh_expired_token_rotates_and_persists(

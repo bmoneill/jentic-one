@@ -434,10 +434,12 @@ def _marker_validator(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def _run_handle(request: Request) -> Response:
+    ctx = MagicMock()  # never reached: both paths stop at the miss
+    ctx.config.broker.resilience.request_deadline_s = 0.0  # no request deadline to bind
     return await _handle(
         request,
         "GET",
-        MagicMock(),  # ctx — never reached: both paths stop at the miss
+        ctx,
         _identity(),
         MagicMock(),  # credential_deriver
         MagicMock(),  # agent_rule_evaluator

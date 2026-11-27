@@ -28,7 +28,11 @@ from jentic_one.shared.db.errors import DatabaseCommitOutcomeUnknownError
 from jentic_one.shared.db.session import DatabaseSession
 from jentic_one.shared.events import emit_event
 from jentic_one.shared.executions import ExecutionRecordInput, record_execution
-from jentic_one.shared.jobs.handlers import JobHandlerRegistry, JobResultPayload
+from jentic_one.shared.jobs.handlers import (
+    DispatchAbandonedError,
+    JobHandlerRegistry,
+    JobResultPayload,
+)
 from jentic_one.shared.jobs.worker import _COMPLETION_MAX_RETRIES, WorkerLoop
 from jentic_one.shared.models import ExecutionStatus, JobKind, JobStatus
 from jentic_one.shared.models.events import EventSeverity, EventType
@@ -676,3 +680,111 @@ async def test_completion_failure_stamps_dispatched_before_backoff_sleep(
     job = await _get(admin_db, job_id)
     assert job.status == JobStatus.FAILED
     assert handler.calls == 1
+
+
+class _AbandonAfterInjectionHandler:
+    """Records credential.accessed (as injection does), then abandons before sending."""
+
+    def __init__(self, db: DatabaseSession, trace_id: str) -> None:
+        self._db = db
+        self._trace_id = trace_id
+        self.calls = 0
+
+    async def execute(
+        self,
+        job_id: str,
+        session: Any,
+        *,
+        payload: dict[str, Any] | None = None,
+        created_by: str | None = None,
+        actor_type: str | None = None,
+    ) -> JobResultPayload:
+        self.calls += 1
+        async with self._db.transaction() as tx:
+            await emit_event(
+                tx,
+                type=EventType.CREDENTIAL_ACCESSED,
+                severity=EventSeverity.INFO,
+                summary="Credential accessed",
+                created_by="agnt_test",
+                trace_id=self._trace_id,
+                actor_id="agnt_test",
+                actor_type="agent",
+            )
+        raise DispatchAbandonedError("request deadline expired; nothing was sent")
+
+
+async def test_an_abandoned_dispatch_is_requeued_and_re_run(
+    admin_db: DatabaseSession, clean_jobs: None
+) -> None:
+    """Credential access from a claim that abandoned before sending is not dispatch evidence."""
+    trace_id = "c" * 32
+    job_id = await _insert_job(
+        admin_db,
+        execution_id="exec_abandoned",
+        payload={"execution_id": "exec_abandoned", "trace_id": trace_id},
+        created_by="agnt_test",
+        actor_type="agent",
+    )
+    abandoning = _AbandonAfterInjectionHandler(admin_db, trace_id)
+    worker = WorkerLoop(admin_db, _registry(abandoning), worker_config=WorkerConfig())
+    assert await worker._tick() is True
+
+    job = await _get(admin_db, job_id)
+    assert job.status == JobStatus.QUEUED
+    assert abandoning.calls == 1
+    assert isinstance(job.payload, dict) and "_abandoned_before_send_at" in job.payload
+
+    async with admin_db.transaction() as session:
+        await session.execute(
+            update(Job).where(Job.id == job_id).values(visible_at=datetime.now(UTC))
+        )
+    retry = _CountingOkHandler()
+    worker = WorkerLoop(admin_db, _registry(retry), worker_config=WorkerConfig())
+    assert await worker._tick() is True
+
+    job = await _get(admin_db, job_id)
+    assert retry.calls == 1
+    assert job.status == JobStatus.COMPLETED
+
+
+async def test_dispatch_evidence_after_an_abandoned_claim_still_refuses_reclaim(
+    admin_db: DatabaseSession, clean_jobs: None
+) -> None:
+    """A later claim that did send (credential access after the stamp) is never re-run."""
+    trace_id = "d" * 32
+    abandoned_at = datetime.now(UTC) - timedelta(seconds=5)
+    job_id = await _insert_job(
+        admin_db,
+        status=JobStatus.RUNNING,
+        visible_at=datetime.now(UTC) - timedelta(seconds=1),
+        attempts=1,
+        execution_id="exec_later_send",
+        payload={
+            "execution_id": "exec_later_send",
+            "trace_id": trace_id,
+            "_abandoned_before_send_at": abandoned_at.isoformat(),
+        },
+        created_by="agnt_test",
+        actor_type="agent",
+    )
+    async with admin_db.transaction() as session:
+        await emit_event(
+            session,
+            type=EventType.CREDENTIAL_ACCESSED,
+            severity=EventSeverity.INFO,
+            summary="Credential accessed",
+            created_by="agnt_test",
+            trace_id=trace_id,
+            actor_id="agnt_test",
+            actor_type="agent",
+        )
+
+    handler = _CountingOkHandler()
+    worker = WorkerLoop(admin_db, _registry(handler), worker_config=WorkerConfig())
+    assert await worker._tick() is True
+
+    job = await _get(admin_db, job_id)
+    assert job.status == JobStatus.FAILED
+    assert job.error == "execution interrupted after dispatch; not re-run"
+    assert handler.calls == 0

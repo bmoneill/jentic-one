@@ -52,6 +52,10 @@ from jentic_one.shared.broker.protocols import (
 )
 from jentic_one.shared.config import AppConfig
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    credential_secret_context,
+)
 from jentic_one.shared.models import ActorType, ExecutionStatus, StoredCredentialType
 from jentic_one.shared.resilience import CircuitBreaker
 from jentic_one.shared.schemas import APIReference, OperationInfo
@@ -174,7 +178,10 @@ async def seeded_credential(ctx: Context) -> AsyncGenerator[None, None]:
             CustomerAPIKey(
                 id=f"key-{_CRED_ID}",
                 credential_id=_CRED_ID,
-                encrypted_key=ctx.encryption.encrypt("sk-timing"),  # pragma: allowlist secret
+                encrypted_key=await ctx.encryption.encrypt(
+                    "sk-timing",  # pragma: allowlist secret
+                    context=credential_secret_context(_CRED_ID, FIELD_API_KEY),
+                ),
                 location="header",
                 field_name="X-Api-Key",
             )

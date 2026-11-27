@@ -58,6 +58,7 @@ from jentic_one.admin.services.schemas.jobs import JobResultView
 from jentic_one.shared.agent_text import clean_agent_text
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import held_payload_context
 from jentic_one.shared.events import emit_event_best_effort
 from jentic_one.shared.jobs.hold import (
     ENCRYPTED_PAYLOAD_KEY,
@@ -150,7 +151,7 @@ class HeldExecutionService:
             execution_status=_execution_status(str(job.status) if job is not None else None),
             agent_name=agent.name if agent is not None else None,
             agent_owner_id=agent.owner_id if agent is not None else None,
-            request=self._held_request(job.payload if job is not None else None),
+            request=await self._held_request(job),
         )
 
     async def get_result(self, approval_id: str, *, identity: Identity) -> JobResultView:
@@ -186,19 +187,28 @@ class HeldExecutionService:
                 raise HeldExecutionResultExpiredError(approval_id)
         return JobResultService.to_view(result)
 
-    def _held_request(self, payload: dict[str, Any] | None) -> HeldRequestView | None:
+    async def _held_request(self, job: Job | None) -> HeldRequestView | None:
         """Decrypt the held job payload into what the reviewer is approving.
 
         Upstream credentials are injected only when the job runs, so the
-        payload never carries them.
+        payload never carries them. The payload is bound to the job's
+        ``execution_id``, or its id when that column is NULL.
         """
-        if not payload:
+        payload: dict[str, Any] | None = job.payload if job is not None else None
+        if job is None or not payload:
             return None
         if ENCRYPTED_PAYLOAD_KEY in payload:
-            if not self._ctx.has_encryption_keyset:
+            if not self._ctx.encryption_enabled:
                 logger.warning("held_payload_unreadable_without_keyset")
                 return None
-            payload = json.loads(self._ctx.encryption.decrypt(str(payload[ENCRYPTED_PAYLOAD_KEY])))
+            context = held_payload_context(
+                execution_id=job.execution_id or None, job_id=str(job.id)
+            )
+            payload = json.loads(
+                await self._ctx.encryption.decrypt(
+                    str(payload[ENCRYPTED_PAYLOAD_KEY]), context=context
+                )
+            )
         raw = base64.b64decode(payload["body_b64"]) if payload.get("body_b64") else b""
         truncated = len(raw) > _MAX_REVIEW_BODY_BYTES
         body = raw[:_MAX_REVIEW_BODY_BYTES].decode("utf-8", errors="replace") if raw else None

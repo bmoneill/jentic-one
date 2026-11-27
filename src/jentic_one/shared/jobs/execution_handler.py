@@ -36,19 +36,30 @@ injected at worker startup.
 from __future__ import annotations
 
 import base64
+import enum
 import json
 from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import structlog
+from sqlalchemy import select
 
+from jentic_one.admin.core.schema.jobs import Job
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.permission_catalog import BROKER_EXECUTE_PERMISSION
 from jentic_one.shared.config import SecurityConfig
-from jentic_one.shared.crypto.encryption import DecryptionError, EncryptionService
+from jentic_one.shared.crypto import DecryptionError, EncryptionService
+from jentic_one.shared.crypto.contexts import cookie_context, held_payload_context
+from jentic_one.shared.crypto.service import backend_name
 from jentic_one.shared.db.connectivity import involves_database_error, redact_sql
 from jentic_one.shared.db.protocols import TransactionalDatabase
+from jentic_one.shared.deadline import (
+    bind_request_deadline,
+    deadline_expired,
+    ensure_not_expired,
+    within_encryption_deadline,
+)
 from jentic_one.shared.events import (
     MAX_EVENT_SUMMARY_FIELD_LEN,
     emit_event,
@@ -66,7 +77,7 @@ from jentic_one.shared.http.injection import (
     reset_current_cookie_scope,
     set_current_cookie_scope,
 )
-from jentic_one.shared.jobs.handlers import JobResultPayload
+from jentic_one.shared.jobs.handlers import DispatchAbandonedError, JobResultPayload
 from jentic_one.shared.jobs.hold import ENCRYPTED_PAYLOAD_KEY, INBOUND_COOKIE_PAYLOAD_KEY
 from jentic_one.shared.jobs.operation_payload import operation_from_job_payload
 from jentic_one.shared.jobs.protocols import (
@@ -173,6 +184,13 @@ _NO_INJECTION = InjectedAuth(headers={}, query_params={}, cookies={})
 _PreInjectionDenial = tuple[str, Callable[[str], dict[str, object]]]
 
 
+class _Unset(enum.Enum):
+    TOKEN = enum.auto()
+
+
+_UNSET: Final = _Unset.TOKEN
+
+
 class ExecutionHandler:
     """Handles ``kind=execution`` jobs by running the shared execution pipeline."""
 
@@ -181,6 +199,7 @@ class ExecutionHandler:
         *,
         executor: UpstreamExecutor,
         upstream_timeout_s: float = 30.0,
+        pre_dispatch_deadline_s: float = 0.0,
         credential_injector: CredentialInjector | None = None,
         egress: Any | None = None,
         security_config: SecurityConfig | None = None,
@@ -206,19 +225,28 @@ class ExecutionHandler:
         self._authorizer = execution_authorizer
         self._actor_status = actor_status
         self._timeout = upstream_timeout_s
+        # Budget for everything before the upstream send (opening the held payload and
+        # cookie, resolving and refreshing credentials). It starts when the worker picks
+        # the job up; the HTTP request's deadline died with that request. 0 means none.
+        self._pre_dispatch_deadline_s = pre_dispatch_deadline_s
         self._credential_injector = credential_injector
         self._egress = egress
         self._security_config = security_config or SecurityConfig()
         self._encryption = encryption
         self._repeated_failure_counter = repeated_failure_counter
 
-    def _inbound_cookie(self, payload: dict[str, Any], *, job_id: str) -> tuple[str | None, bool]:
+    async def _inbound_cookie(
+        self, payload: dict[str, Any], *, job_id: str, execution_id: str | None
+    ) -> tuple[str | None, bool]:
         """The caller's ``Cookie`` the broker captured at enqueue, decrypted.
 
         Returns ``(cookie, ok)``. A payload without a cookie yields ``(None, True)``.
         When a cookie ciphertext is present and cannot be decrypted (no keyset,
         a rotated-out key id, or a corrupt blob), logs the error and returns
         ``(None, False)`` so the caller fails the job closed without dispatching.
+        A transient backend failure propagates, so the job is retried.
+        ``execution_id`` is the job row's ``execution_id`` (``None`` falls back
+        to the job id), matching the writer's context.
         """
         blob = payload.get(INBOUND_COOKIE_PAYLOAD_KEY)
         if not isinstance(blob, str) or not blob:
@@ -230,13 +258,28 @@ class ExecutionHandler:
                 reason="no_encryption_keyset",
             )
             return None, False
+        context = cookie_context(execution_id=execution_id, job_id=job_id)
         try:
-            return self._encryption.decrypt(blob), True
+            return (
+                await within_encryption_deadline(
+                    self._encryption.decrypt(blob, context=context),
+                    backend=backend_name(self._encryption),
+                ),
+                True,
+            )
         except DecryptionError:
             logger.error(
                 "queued_execution_cookie_undecryptable", job_id=job_id, reason="decryption_failed"
             )
             return None, False
+
+    @staticmethod
+    async def _job_execution_id(db: TransactionalDatabase, job_id: str) -> str | None:
+        """Read ``jobs.execution_id`` for *job_id*; ``None`` when the column is NULL."""
+        async with db.transaction() as session:
+            result = await session.execute(select(Job.execution_id).where(Job.id == job_id))
+            value = result.scalar_one_or_none()
+        return str(value) if value else None
 
     async def execute(
         self,
@@ -246,6 +289,28 @@ class ExecutionHandler:
         payload: dict[str, Any] | None = None,
         created_by: str | None = None,
         actor_type: str | None = None,
+        job_execution_id: str | _Unset | None = _UNSET,
+    ) -> JobResultPayload:
+        """Run one execution job under a fresh pre-dispatch deadline (see :meth:`_execute`)."""
+        with bind_request_deadline(self._pre_dispatch_deadline_s):
+            return await self._execute(
+                job_id,
+                db,
+                payload=payload,
+                created_by=created_by,
+                actor_type=actor_type,
+                job_execution_id=job_execution_id,
+            )
+
+    async def _execute(
+        self,
+        job_id: str,
+        db: TransactionalDatabase,
+        *,
+        payload: dict[str, Any] | None = None,
+        created_by: str | None = None,
+        actor_type: str | None = None,
+        job_execution_id: str | _Unset | None = _UNSET,
     ) -> JobResultPayload:
         """Resolve creds, dispatch through the pipeline, persist the result.
 
@@ -259,11 +324,26 @@ class ExecutionHandler:
         write is best-effort, and either failure is logged and counted.
         Failures before dispatch (credential resolution and its audit write)
         propagate, so the job is retried with nothing sent.
+
+        ``job_execution_id`` is the job row's ``execution_id`` column, the id
+        the broker bound its held payload and cookie ciphertexts to (``None``
+        means the column is NULL and the job id is used). When omitted it is
+        read from ``db``, only if the payload carries a ciphertext.
         """
         if not created_by or not actor_type:
             raise ValueError("created_by and actor_type are required for execution jobs")
         if payload is None:
             payload = {}
+
+        encrypted_execution_id: str | None = None
+        if self._encryption is not None and (
+            ENCRYPTED_PAYLOAD_KEY in payload or payload.get(INBOUND_COOKIE_PAYLOAD_KEY)
+        ):
+            encrypted_execution_id = (
+                await self._job_execution_id(db, job_id)
+                if isinstance(job_execution_id, _Unset)
+                else job_execution_id
+            )
 
         # Held-job payloads are encrypted at rest with the platform key; decrypt
         # before reading any field.
@@ -282,7 +362,15 @@ class ExecutionHandler:
                 )
             try:
                 decrypted = json.loads(
-                    self._encryption.decrypt(str(payload[ENCRYPTED_PAYLOAD_KEY]))
+                    await within_encryption_deadline(
+                        self._encryption.decrypt(
+                            str(payload[ENCRYPTED_PAYLOAD_KEY]),
+                            context=held_payload_context(
+                                execution_id=encrypted_execution_id, job_id=job_id
+                            ),
+                        ),
+                        backend=backend_name(self._encryption),
+                    )
                 )
                 if not isinstance(decrypted, dict):
                     raise ValueError("held payload is not a JSON object")
@@ -338,7 +426,9 @@ class ExecutionHandler:
 
         upstream_url = await validate_upstream_url_async(upstream_url, self._egress)
 
-        inbound_cookie, cookie_ok = self._inbound_cookie(payload, job_id=job_id)
+        inbound_cookie, cookie_ok = await self._inbound_cookie(
+            payload, job_id=job_id, execution_id=encrypted_execution_id
+        )
         if not cookie_ok:
             return await self._deny(
                 db,
@@ -426,6 +516,9 @@ class ExecutionHandler:
         headers: dict[str, str] = _str_map(payload.get("headers")) or {}
         injection = _NO_INJECTION
         injected_defaults: dict[str, str] | None = None
+        # Fail plainly (and retryably) before injection when the budget is already
+        # gone; after injection, expiry is reported as an abandoned dispatch below.
+        ensure_not_expired()
         if self._credential_injector is not None and api_vendor:
             if identity is None:
                 # Unreachable while the constructor's wiring invariant holds
@@ -469,6 +562,15 @@ class ExecutionHandler:
             signing = injection.signing
             if injection.server_variables or injected_defaults:
                 upstream_url = await validate_upstream_url_async(upstream_url, self._egress)
+
+            # Last stop before the send. Credentials are already injected (and
+            # ``credential.accessed`` recorded), so expiry here is reported as an
+            # abandoned dispatch: the worker records it, and a re-claim does not
+            # mistake this run's credential access for a send.
+            if deadline_expired():
+                raise DispatchAbandonedError(
+                    "request deadline expired after credentials were prepared; nothing was sent"
+                )
 
             status = ExecutionStatus.COMPLETED
             http_status: int | None = None

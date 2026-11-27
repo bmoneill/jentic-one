@@ -9,6 +9,15 @@ import pytest
 
 from jentic_one.broker.core.injection import InjectionResult, inject_auth
 from jentic_one.broker.services.credentials.resolver import ResolvedCredential
+from jentic_one.shared.crypto import EncryptionContext
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    FIELD_PASSWORD,
+    FIELD_SECRET_ACCESS_KEY,
+    FIELD_SESSION_TOKEN,
+    FIELD_TOKEN_VALUE,
+    credential_secret_context,
+)
 from jentic_one.shared.models.credentials import (
     CredentialLocation,
     CredentialType,
@@ -16,13 +25,25 @@ from jentic_one.shared.models.credentials import (
 )
 
 
+class _FakeEncryption:
+    """Decrypts from a map and records the context of every call."""
+
+    def __init__(self, decrypt_map: dict[str, str]) -> None:
+        self._map = decrypt_map
+        self.contexts: list[EncryptionContext] = []
+
+    async def decrypt(self, blob: str, *, context: EncryptionContext) -> str:
+        self.contexts.append(context)
+        return self._map[blob]
+
+
 def _make_ctx(decrypt_map: dict[str, str]) -> MagicMock:
     ctx = MagicMock()
-    ctx.encryption.decrypt.side_effect = lambda blob: decrypt_map[blob]
+    ctx.encryption = _FakeEncryption(decrypt_map)
     return ctx
 
 
-def test_inject_bearer_token() -> None:
+async def test_inject_bearer_token() -> None:
     resolved = ResolvedCredential(
         credential_id="cred_1",
         name="cred1",
@@ -33,13 +54,14 @@ def test_inject_bearer_token() -> None:
     )
     ctx = _make_ctx({"enc:my-token": "sk-live-secret"})
 
-    result = inject_auth(resolved, ctx=ctx)
+    result = await inject_auth(resolved, ctx=ctx)
 
     assert result.headers == {"Authorization": "Bearer sk-live-secret"}
     assert result.query_params == {}
+    assert ctx.encryption.contexts == [credential_secret_context("cred_1", FIELD_TOKEN_VALUE)]
 
 
-def test_inject_api_key_header() -> None:
+async def test_inject_api_key_header() -> None:
     resolved = ResolvedCredential(
         credential_id="cred_2",
         name="cred2",
@@ -52,13 +74,14 @@ def test_inject_api_key_header() -> None:
     )
     ctx = _make_ctx({"enc:api-key": "key-12345"})
 
-    result = inject_auth(resolved, ctx=ctx)
+    result = await inject_auth(resolved, ctx=ctx)
 
     assert result.headers == {"X-Api-Key": "key-12345"}
     assert result.query_params == {}
+    assert ctx.encryption.contexts == [credential_secret_context("cred_2", FIELD_API_KEY)]
 
 
-def test_inject_api_key_query() -> None:
+async def test_inject_api_key_query() -> None:
     resolved = ResolvedCredential(
         credential_id="cred_3",
         name="cred3",
@@ -71,14 +94,14 @@ def test_inject_api_key_query() -> None:
     )
     ctx = _make_ctx({"enc:qkey": "query-secret"})
 
-    result = inject_auth(resolved, ctx=ctx)
+    result = await inject_auth(resolved, ctx=ctx)
 
     assert result.headers == {}
     assert result.query_params == {"api_key": "query-secret"}
     assert result.cookies == {}
 
 
-def test_inject_api_key_cookie() -> None:
+async def test_inject_api_key_cookie() -> None:
     resolved = ResolvedCredential(
         credential_id="cred_3c",
         name="cred3c",
@@ -91,14 +114,14 @@ def test_inject_api_key_cookie() -> None:
     )
     ctx = _make_ctx({"enc:ckey": "cookie-secret"})
 
-    result = inject_auth(resolved, ctx=ctx)
+    result = await inject_auth(resolved, ctx=ctx)
 
     assert result.headers == {}
     assert result.query_params == {}
     assert result.cookies == {"session": "cookie-secret"}
 
 
-def test_inject_basic_auth() -> None:
+async def test_inject_basic_auth() -> None:
     resolved = ResolvedCredential(
         credential_id="cred_4",
         name="cred4",
@@ -110,14 +133,15 @@ def test_inject_basic_auth() -> None:
     )
     ctx = _make_ctx({"enc:pw": "secret123"})
 
-    result = inject_auth(resolved, ctx=ctx)
+    result = await inject_auth(resolved, ctx=ctx)
 
     expected = base64.b64encode(b"admin:secret123").decode()
     assert result.headers == {"Authorization": f"Basic {expected}"}
     assert result.query_params == {}
+    assert ctx.encryption.contexts == [credential_secret_context("cred_4", FIELD_PASSWORD)]
 
 
-def test_inject_oauth2_with_access_token() -> None:
+async def test_inject_oauth2_with_access_token() -> None:
     resolved = ResolvedCredential(
         credential_id="cred_5",
         name="cred5",
@@ -128,13 +152,13 @@ def test_inject_oauth2_with_access_token() -> None:
     )
     ctx = MagicMock()
 
-    result = inject_auth(resolved, ctx=ctx, access_token="access-token-live")
+    result = await inject_auth(resolved, ctx=ctx, access_token="access-token-live")
 
     assert result.headers == {"Authorization": "Bearer access-token-live"}
     assert result.query_params == {}
 
 
-def test_inject_oauth2_raises_without_access_token() -> None:
+async def test_inject_oauth2_raises_without_access_token() -> None:
     resolved = ResolvedCredential(
         credential_id="cred_6",
         name="cred6",
@@ -146,7 +170,7 @@ def test_inject_oauth2_raises_without_access_token() -> None:
     ctx = MagicMock()
 
     with pytest.raises(ValueError, match="pre-validated access_token"):
-        inject_auth(resolved, ctx=ctx, access_token=None)
+        await inject_auth(resolved, ctx=ctx, access_token=None)
 
 
 def test_injection_result_dataclass() -> None:
@@ -156,7 +180,7 @@ def test_injection_result_dataclass() -> None:
     assert result.cookies == {"e": "f"}
 
 
-def test_inject_no_auth_injects_nothing() -> None:
+async def test_inject_no_auth_injects_nothing() -> None:
     # A no-auth credential carries no secret — injection is a no-op (#603).
     resolved = ResolvedCredential(
         credential_id="cred_noauth",
@@ -165,13 +189,13 @@ def test_inject_no_auth_injects_nothing() -> None:
         stored_type=StoredCredentialType.NO_AUTH,
         provider="static",
     )
-    result = inject_auth(resolved, ctx=MagicMock())
+    result = await inject_auth(resolved, ctx=MagicMock())
     assert result.headers == {}
     assert result.query_params == {}
     assert result.cookies == {}
 
 
-def test_inject_sigv4_returns_signing_material_not_headers() -> None:
+async def test_inject_sigv4_returns_signing_material_not_headers() -> None:
     # SigV4 can't produce a static header — it hands decrypted material forward
     # for the signing runner to sign the final request (#776).
     resolved = ResolvedCredential(
@@ -188,7 +212,7 @@ def test_inject_sigv4_returns_signing_material_not_headers() -> None:
     )
     ctx = _make_ctx({"enc:secret": "decrypted-secret"})
 
-    result = inject_auth(resolved, ctx=ctx)
+    result = await inject_auth(resolved, ctx=ctx)
 
     assert result.headers == {}
     assert result.query_params == {}
@@ -201,7 +225,7 @@ def test_inject_sigv4_returns_signing_material_not_headers() -> None:
     assert result.signing.session_token is None
 
 
-def test_inject_sigv4_decrypts_session_token() -> None:
+async def test_inject_sigv4_decrypts_session_token() -> None:
     resolved = ResolvedCredential(
         credential_id="cred_sigv4_st",
         name="sigv4st",
@@ -216,13 +240,17 @@ def test_inject_sigv4_decrypts_session_token() -> None:
     )
     ctx = _make_ctx({"enc:secret": "s", "enc:token": "session-tok"})
 
-    result = inject_auth(resolved, ctx=ctx)
+    result = await inject_auth(resolved, ctx=ctx)
 
     assert result.signing is not None
     assert result.signing.session_token == "session-tok"
+    assert ctx.encryption.contexts == [
+        credential_secret_context("cred_sigv4_st", FIELD_SESSION_TOKEN),
+        credential_secret_context("cred_sigv4_st", FIELD_SECRET_ACCESS_KEY),
+    ]
 
 
-def test_inject_sigv4_missing_secret_raises() -> None:
+async def test_inject_sigv4_missing_secret_raises() -> None:
     resolved = ResolvedCredential(
         credential_id="cred_sigv4_bad",
         name="sigv4bad",
@@ -235,13 +263,13 @@ def test_inject_sigv4_missing_secret_raises() -> None:
         aws_service="aoss",
     )
     with pytest.raises(ValueError, match="missing encrypted_secret_access_key"):
-        inject_auth(resolved, ctx=MagicMock())
+        await inject_auth(resolved, ctx=MagicMock())
 
 
-def test_inject_unknown_wire_type_raises() -> None:
+async def test_inject_unknown_wire_type_raises() -> None:
     # An unknown wire type must fail loudly, not silently inject nothing — a quiet
     # empty injection would send an unauthenticated request (B4 / Ren review).
     resolved = MagicMock()
     resolved.wire_type = "totally-unknown-type"
     with pytest.raises(ValueError, match="Unsupported credential wire_type"):
-        inject_auth(resolved, ctx=MagicMock())
+        await inject_auth(resolved, ctx=MagicMock())

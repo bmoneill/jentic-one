@@ -58,6 +58,9 @@ from jentic_one.mcp.tools import CallEnv, handle_explain_held_call
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.config import WorkerConfig
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    held_payload_context,
+)
 from jentic_one.shared.jobs.handlers import JobHandlerRegistry
 from jentic_one.shared.jobs.hold import (
     ENCRYPTED_PAYLOAD_KEY,
@@ -160,6 +163,10 @@ async def _hold(
         "upstream_url": f"https://api.example.com{path}?expand=all",
         "body_b64": base64.b64encode(body).decode(),
     }
+    execution_id = f"exec_{path.strip('/').replace('/', '_')}_{len(body)}"
+    encrypted = await ctx.encryption.encrypt(
+        json.dumps(payload), context=held_payload_context(execution_id=execution_id)
+    )
     async with ctx.admin_db.transaction() as session:
         return await file_hold(
             session,
@@ -175,8 +182,8 @@ async def _hold(
             path=path,
             body=body,
             trace_id=None,
-            execution_id=f"exec_{path.strip('/').replace('/', '_')}_{len(body)}",
-            payload={ENCRYPTED_PAYLOAD_KEY: ctx.encryption.encrypt(json.dumps(payload))},
+            execution_id=execution_id,
+            payload={ENCRYPTED_PAYLOAD_KEY: encrypted},
             ttl_seconds=ttl_seconds,
             max_pending=max_pending,
         )

@@ -31,13 +31,15 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Any, Final
+from typing import Any
 
 import mcp.types as mcp_types
 import structlog
 from mcp_types.version import MODERN_PROTOCOL_VERSIONS
 
 from jentic_one.mcp.envelopes import SCHEMA_VERSION
+from jentic_one.shared.crypto import EncryptionBackendError, EncryptionService
+from jentic_one.shared.crypto.contexts import mcp_request_state_context
 
 logger = structlog.get_logger(__name__)
 
@@ -56,7 +58,6 @@ FRONT_DOOR_URL_ELICITATION = "url_elicitation"
 FRONT_DOOR_HELD_RESULT = "held_result"
 
 _STATE_VERSION = 1
-_REQUEST_STATE_AAD: Final = b"jentic/mcp/request-state/v1"
 
 
 def client_capabilities(meta: Any) -> dict[str, Any]:
@@ -85,7 +86,9 @@ def front_door(caps: dict[str, Any], protocol_version: str | None = None) -> str
     return FRONT_DOOR_HELD_RESULT
 
 
-def seal_request_state(encryption: Any, *, envelope: dict[str, Any], agent_id: str) -> str:
+async def seal_request_state(
+    encryption: EncryptionService, *, envelope: dict[str, Any], agent_id: str
+) -> str:
     """AEAD-seal the retry state: the held execution, the agent, an expiry."""
     state = {
         "v": _STATE_VERSION,
@@ -96,13 +99,24 @@ def seal_request_state(encryption: Any, *, envelope: dict[str, Any], agent_id: s
         "links": envelope.get("_links", {}),
         "exp": int(time.time() + SHORT_WAIT_SECONDS * 20),
     }
-    return str(encryption.encrypt(json.dumps(state, separators=(",", ":")), aad=_REQUEST_STATE_AAD))
+    return await encryption.encrypt(
+        json.dumps(state, separators=(",", ":")), context=mcp_request_state_context(agent_id)
+    )
 
 
-def open_request_state(encryption: Any, token: str, *, agent_id: str) -> dict[str, Any] | None:
-    """The sealed retry state, or None when it is forged, expired, or another agent's."""
+async def open_request_state(
+    encryption: EncryptionService, token: str, *, agent_id: str
+) -> dict[str, Any] | None:
+    """The sealed retry state, or None when it is forged, expired, or another agent's.
+
+    A backend failure propagates: the token may be valid.
+    """
     try:
-        state = json.loads(encryption.decrypt(token, aad=_REQUEST_STATE_AAD))
+        state = json.loads(
+            await encryption.decrypt(token, context=mcp_request_state_context(agent_id))
+        )
+    except EncryptionBackendError:
+        raise
     except Exception:
         return None
     if not isinstance(state, dict) or state.get("v") != _STATE_VERSION:

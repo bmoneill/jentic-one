@@ -28,6 +28,10 @@ from collections.abc import Awaitable, Callable
 DEFAULT_MAX_IN_FLIGHT = 10_000
 
 
+class SingleFlightWaitTimeoutError(TimeoutError):
+    """A waiter's ``wait_budget`` ran out before the shared lookup finished."""
+
+
 class SingleFlight[V]:
     """Coalesces concurrent lookups for the same key into one execution.
 
@@ -48,7 +52,13 @@ class SingleFlight[V]:
         """Number of lookups currently running (for tests/metrics)."""
         return len(self._in_flight)
 
-    async def do(self, key: str, fn: Callable[[], Awaitable[V]]) -> V:
+    async def do(
+        self,
+        key: str,
+        fn: Callable[[], Awaitable[V]],
+        *,
+        wait_budget: Callable[[], float | None] | None = None,
+    ) -> V:
         """Run ``fn`` for ``key`` once, sharing the result with concurrent callers.
 
         The first caller for an idle ``key`` runs ``fn``; concurrent callers await
@@ -60,12 +70,21 @@ class SingleFlight[V]:
         touching the shared lookup. A cancelled leader aborts the lookup it was
         running (it lives in the leader's task), and the surviving waiters elect
         a new leader that re-runs ``fn`` once for all of them.
+
+        ``wait_budget`` limits how long a *waiter* will wait: it returns the seconds
+        left (or ``None`` for no limit) each time the waiter starts waiting. A waiter
+        that runs out raises :class:`SingleFlightWaitTimeoutError` (a ``TimeoutError``) and
+        leaves the shared lookup alone.
+        It never limits the leader, which owns the lookup.
         """
         while (existing := self._in_flight.get(key)) is not None:
             # ``asyncio.wait`` never cancels what it waits on, so cancelling this
             # waiter (client disconnect, request timeout) raises here without
             # cancelling the Future every other caller shares.
-            await asyncio.wait((existing,))
+            budget = wait_budget() if wait_budget is not None else None
+            await asyncio.wait((existing,), timeout=budget)
+            if not existing.done():
+                raise SingleFlightWaitTimeoutError("timed out waiting for the shared lookup")
             if not existing.cancelled():
                 return existing.result()
             # The leader was cancelled mid-lookup and its entry is already gone:

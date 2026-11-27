@@ -208,6 +208,29 @@ class CredentialUndecryptableError(BrokerError):
     """
 
 
+class CredentialEncryptionUnavailableError(BrokerError):
+    """The encryption backend failed transiently while reading a credential (503).
+
+    The stored value is intact; the backend was throttled, timed out or
+    unreachable. The request was not dispatched, so the agent may retry,
+    after ``Retry-After`` when the backend gave a delay.
+    """
+
+    default_type = "encryption_unavailable"
+
+
+class CredentialEncryptionAccessDeniedError(BrokerError):
+    """The encryption backend refused to decrypt a credential (503).
+
+    The stored value is intact, but the backend denied access (permission
+    removed, key disabled or scheduled for deletion). Only an operator can
+    restore access, so the ``prompt_human`` directive tells the agent not to
+    retry.
+    """
+
+    default_type = "encryption_access_denied"
+
+
 class CredentialNeedsReconnectError(BrokerError):
     """The stored OAuth2 grant was revoked/disconnected — it must be reconnected (424).
 

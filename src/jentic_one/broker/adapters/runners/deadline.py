@@ -63,7 +63,12 @@ def _deadline_directive(deadline_s: float) -> AgentDirective:
 
 
 class DeadlineRunner:
-    """Wraps an ``UpstreamRunner`` with an overall wall-clock deadline budget."""
+    """Wraps an ``UpstreamRunner`` with an overall wall-clock deadline budget.
+
+    The budget starts when the call is dispatched. Time spent before that (resolving
+    credentials) is bounded separately by the request deadline cutoff, so it never
+    shortens what a healthy upstream is given.
+    """
 
     def __init__(self, inner: UpstreamRunner, *, deadline_s: float) -> None:
         self._inner = inner

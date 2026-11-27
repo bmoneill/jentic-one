@@ -19,9 +19,12 @@ import pytest
 import structlog
 
 from jentic_one.broker.core.errors import (
+    CredentialEncryptionAccessDeniedError,
+    CredentialEncryptionUnavailableError,
     CredentialNeedsReconnectError,
     CredentialUndecryptableError,
 )
+from jentic_one.broker.core.problem import status_for_broker_error
 from jentic_one.broker.services.credentials.errors import (
     RefreshInvalidGrantError,
     RefreshTransientError,
@@ -63,12 +66,27 @@ from jentic_one.control.services.integrations import device_authorization as df
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.config import AppConfig, DatabaseConfig, EncryptionConfig
 from jentic_one.shared.context import Context
-from jentic_one.shared.crypto import EncryptionService
+from jentic_one.shared.crypto import (
+    EncryptionAccessDeniedError,
+    EncryptionContext,
+    EncryptionUnavailableError,
+    LocalEncryptionService,
+)
+from jentic_one.shared.crypto.contexts import (
+    oauth_access_token_context,
+    oauth_refresh_token_context,
+)
 from jentic_one.shared.db.session import DatabaseSession
+from jentic_one.shared.deadline import (
+    EncryptionDeadlineError,
+    RequestDeadlineExpiredError,
+    bind_request_deadline,
+)
 from jentic_one.shared.http.idp_client import idp_request
 from jentic_one.shared.models import ActorType
 from jentic_one.shared.models.credentials import CredentialType, StoredCredentialType
 from jentic_one.shared.redaction import REDACTED, redact_event, redact_value
+from jentic_one.testing.encryption import FakeEncryptionBackend
 
 
 @contextmanager
@@ -143,11 +161,11 @@ class _DummyOAuth2Provider(OAuth2Provider):
         )
 
 
-def _encryption_service(key_b64: str = _KEY_B64, key_id: str = "k1") -> EncryptionService:
+def _encryption_service(key_b64: str = _KEY_B64, key_id: str = "k1") -> LocalEncryptionService:
     cfg = EncryptionConfig.model_validate(
         {"active_id": key_id, "entries": [{"id": key_id, "material": key_b64}]}
     )
-    return EncryptionService(cfg)
+    return LocalEncryptionService(cfg)
 
 
 @pytest.fixture()
@@ -200,11 +218,19 @@ async def _seed_credential_and_token(
     provider_account_ref: str | None = None,
     create_token_row: bool = True,
 ) -> ResolvedCredential:
-    encrypted_access = ctx.encryption.encrypt(access_token) if access_token is not None else None
+    encrypted_access = (
+        await ctx.encryption.encrypt(
+            access_token, context=oauth_access_token_context(credential_id)
+        )
+        if access_token is not None
+        else None
+    )
     if raw_encrypted_refresh_token is not None:
         encrypted_refresh: str | None = raw_encrypted_refresh_token
     elif refresh_token is not None:
-        encrypted_refresh = ctx.encryption.encrypt(refresh_token)
+        encrypted_refresh = await ctx.encryption.encrypt(
+            refresh_token, context=oauth_refresh_token_context(credential_id)
+        )
     else:
         encrypted_refresh = None
 
@@ -223,7 +249,9 @@ async def _seed_credential_and_token(
         )
         await session.flush()
         if create_token_row:
-            stored_access = encrypted_access or ctx.encryption.encrypt("placeholder")
+            stored_access = encrypted_access or await ctx.encryption.encrypt(
+                "placeholder", context=oauth_access_token_context(credential_id)
+            )
             session.add(
                 OAuthToken(
                     credential_id=credential_id,
@@ -305,9 +333,19 @@ async def test_expired_token_triggers_refresh_and_persists(sqlite_ctx: MagicMock
     assert token == "fresh-access-token"
     row = await _get_token_row(sqlite_ctx)
     assert row is not None
-    assert sqlite_ctx.encryption.decrypt(row.encrypted_access_token) == "fresh-access-token"
+    assert (
+        await sqlite_ctx.encryption.decrypt(
+            row.encrypted_access_token, context=oauth_access_token_context(_CRED_ID)
+        )
+        == "fresh-access-token"
+    )
     assert row.encrypted_refresh_token is not None
-    assert sqlite_ctx.encryption.decrypt(row.encrypted_refresh_token) == "new-refresh-token"
+    assert (
+        await sqlite_ctx.encryption.decrypt(
+            row.encrypted_refresh_token, context=oauth_refresh_token_context(_CRED_ID)
+        )
+        == "new-refresh-token"
+    )
     assert row.scope == "read:all"
 
 
@@ -482,7 +520,7 @@ async def test_missing_or_undecryptable_refresh_token_maps_to_reconnect(
     "raw_encrypted_refresh_token",
     [
         "not-valid-ciphertext",
-        _encryption_service(_OTHER_KEY_B64, key_id="unknown_key").encrypt("rt"),
+        None,
     ],
     ids=[
         "corrupted-ciphertext",
@@ -491,10 +529,14 @@ async def test_missing_or_undecryptable_refresh_token_maps_to_reconnect(
 )
 async def test_undecryptable_refresh_token_is_undecryptable_not_invalid_grant(
     sqlite_ctx: MagicMock,
-    raw_encrypted_refresh_token: str,
+    raw_encrypted_refresh_token: str | None,
 ) -> None:
     """An undecryptable stored refresh token raises RefreshUndecryptableError
     and maps to 424 credential_undecryptable with prompt_human in the orchestrator."""
+    if raw_encrypted_refresh_token is None:
+        raw_encrypted_refresh_token = await _encryption_service(
+            _OTHER_KEY_B64, key_id="unknown_key"
+        ).encrypt("rt", context=oauth_refresh_token_context(_CRED_ID))
     resolved = await _seed_credential_and_token(
         sqlite_ctx,
         access_token="expired-access",
@@ -647,8 +689,12 @@ async def test_double_check_skips_refresh_when_another_worker_refreshed(
         await OAuthTokenRepository.update_tokens(
             session,
             _CRED_ID,
-            encrypted_access_token=sqlite_ctx.encryption.encrypt("fresh-token"),
-            encrypted_refresh_token=sqlite_ctx.encryption.encrypt("rt-fresh"),
+            encrypted_access_token=await sqlite_ctx.encryption.encrypt(
+                "fresh-token", context=oauth_access_token_context(_CRED_ID)
+            ),
+            encrypted_refresh_token=await sqlite_ctx.encryption.encrypt(
+                "rt-fresh", context=oauth_refresh_token_context(_CRED_ID)
+            ),
             expires_at=datetime.now(UTC) + timedelta(hours=1),
         )
 
@@ -793,7 +839,12 @@ async def test_cancel_during_rotation_still_persists_rotated_refresh_token(
     row = await _get_token_row(sqlite_ctx)
     assert row is not None
     assert row.encrypted_refresh_token is not None
-    assert sqlite_ctx.encryption.decrypt(row.encrypted_refresh_token) == "rt-2"
+    assert (
+        await sqlite_ctx.encryption.decrypt(
+            row.encrypted_refresh_token, context=oauth_refresh_token_context(_CRED_ID)
+        )
+        == "rt-2"
+    )
 
     expired_again = datetime.now(UTC) - timedelta(minutes=1)
     async with sqlite_ctx.control_db.transaction() as session:
@@ -839,9 +890,19 @@ async def test_rotated_refresh_token_persisted_only_when_returned(
 
     row = await _get_token_row(sqlite_ctx)
     assert row is not None
-    assert sqlite_ctx.encryption.decrypt(row.encrypted_access_token) == "new-access"
+    assert (
+        await sqlite_ctx.encryption.decrypt(
+            row.encrypted_access_token, context=oauth_access_token_context(_CRED_ID)
+        )
+        == "new-access"
+    )
     assert row.encrypted_refresh_token is not None
-    assert sqlite_ctx.encryption.decrypt(row.encrypted_refresh_token) == "preserved-refresh-token"
+    assert (
+        await sqlite_ctx.encryption.decrypt(
+            row.encrypted_refresh_token, context=oauth_refresh_token_context(_CRED_ID)
+        )
+        == "preserved-refresh-token"
+    )
 
 
 @pytest.mark.parametrize(
@@ -1168,3 +1229,343 @@ async def test_post_token_drip_feed_is_transient_not_hang() -> None:
     assert time.monotonic() - start < 3.0
     assert exc_info.value.status == 0
     assert exc_info.value.body == "timeout"
+
+
+def _fake_backend(ctx: MagicMock) -> FakeEncryptionBackend:
+    """Swap the context's encryption for a fake backend over the same key."""
+    fake = FakeEncryptionBackend(_encryption_service())
+    ctx.encryption = fake
+    return fake
+
+
+@pytest.mark.asyncio
+async def test_refresh_prepares_the_write_before_the_vendor_call(sqlite_ctx: MagicMock) -> None:
+    """The write key is acquired before the refresh token is sent to the vendor."""
+    fake = _fake_backend(sqlite_ctx)
+    resolved = await _seed_credential_and_token(
+        sqlite_ctx,
+        refresh_token="rt-1",
+        expires_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    fake.behaviour.calls.clear()
+
+    async def _refresh(ctx: Context, *, token: OAuthTokenView) -> RefreshResult:
+        assert await token.decrypt() == "rt-1"
+        return RefreshResult(
+            access_token="new-access",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+            refresh_token="rt-2",
+        )
+
+    sqlite_ctx.providers.get.return_value.refresh = AsyncMock(side_effect=_refresh)
+
+    token = await TokenRefresher(sqlite_ctx).ensure_fresh(resolved=resolved, caller="test")
+
+    assert token == "new-access"
+    assert fake.behaviour.calls == ["prepare_write", "decrypt"]
+    row = await _get_token_row(sqlite_ctx)
+    assert row is not None and row.encrypted_refresh_token is not None
+    assert (
+        await fake.decrypt(
+            row.encrypted_refresh_token, context=oauth_refresh_token_context(_CRED_ID)
+        )
+        == "rt-2"
+    )
+
+
+@pytest.mark.asyncio
+async def test_refresh_never_calls_the_vendor_when_prepare_fails(sqlite_ctx: MagicMock) -> None:
+    """A backend outage while preparing the write leaves the grant untouched."""
+    fake = _fake_backend(sqlite_ctx)
+    resolved = await _seed_credential_and_token(
+        sqlite_ctx,
+        refresh_token="rt-1",
+        expires_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    fake.behaviour.fail_with = lambda: EncryptionUnavailableError("throttled", backend="fake")
+    provider_mock = sqlite_ctx.providers.get.return_value
+    provider_mock.refresh = AsyncMock()
+
+    with pytest.raises(EncryptionUnavailableError):
+        await TokenRefresher(sqlite_ctx).ensure_fresh(resolved=resolved, caller="test")
+
+    provider_mock.refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("retry_after_s", "expected_header"),
+    [(2.5, "3"), (None, None)],
+    ids=["with-retry-after", "without-retry-after"],
+)
+async def test_encryption_unavailable_maps_to_retryable_503(
+    sqlite_ctx: MagicMock, retry_after_s: float | None, expected_header: str | None
+) -> None:
+    fake = _fake_backend(sqlite_ctx)
+    resolved = await _seed_credential_and_token(
+        sqlite_ctx, expires_at=datetime.now(UTC) + timedelta(hours=1)
+    )
+    fake.behaviour.fail_with = lambda: EncryptionUnavailableError(
+        "throttled", backend="fake", retry_after_s=retry_after_s
+    )
+
+    with pytest.raises(CredentialEncryptionUnavailableError) as exc_info:
+        await CredentialService(sqlite_ctx).inject(
+            api_vendor="acme",
+            api_name="widgets",
+            api_version="v1",
+            identity=Identity(sub="agent_1", actor_type=ActorType.AGENT),
+            preresolved=resolved,
+        )
+
+    err = exc_info.value
+    assert status_for_broker_error(err) == 503
+    assert err.type == "encryption_unavailable"
+    assert err.headers.get("Retry-After") == expected_header
+    assert err.directive is not None
+    assert err.directive.strategy == "wait"
+    if expected_header is not None:
+        assert err.directive.parameters == {"retry_after_seconds": 3}
+    assert "old-access" not in err.detail
+    assert "k1:" not in err.detail
+
+
+@pytest.mark.asyncio
+async def test_encryption_access_denied_maps_to_prompt_human_503(
+    sqlite_ctx: MagicMock,
+) -> None:
+    fake = _fake_backend(sqlite_ctx)
+    resolved = await _seed_credential_and_token(
+        sqlite_ctx, expires_at=datetime.now(UTC) + timedelta(hours=1)
+    )
+    fake.behaviour.fail_with = lambda: EncryptionAccessDeniedError(
+        "key disabled", backend="fake", key_id="k1"
+    )
+    service = CredentialService(sqlite_ctx)
+    emitted: list[dict[str, Any]] = []
+
+    async def _record(**kwargs: Any) -> None:
+        emitted.append(kwargs)
+
+    with (
+        patch.object(service, "_emit_credential_failure", side_effect=_record),
+        pytest.raises(CredentialEncryptionAccessDeniedError) as exc_info,
+    ):
+        await service.inject(
+            api_vendor="acme",
+            api_name="widgets",
+            api_version="v1",
+            identity=Identity(sub="agent_1", actor_type=ActorType.AGENT),
+            preresolved=resolved,
+        )
+
+    err = exc_info.value
+    assert status_for_broker_error(err) == 503
+    assert err.type == "encryption_access_denied"
+    assert "Retry-After" not in err.headers
+    assert err.directive is not None
+    assert err.directive.strategy == "prompt_human"
+    assert len(emitted) == 1
+    assert emitted[0]["requires_action"] is True
+    assert emitted[0]["data"]["backend"] == "fake"
+    assert "k1" not in str(emitted[0])
+    assert "old-access" not in err.detail
+
+
+@pytest.mark.asyncio
+async def test_deadline_expiring_while_preparing_the_key_prevents_the_vendor_call(
+    sqlite_ctx: MagicMock,
+) -> None:
+    """A slow key backend cannot hold the request past its deadline or trigger a refresh."""
+    fake = _fake_backend(sqlite_ctx)
+    resolved = await _seed_credential_and_token(
+        sqlite_ctx,
+        refresh_token="rt-1",
+        expires_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    fake.behaviour.latency_s = 5.0  # key preparation hangs far past the budget
+    provider_mock = sqlite_ctx.providers.get.return_value
+    provider_mock.refresh = AsyncMock()
+
+    started = time.monotonic()
+    with bind_request_deadline(0.1), pytest.raises(RequestDeadlineExpiredError):
+        await TokenRefresher(sqlite_ctx).ensure_fresh(resolved=resolved, caller="test")
+
+    assert time.monotonic() - started < 2.0
+    provider_mock.refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_refresh_already_sent_to_the_vendor_still_seals_and_commits_after_deadline(
+    sqlite_ctx: MagicMock,
+) -> None:
+    """Past the point of no return the rotated grant is saved, whatever the request budget."""
+    fake = _fake_backend(sqlite_ctx)
+    resolved = await _seed_credential_and_token(
+        sqlite_ctx,
+        refresh_token="rt-1",
+        expires_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+
+    async def _slow_refresh(ctx: Context, *, token: OAuthTokenView) -> RefreshResult:
+        await asyncio.sleep(0.3)  # outlasts the 0.1s request deadline
+        return RefreshResult(
+            access_token="new-access",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+            refresh_token="rt-2",
+        )
+
+    sqlite_ctx.providers.get.return_value.refresh = AsyncMock(side_effect=_slow_refresh)
+
+    with bind_request_deadline(0.1):
+        token = await TokenRefresher(sqlite_ctx).ensure_fresh(resolved=resolved, caller="test")
+
+    assert token == "new-access"
+    row = await _get_token_row(sqlite_ctx)
+    assert row is not None and row.encrypted_refresh_token is not None
+    assert (
+        await fake.decrypt(
+            row.encrypted_refresh_token, context=oauth_refresh_token_context(_CRED_ID)
+        )
+        == "rt-2"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_slow_fresh_token_read_cannot_outlast_the_deadline(sqlite_ctx: MagicMock) -> None:
+    """Even the no-refresh fast path (decrypting a valid token) honours the request deadline."""
+    fake = _fake_backend(sqlite_ctx)
+    resolved = await _seed_credential_and_token(
+        sqlite_ctx, expires_at=datetime.now(UTC) + timedelta(hours=1)
+    )
+    fake.behaviour.latency_s = 0.05  # the backend read takes five times the 10 ms budget
+
+    started = time.monotonic()
+    with bind_request_deadline(0.01), pytest.raises(RequestDeadlineExpiredError):
+        await TokenRefresher(sqlite_ctx).ensure_fresh(resolved=resolved, caller="test")
+
+    assert time.monotonic() - started < 0.04
+
+
+@pytest.mark.asyncio
+async def test_a_short_lived_waiter_leaves_a_longer_refresh_running(sqlite_ctx: MagicMock) -> None:
+    """A caller joining an in-flight refresh stops waiting at its own deadline, not the leader's."""
+    resolved = await _seed_credential_and_token(
+        sqlite_ctx,
+        refresh_token="rt-1",
+        expires_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    release = asyncio.Event()
+    entered = asyncio.Event()
+
+    async def _slow_refresh(ctx: Context, *, token: OAuthTokenView) -> RefreshResult:
+        entered.set()
+        await release.wait()
+        return RefreshResult(
+            access_token="new-access",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+            refresh_token="rt-2",
+        )
+
+    provider_mock = sqlite_ctx.providers.get.return_value
+    provider_mock.refresh = AsyncMock(side_effect=_slow_refresh)
+    refresher = TokenRefresher(sqlite_ctx)
+
+    leader = asyncio.create_task(refresher.ensure_fresh(resolved=resolved, caller="leader"))
+    await asyncio.wait_for(entered.wait(), timeout=2)
+
+    async def _waiter() -> str:
+        with bind_request_deadline(0.05):
+            return await refresher.ensure_fresh(resolved=resolved, caller="waiter")
+
+    with pytest.raises(RequestDeadlineExpiredError):
+        await _waiter()
+    assert not leader.done()  # the leader was not disturbed
+
+    release.set()
+    assert await leader == "new-access"
+    assert provider_mock.refresh.await_count == 1  # one vendor send for both callers
+
+
+@pytest.mark.asyncio
+async def test_an_expired_deadline_sends_nothing_to_the_vendor(sqlite_ctx: MagicMock) -> None:
+    """When the budget is gone before the send, the refresh token never leaves the broker."""
+    resolved = await _seed_credential_and_token(
+        sqlite_ctx,
+        refresh_token="rt-1",
+        expires_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    provider_mock = sqlite_ctx.providers.get.return_value
+    provider_mock.refresh = AsyncMock()
+
+    with bind_request_deadline(0.000001), pytest.raises(RequestDeadlineExpiredError):
+        await TokenRefresher(sqlite_ctx).ensure_fresh(resolved=resolved, caller="test")
+
+    provider_mock.refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_waiter_takes_over_when_the_leader_runs_out_of_time(sqlite_ctx: MagicMock) -> None:
+    """A leader's own deadline is not shared: a waiter with time left refreshes instead."""
+    fake = _fake_backend(sqlite_ctx)
+    resolved = await _seed_credential_and_token(
+        sqlite_ctx,
+        refresh_token="rt-1",
+        expires_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    fake.behaviour.latency_s = 0.2  # key preparation outlasts the leader's budget only
+    provider_mock = sqlite_ctx.providers.get.return_value
+    provider_mock.refresh = AsyncMock(
+        return_value=RefreshResult(
+            access_token="new-access",
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
+            refresh_token="rt-2",
+        )
+    )
+    refresher = TokenRefresher(sqlite_ctx)
+
+    async def _call(budget_s: float, caller: str) -> str:
+        with bind_request_deadline(budget_s):
+            return await refresher.ensure_fresh(resolved=resolved, caller=caller)
+
+    leader = asyncio.create_task(_call(0.05, "leader"))
+    await asyncio.sleep(0.01)
+    waiter = asyncio.create_task(_call(5.0, "waiter"))
+
+    with pytest.raises(RequestDeadlineExpiredError):
+        await leader
+    assert await waiter == "new-access"
+    assert provider_mock.refresh.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_a_slow_refresh_token_read_reaches_no_provider_send(sqlite_ctx: MagicMock) -> None:
+    """The shared refresh-token read is bounded, whichever provider uses it."""
+    fake = _fake_backend(sqlite_ctx)
+    resolved = await _seed_credential_and_token(
+        sqlite_ctx,
+        refresh_token="rt-1",
+        expires_at=datetime.now(UTC) - timedelta(minutes=5),
+    )
+    sends = 0
+
+    async def _provider_refresh(ctx: Context, *, token: OAuthTokenView) -> RefreshResult:
+        nonlocal sends
+        await token.decrypt()  # a provider that does not bound the read itself
+        sends += 1
+        return RefreshResult(access_token="late", expires_at=None, refresh_token="rt-2")
+
+    provider_mock = sqlite_ctx.providers.get.return_value
+    provider_mock.refresh = AsyncMock(side_effect=_provider_refresh)
+
+    original_decrypt = fake.decrypt
+
+    async def _slow_decrypt(blob: str, *, context: EncryptionContext) -> str:
+        await asyncio.sleep(0.2)
+        return await original_decrypt(blob, context=context)
+
+    fake.decrypt = _slow_decrypt  # type: ignore[method-assign]
+
+    with bind_request_deadline(0.05), pytest.raises(EncryptionDeadlineError):
+        await TokenRefresher(sqlite_ctx).ensure_fresh(resolved=resolved, caller="test")
+    assert sends == 0

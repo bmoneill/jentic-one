@@ -66,6 +66,10 @@ from jentic_one.shared.auth.permission_catalog import (
     ORG_ADMIN,
 )
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    credential_secret_context,
+)
 from jentic_one.shared.db.ids import generate_ksuid
 from jentic_one.shared.jobs.execution_handler import ExecutionHandler
 from jentic_one.shared.jobs.protocols import (
@@ -224,7 +228,10 @@ async def _seed_bound_credential(
     version: str | None = VERSION,
 ) -> str:
     """Create an active API-key credential and bind AGENT_ID to it."""
-    encrypted = ctx.encryption.encrypt("secret-token-1081")  # pragma: allowlist secret
+    encrypted = await ctx.encryption.encrypt(
+        "secret-token-1081",  # pragma: allowlist secret
+        context=credential_secret_context(cred_id, FIELD_API_KEY),
+    )
     async with ctx.control_db.session() as session:
         cred = Credential(
             id=cred_id,

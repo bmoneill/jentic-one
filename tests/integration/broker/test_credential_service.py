@@ -26,6 +26,12 @@ from jentic_one.control.core.schema.customer_api_keys import CustomerAPIKey
 from jentic_one.control.core.schema.oauth_tokens import OAuthToken
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    credential_secret_context,
+    oauth_access_token_context,
+    oauth_refresh_token_context,
+)
 from jentic_one.shared.db.session import DatabaseSession
 from jentic_one.shared.models import ActorType, StoredCredentialType
 from jentic_one.shared.schemas import APIReference
@@ -61,7 +67,9 @@ async def clean_credentials(control_db: DatabaseSession) -> AsyncGenerator[None,
 async def _seed_api_key(
     ctx: Context, *, cred_id: str, location: str, field_name: str, secret: str
 ) -> None:
-    encrypted = ctx.encryption.encrypt(secret)
+    encrypted = await ctx.encryption.encrypt(
+        secret, context=credential_secret_context(cred_id, FIELD_API_KEY)
+    )
     async with ctx.control_db.session() as session:
         session.add(
             Credential(
@@ -190,8 +198,12 @@ async def test_resolve_oauth2_credential_eager_loads_token(
     Regression test for #549: the default
     lazy='select' strategy would raise MissingGreenlet under AsyncSession.
     """
-    encrypted_access = integration_context.encryption.encrypt("access-tok-123")
-    encrypted_refresh = integration_context.encryption.encrypt("refresh-tok-456")
+    encrypted_access = await integration_context.encryption.encrypt(
+        "access-tok-123", context=oauth_access_token_context("cred_oauth")
+    )
+    encrypted_refresh = await integration_context.encryption.encrypt(
+        "refresh-tok-456", context=oauth_refresh_token_context("cred_oauth")
+    )
     expires = datetime.now(UTC) + timedelta(hours=1)
 
     async with integration_context.control_db.session() as session:

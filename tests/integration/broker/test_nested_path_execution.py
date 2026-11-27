@@ -56,6 +56,10 @@ from jentic_one.registry.web.app import create_app as create_registry_app
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.auth.permission_catalog import DEFAULT_AGENT_PERMISSIONS
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    credential_secret_context,
+)
 from jentic_one.shared.discovery.errors import AmbiguousMatchError, MethodNotAllowedError
 from jentic_one.shared.models import ActorType, ApiRevisionSourceType, StoredCredentialType
 from jentic_one.shared.web.deps import resolve_identity
@@ -323,7 +327,10 @@ async def seeded_env(integration_context: Context) -> AsyncGenerator[dict[str, A
             CustomerAPIKey(
                 id="key_nested701_github",
                 credential_id=_CRED_ID,
-                encrypted_key=integration_context.encryption.encrypt(f"Bearer {_PAT_SECRET}"),
+                encrypted_key=await integration_context.encryption.encrypt(
+                    f"Bearer {_PAT_SECRET}",
+                    context=credential_secret_context(_CRED_ID, FIELD_API_KEY),
+                ),
                 location="header",
                 field_name="Authorization",
             )

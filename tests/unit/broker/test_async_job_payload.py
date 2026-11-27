@@ -5,16 +5,21 @@ this one holds the broker's ``_async_job_payload`` to the payload contract the
 worker reads.
 """
 
+import asyncio
 import hashlib
 from datetime import UTC, datetime
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import jwt
 import pytest
 from starlette.requests import Request
 
-from jentic_one.broker.core.errors import AsyncCookieEncryptionUnavailableError
+from jentic_one.broker.core.errors import (
+    AsyncCookieEncryptionUnavailableError,
+    CredentialEncryptionAccessDeniedError,
+    CredentialEncryptionUnavailableError,
+)
 from jentic_one.broker.core.problem import status_for_broker_error
 from jentic_one.broker.core.proxy_headers import is_replay_header, replay_headers
 from jentic_one.broker.core.schemas import ExecuteRequestContext
@@ -25,6 +30,11 @@ from jentic_one.broker.web.routers.execute import (
     _extract_request_auth_lineage,
 )
 from jentic_one.shared.auth.identity import Identity
+from jentic_one.shared.crypto.errors import (
+    EncryptionAccessDeniedError,
+    EncryptionUnavailableError,
+)
+from jentic_one.shared.deadline import bind_request_deadline
 from jentic_one.shared.jobs.operation_payload import operation_from_job_payload
 from jentic_one.shared.models import ActorType
 from jentic_one.shared.schemas import OperationInfo
@@ -285,7 +295,7 @@ async def test_payload_preserves_real_broker_jwt_lineage_and_expiry() -> None:
     assert payload["auth_expires_at"] == expires_at.isoformat()
 
 
-def test_captured_cookie_fails_closed_without_keyset() -> None:
+async def test_captured_cookie_fails_closed_without_keyset() -> None:
     req = Request(
         {
             "type": "http",
@@ -295,8 +305,77 @@ def test_captured_cookie_fails_closed_without_keyset() -> None:
         }
     )
     ctx = MagicMock()
-    ctx.has_encryption_keyset = False
+    ctx.encryption_enabled = False
 
     with pytest.raises(AsyncCookieEncryptionUnavailableError) as exc:
-        _captured_cookie(req, ctx)
+        await _captured_cookie(req, ctx, execution_id="exec_1")
     assert status_for_broker_error(exc.value) == 503
+
+
+def _cookie_request() -> Request:
+    return Request(
+        {
+            "type": "http",
+            "method": "POST",
+            "path": "/api.example.com/v1/things",
+            "headers": [(b"cookie", b"sid=secret")],
+        }
+    )
+
+
+async def test_captured_cookie_keeps_the_retry_hint_for_a_temporary_outage() -> None:
+    ctx = MagicMock()
+    ctx.encryption_enabled = True
+    ctx.encryption.encrypt = AsyncMock(
+        side_effect=EncryptionUnavailableError("throttled", backend="kms", retry_after_s=2.5)
+    )
+
+    with pytest.raises(CredentialEncryptionUnavailableError) as exc:
+        await _captured_cookie(_cookie_request(), ctx, execution_id="exec_1")
+
+    err = exc.value
+    assert status_for_broker_error(err) == 503
+    assert err.type == "encryption_unavailable"
+    assert err.headers["Retry-After"] == "3"
+    assert err.directive is not None and err.directive.strategy == "wait"
+    assert "secret" not in err.detail
+
+
+async def test_captured_cookie_tells_the_operator_to_restore_denied_access() -> None:
+    ctx = MagicMock()
+    ctx.encryption_enabled = True
+    ctx.encryption.encrypt = AsyncMock(
+        side_effect=EncryptionAccessDeniedError("key disabled", backend="kms", key_id="k1")
+    )
+
+    with pytest.raises(CredentialEncryptionAccessDeniedError) as exc:
+        await _captured_cookie(_cookie_request(), ctx, execution_id="exec_1")
+
+    err = exc.value
+    assert status_for_broker_error(err) == 503
+    assert err.directive is not None and err.directive.strategy == "prompt_human"
+    assert "Retry-After" not in err.headers
+
+
+async def test_captured_cookie_still_refuses_unexpected_encryption_failures() -> None:
+    ctx = MagicMock()
+    ctx.encryption_enabled = True
+    ctx.encryption.encrypt = AsyncMock(side_effect=RuntimeError("boom"))
+
+    with pytest.raises(AsyncCookieEncryptionUnavailableError):
+        await _captured_cookie(_cookie_request(), ctx, execution_id="exec_1")
+
+
+async def test_captured_cookie_gives_up_when_the_request_deadline_expires() -> None:
+    ctx = MagicMock()
+    ctx.encryption_enabled = True
+
+    async def _hang(*_a: Any, **_k: Any) -> str:
+        await asyncio.sleep(5)
+        return "never"
+
+    ctx.encryption.encrypt = _hang
+
+    with bind_request_deadline(0.05), pytest.raises(CredentialEncryptionUnavailableError) as exc:
+        await _captured_cookie(_cookie_request(), ctx, execution_id="exec_1")
+    assert exc.value.type == "encryption_unavailable"

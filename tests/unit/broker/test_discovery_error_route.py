@@ -60,12 +60,15 @@ def _broker(exc: DiscoveryError) -> TestClient:
     install_broker_error_handlers(app)
     app.state.broker_registry_resolver = _RaisingResolver(exc)
 
+    ctx = MagicMock()  # never reached past discovery, which fails first
+    ctx.config.broker.resilience.request_deadline_s = 0.0  # no request deadline to bind
+
     @app.api_route("/{upstream_url:path}", methods=["GET", "POST"])
     async def proxy(upstream_url: str, request: Request) -> Response:
         return await _handle(
             request,
             request.method,
-            MagicMock(),  # ctx: never reached, discovery fails first
+            ctx,
             Identity(sub="agnt_test", permissions=[]),
             MagicMock(),  # credential_deriver
             MagicMock(),  # agent_rule_evaluator

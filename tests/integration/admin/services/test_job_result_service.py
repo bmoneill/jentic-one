@@ -42,6 +42,9 @@ from jentic_one.mcp.tools import CallEnv, handle_get_execution_result, job_poll_
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.config import WorkerConfig
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    held_payload_context,
+)
 from jentic_one.shared.jobs.execution_handler import ExecutionHandler
 from jentic_one.shared.jobs.handlers import JobHandlerRegistry
 from jentic_one.shared.jobs.hold import ENCRYPTED_PAYLOAD_KEY, file_hold
@@ -312,6 +315,9 @@ async def _file_and_approve_hold(
         "api_version": "1",
         "body_b64": base64.b64encode(b'{"amount": 500}').decode(),
     }
+    encrypted = await ctx.encryption.encrypt(
+        json.dumps(raw_payload), context=held_payload_context(execution_id=execution_id)
+    )
     async with ctx.admin_db.transaction() as session:
         hold = await file_hold(
             session,
@@ -328,7 +334,7 @@ async def _file_and_approve_hold(
             body=b'{"amount": 500}',
             trace_id=None,
             execution_id=execution_id,
-            payload={ENCRYPTED_PAYLOAD_KEY: ctx.encryption.encrypt(json.dumps(raw_payload))},
+            payload={ENCRYPTED_PAYLOAD_KEY: encrypted},
             ttl_seconds=3600,
             max_pending=10,
         )

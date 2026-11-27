@@ -575,8 +575,10 @@ async def test_successful_inject_emits_one_audit_event(monkeypatch: pytest.Monke
     _patch_resolved(monkeypatch, _resolved())
     monkeypatch.setattr(
         "jentic_one.broker.services.credentials.orchestrator.inject_auth",
-        lambda resolved, *, ctx, access_token=None: MagicMock(
-            headers={"Authorization": "injected"}, query_params={}, cookies={}
+        AsyncMock(
+            return_value=MagicMock(
+                headers={"Authorization": "injected"}, query_params={}, cookies={}
+            )
         ),
     )
     audit = AsyncMock(return_value="evt_1")
@@ -630,8 +632,10 @@ async def test_inject_with_invalid_trace_id_emits_uncorrelated_audit_event(
     _patch_resolved(monkeypatch, _resolved())
     monkeypatch.setattr(
         "jentic_one.broker.services.credentials.orchestrator.inject_auth",
-        lambda resolved, *, ctx, access_token=None: MagicMock(
-            headers={"Authorization": "injected"}, query_params={}, cookies={}
+        AsyncMock(
+            return_value=MagicMock(
+                headers={"Authorization": "injected"}, query_params={}, cookies={}
+            )
         ),
     )
     audit = AsyncMock(return_value="evt_1")
@@ -824,9 +828,7 @@ async def test_access_event_names_the_credential_owner(
     _patch_resolved(monkeypatch, _owned(_resolved(), owner))
     monkeypatch.setattr(
         "jentic_one.broker.services.credentials.orchestrator.inject_auth",
-        lambda resolved, *, ctx, access_token=None: MagicMock(
-            headers={}, query_params={}, cookies={}
-        ),
+        AsyncMock(return_value=MagicMock(headers={}, query_params={}, cookies={})),
     )
     audit = AsyncMock(return_value="evt_1")
     monkeypatch.setattr(

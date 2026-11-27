@@ -992,7 +992,7 @@ async def _answer_held(
     door = approvals.front_door(env.client_capabilities, env.protocol_version)
     _log_front_door(env, door, envelope)
     if door == approvals.FRONT_DOOR_URL_ELICITATION:
-        state = approvals.seal_request_state(
+        state = await approvals.seal_request_state(
             env.ctx.encryption, envelope=envelope, agent_id=env.identity.sub
         )
         return approvals.url_elicitation_result(
@@ -1009,7 +1009,7 @@ async def _resume_held(env: CallEnv, token: str) -> ToolCallResult:
     The elicitation response the client sends back is consent to open the
     review page only — it never decides the approval.
     """
-    state = approvals.open_request_state(env.ctx.encryption, token, agent_id=env.identity.sub)
+    state = await approvals.open_request_state(env.ctx.encryption, token, agent_id=env.identity.sub)
     if state is None:
         raise invalid_params("Invalid or expired requestState")
     _log_front_door(env, "url_elicitation_retry", {"held_execution_id": state["held_execution_id"]})

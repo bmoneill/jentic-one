@@ -14,13 +14,14 @@ expiry.
 from __future__ import annotations
 
 import asyncio
+from contextlib import AsyncExitStack
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
 import structlog
 
-from jentic_one.broker.core.singleflight import SingleFlight
+from jentic_one.broker.core.singleflight import SingleFlight, SingleFlightWaitTimeoutError
 from jentic_one.broker.services.credentials.errors import (
     RefreshInvalidGrantError,
     RefreshTransientError,
@@ -40,6 +41,21 @@ from jentic_one.control.services.credentials.providers.oauth2 import (
 from jentic_one.control.services.credentials.schemas.provision import OAuthTokenView
 from jentic_one.shared.context import Context
 from jentic_one.shared.crypto import DecryptionError
+from jentic_one.shared.crypto.contexts import (
+    FIELD_ACCESS_TOKEN,
+    FIELD_REFRESH_TOKEN,
+    oauth_access_token_context,
+    oauth_refresh_token_context,
+    oauth_token_scope,
+)
+from jentic_one.shared.crypto.service import backend_name
+from jentic_one.shared.deadline import (
+    RequestDeadlineExpiredError,
+    deadline_expired,
+    ensure_not_expired,
+    remaining_budget,
+    within_encryption_deadline,
+)
 from jentic_one.shared.http.idp_client import IDP_DEADLINE_SECONDS
 from jentic_one.shared.redaction import redact_value
 
@@ -56,6 +72,8 @@ logger = structlog.get_logger(__name__)
 _REFRESH_FLIGHTS: SingleFlight[str] = SingleFlight(max_in_flight=1024)
 
 _DEFAULT_EXPIRY_SKEW_SECONDS = 60
+#: How many times a waiter takes over a refresh whose leader ran out of time.
+_MAX_LEADER_HANDOFFS = 3
 
 
 def _is_fresh(expires_at: datetime | None, skew: timedelta, now: datetime) -> bool:
@@ -83,12 +101,42 @@ class TokenRefresher:
         skew = self._get_expiry_skew(resolved.provider)
 
         if self._is_valid(resolved, skew):
-            return self._ctx.encryption.decrypt(resolved.encrypted_access_token)  # type: ignore[arg-type]
+            return await self._decrypt_access(
+                resolved.credential_id,
+                resolved.encrypted_access_token,  # type: ignore[arg-type]
+            )
 
         flight_key = f"{id(self._ctx)}:{resolved.credential_id}"
-        return await _REFRESH_FLIGHTS.do(
-            flight_key,
-            lambda: self._refresh_with_lock(resolved, skew, caller),
+        # A caller that joins a refresh already in flight waits only as long as its own
+        # request has left, then leaves; the shared refresh is untouched. The caller that
+        # leads it is bounded step by step before the vendor send (reads, write key,
+        # expiry check) and, once the send is out, runs to the end so the rotated grant
+        # is always saved.
+        # A caller whose leader gave up on *its own* deadline (before the vendor send)
+        # still has time of its own, so it takes the refresh over instead of failing.
+        # Bounded: each retry needs a different leader whose deadline also expired.
+        for _ in range(_MAX_LEADER_HANDOFFS):
+            try:
+                return await _REFRESH_FLIGHTS.do(
+                    flight_key,
+                    lambda: self._refresh_with_lock(resolved, skew, caller),
+                    wait_budget=remaining_budget,
+                )
+            except SingleFlightWaitTimeoutError:
+                raise RequestDeadlineExpiredError(
+                    "request deadline expired while waiting for a token refresh"
+                ) from None
+            except RequestDeadlineExpiredError:
+                if deadline_expired():
+                    raise
+        raise RequestDeadlineExpiredError(
+            "request deadline expired while waiting for a token refresh"
+        )
+
+    async def _decrypt_access(self, credential_id: str, blob: str) -> str:
+        return await within_encryption_deadline(
+            self._ctx.encryption.decrypt(blob, context=oauth_access_token_context(credential_id)),
+            backend=backend_name(self._ctx.encryption),
         )
 
     def _get_expiry_skew(self, provider_name: str) -> timedelta:
@@ -162,7 +210,10 @@ class TokenRefresher:
         re-raised afterwards.
         """
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + IDP_DEADLINE_SECONDS
+        # The lock wait never outlasts the request that asked for the token.
+        lock_budget = remaining_budget(IDP_DEADLINE_SECONDS)
+        assert lock_budget is not None
+        deadline = loop.time() + min(IDP_DEADLINE_SECONDS, lock_budget)
         attempt = 0
 
         while True:
@@ -197,7 +248,9 @@ class TokenRefresher:
                     else:
                         now = datetime.now(UTC)
                         if row.encrypted_access_token and _is_fresh(row.expires_at, skew, now):
-                            return self._ctx.encryption.decrypt(row.encrypted_access_token)
+                            return await self._decrypt_access(
+                                resolved.credential_id, row.encrypted_access_token
+                            )
                         # Every encryption draws a fresh nonce, so a ciphertext that
                         # differs from the snapshot's means the row was rewritten after
                         # the snapshot (another holder refreshed, or a reconnect
@@ -210,7 +263,9 @@ class TokenRefresher:
                             and row.encrypted_access_token != resolved.encrypted_access_token
                             and (row.expires_at is None or row.expires_at > now)
                         ):
-                            return self._ctx.encryption.decrypt(row.encrypted_access_token)
+                            return await self._decrypt_access(
+                                resolved.credential_id, row.encrypted_access_token
+                            )
                         if not has_account_ref and (
                             row.encrypted_refresh_token is None
                             or not row.encrypted_refresh_token.strip()
@@ -252,6 +307,10 @@ class TokenRefresher:
 
             remaining = deadline - loop.time()
             if remaining <= 0:
+                if deadline_expired():
+                    raise RequestDeadlineExpiredError(
+                        "request deadline expired while waiting for the refresh lock"
+                    )
                 raise RefreshTransientError(resolved.credential_id, "refresh_lock_timeout")
             delay = min(0.05 * (2**attempt), remaining)
             attempt += 1
@@ -269,17 +328,23 @@ class TokenRefresher:
         *,
         mints_without_row: bool = False,
     ) -> str:
-        fresh_token = await self._do_refresh(resolved, caller)
-
         if mints_without_row:
+            fresh_token = await self._do_refresh(resolved, caller)
             return fresh_token.access_token
 
-        encrypted_access = self._ctx.encryption.encrypt(fresh_token.access_token)
-        encrypted_refresh = (
-            self._ctx.encryption.encrypt(fresh_token.refresh_token)
-            if fresh_token.refresh_token
-            else None
-        )
+        # Acquire the write key before the vendor call: a backend failure here
+        # must not follow an irreversible refresh-token rotation.
+        async with AsyncExitStack() as stack:
+            prepared = await self._prepare_write_within_deadline(
+                stack, oauth_token_scope(resolved.credential_id)
+            )
+            fresh_token = await self._do_refresh(resolved, caller)
+            encrypted_access = prepared.seal(fresh_token.access_token, field=FIELD_ACCESS_TOKEN)
+            encrypted_refresh = (
+                prepared.seal(fresh_token.refresh_token, field=FIELD_REFRESH_TOKEN)
+                if fresh_token.refresh_token
+                else None
+            )
         updated = await OAuthTokenRepository.update_tokens(
             session,
             resolved.credential_id,
@@ -297,7 +362,23 @@ class TokenRefresher:
 
         return fresh_token.access_token
 
+    async def _prepare_write_within_deadline(
+        self, stack: AsyncExitStack[bool | None], scope: Any
+    ) -> Any:
+        """Acquire the write key, but not past the request's deadline.
+
+        Only the key preparation is bounded. Once the vendor has been called the
+        refresh runs to completion and seals locally (sealing does no I/O), so a
+        rotated refresh token is never lost to a timeout.
+        """
+        manager = self._ctx.encryption.prepare_write(scope)
+        return await within_encryption_deadline(
+            stack.enter_async_context(manager), backend=backend_name(self._ctx.encryption)
+        )
+
     async def _do_refresh(self, resolved: ResolvedCredential, caller: str) -> _RefreshOutcome:
+        # Last stop before any provider work: an expired request sends nothing.
+        ensure_not_expired()
         try:
             provider = self._ctx.providers.get(resolved.provider)
         except UnknownProviderError as exc:
@@ -312,7 +393,15 @@ class TokenRefresher:
             ):
                 raise InvalidGrantError("No refresh token available")
             try:
-                plaintext = self._ctx.encryption.decrypt(resolved.encrypted_refresh_token)
+                # Bounded here so every provider's refresh path honours the
+                # request deadline before anything reaches the vendor.
+                plaintext = await within_encryption_deadline(
+                    self._ctx.encryption.decrypt(
+                        resolved.encrypted_refresh_token,
+                        context=oauth_refresh_token_context(resolved.credential_id),
+                    ),
+                    backend=backend_name(self._ctx.encryption),
+                )
             except DecryptionError as exc:
                 raise RefreshUndecryptableError(resolved.credential_id) from exc
             if not plaintext or not plaintext.strip():

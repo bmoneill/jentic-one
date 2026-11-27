@@ -41,6 +41,10 @@ from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.broker.protocols import RuleVerdict
 from jentic_one.shared.config import AppConfig
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    credential_secret_context,
+)
 from jentic_one.shared.db.session import DatabaseSession
 from jentic_one.shared.models import ActorType, StoredCredentialType
 from jentic_one.shared.schemas import APIReference
@@ -89,7 +93,9 @@ async def _seed_api_key(
     state: str = "connected",
     server_variables: dict[str, str] | None = None,
 ) -> None:
-    encrypted = ctx.encryption.encrypt(secret)
+    encrypted = await ctx.encryption.encrypt(
+        secret, context=credential_secret_context(cred_id, FIELD_API_KEY)
+    )
     async with ctx.control_db.session() as session:
         session.add(
             Credential(

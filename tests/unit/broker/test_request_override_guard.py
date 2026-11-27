@@ -26,7 +26,7 @@ from jentic_one.broker.web.routers.execute import _handle
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.broker.protocols import ResolveResult, RuleVerdict
 from jentic_one.shared.config import AppConfig
-from jentic_one.shared.crypto.encryption import EncryptionService
+from jentic_one.shared.crypto import LocalEncryptionService
 from jentic_one.shared.jobs.protocols import InjectedAuth
 from jentic_one.shared.models import ActorType
 from jentic_one.shared.models.credentials import CredentialType, StoredCredentialType
@@ -251,11 +251,11 @@ def _build_route_harness(
     cfg = AppConfig.model_validate(cfg_dict)
     cfg.broker.resilience.upstream.stream_passthrough_enabled = False
     assert cfg.credentials.encryption is not None
-    encryption = EncryptionService(cfg.credentials.encryption)
+    encryption = LocalEncryptionService(cfg.credentials.encryption)
     ctx = SimpleNamespace(
         config=cfg,
         admin_db=SessionScope(object()),
-        has_encryption_keyset=True,
+        encryption_enabled=True,
         encryption=encryption,
     )
 

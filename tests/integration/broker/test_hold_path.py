@@ -7,12 +7,14 @@ cap denial, and the ``execution.approval_requested`` event.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncGenerator
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from starlette.requests import Request
 
 from jentic_one.admin.core.schema.agents import Agent
@@ -23,20 +25,26 @@ from jentic_one.admin.core.schema.users import User
 from jentic_one.admin.repos.agent_repo import AgentRepository
 from jentic_one.admin.repos.held_execution_repo import HeldExecutionRepository
 from jentic_one.admin.repos.user_repo import UserRepository
-from jentic_one.broker.core.errors import ApprovalPendingLimitError
+from jentic_one.broker.core.errors import ApprovalPendingLimitError, BrokerError
 from jentic_one.broker.core.problem import broker_error_problem, status_for_broker_error
 from jentic_one.broker.core.schemas import ExecuteRequestContext
 from jentic_one.broker.services.credentials.resolver import ResolvedCredential
 from jentic_one.broker.services.execution.authorization import ExecutionAuthorization
+from jentic_one.broker.web.routers import execute as execute_router
 from jentic_one.broker.web.routers.execute import _handle_hold
 from jentic_one.shared.auth.identity import Identity
 from jentic_one.shared.broker.protocols import RuleVerdict
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto import EncryptionContext, LocalEncryptionService
+from jentic_one.shared.crypto.contexts import held_payload_context
+from jentic_one.shared.deadline import EncryptionDeadlineError, bind_request_deadline
+from jentic_one.shared.jobs.execution_handler import ExecutionHandler
 from jentic_one.shared.jobs.hold import (
     ENCRYPTED_PAYLOAD_KEY,
     HELD_AGENT_DIRECTIVE,
     HELD_EXPLAINED_AGENT_DIRECTIVE,
 )
+from jentic_one.shared.jobs.protocols import UpstreamExecRequest, UpstreamExecResult
 from jentic_one.shared.models import (
     ActorStatus,
     ActorType,
@@ -46,6 +54,7 @@ from jentic_one.shared.models import (
     StoredCredentialType,
 )
 from jentic_one.shared.models.events import EventType
+from jentic_one.testing.encryption import FakeBackendBehaviour, FakeEncryptionBackend
 
 pytestmark = pytest.mark.integration
 
@@ -181,7 +190,15 @@ async def test_hold_answers_the_held_envelope_and_stores_an_encrypted_payload(
     payload = job.payload or {}
     assert set(payload) == {ENCRYPTED_PAYLOAD_KEY}
     assert b"amount" not in json.dumps(payload).encode()
-    decrypted = json.loads(ctx.encryption.decrypt(payload[ENCRYPTED_PAYLOAD_KEY]))
+    # The payload is bound to the execution id persisted on the job row.
+    assert job.execution_id
+    decrypted = json.loads(
+        await ctx.encryption.decrypt(
+            payload[ENCRYPTED_PAYLOAD_KEY],
+            context=held_payload_context(execution_id=job.execution_id),
+        )
+    )
+    assert decrypted["execution_id"] == job.execution_id
     assert decrypted["method"] == "POST"
     assert decrypted["credential_id"] == "cred_holdpath"
     # Only the replay allow-list is kept: the run sends the body as described
@@ -402,3 +419,133 @@ async def test_a_different_query_or_body_files_a_new_hold(
         other_body["held_execution_id"],
     }
     assert len(ids) == 4
+
+
+class _StopAfterDecryptError(Exception):
+    """Ends the run once the handler has asked for its first decrypt."""
+
+
+class _RecordingDecrypt:
+    def __init__(self) -> None:
+        self.contexts: list[EncryptionContext] = []
+
+    async def decrypt(self, blob: str, *, context: EncryptionContext) -> str:
+        self.contexts.append(context)
+        raise _StopAfterDecryptError
+
+
+class _UnusedExecutor:
+    async def execute(self, request: UpstreamExecRequest, *, db: Any) -> UpstreamExecResult:
+        raise AssertionError("the run stops at the first decrypt")
+
+
+async def test_the_worker_reads_the_held_payload_under_the_job_rows_execution_id(
+    integration_context: Context, clean: None
+) -> None:
+    """The worker binds the held payload to ``jobs.execution_id``, else the job id."""
+    ctx = integration_context
+    envelope = await _hold(ctx)
+    async with ctx.admin_db.session() as session:
+        row = await session.get(HeldExecution, envelope["held_execution_id"])
+        assert row is not None
+        job = await session.get(Job, row.job_id)
+        assert job is not None and job.execution_id
+        job_id, execution_id, payload = job.id, job.execution_id, job.payload
+
+    async def _run() -> EncryptionContext:
+        encryption = _RecordingDecrypt()
+        handler = ExecutionHandler(executor=_UnusedExecutor(), encryption=encryption)  # type: ignore[arg-type]
+        with pytest.raises(_StopAfterDecryptError):
+            await handler.execute(
+                job_id, ctx.admin_db, payload=payload, created_by=_AGENT.sub, actor_type="agent"
+            )
+        assert len(encryption.contexts) == 1
+        return encryption.contexts[0]
+
+    assert await _run() == held_payload_context(execution_id=execution_id)
+
+    async with ctx.admin_db.transaction() as session:
+        await session.execute(update(Job).where(Job.id == job_id).values(execution_id=None))
+
+    assert await _run() == held_payload_context(execution_id=None, job_id=job_id)
+
+
+async def test_a_slow_outer_payload_write_files_no_hold(
+    integration_context: Context, clean: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Encrypting the held payload is bounded; nothing is filed once the caller timed out."""
+    inner = integration_context.encryption
+    assert isinstance(inner, LocalEncryptionService)
+    slow = FakeEncryptionBackend(inner, FakeBackendBehaviour(latency_s=0.05))
+    monkeypatch.setattr(integration_context, "_encryption", slow)
+
+    with bind_request_deadline(0.01), pytest.raises(EncryptionDeadlineError):
+        await _handle_hold(
+            _request(_BODY), _ctx_req(), integration_context, _AGENT, _authorization()
+        )
+
+    async with integration_context.admin_db.session() as session:
+        jobs = (await session.execute(select(Job))).scalars().all()
+        events = (
+            (await session.execute(select(Event).where(Event.type.like("execution.approval_%"))))
+            .scalars()
+            .all()
+        )
+    assert jobs == []
+    assert events == []
+
+
+async def _route(
+    ctx: Context, inner: Any, monkeypatch: pytest.MonkeyPatch, *, deadline_s: float
+) -> BrokerError:
+    """Run the broker's web edge (``_handle``) around *inner* and return its problem."""
+    monkeypatch.setattr(execute_router, "_handle_within_deadline", inner)
+    resilience = ctx.config.broker.resilience.model_copy(update={"request_deadline_s": deadline_s})
+    broker = ctx.config.broker.model_copy(update={"resilience": resilience})
+    monkeypatch.setattr(ctx, "_config", ctx.config.model_copy(update={"broker": broker}))
+    with pytest.raises(BrokerError) as exc_info:
+        await execute_router._handle(
+            _request(_BODY),
+            "POST",
+            ctx,
+            _AGENT,
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            None,
+        )
+    return exc_info.value
+
+
+async def test_route_reports_a_slow_backend_as_encryption_unavailable(
+    integration_context: Context, clean: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    inner = integration_context.encryption
+    assert isinstance(inner, LocalEncryptionService)
+    slow = FakeEncryptionBackend(inner, FakeBackendBehaviour(latency_s=0.2))
+
+    async def handle(request: Request, _method: str, ctx: Context, *_a: Any) -> Any:
+        monkeypatch.setattr(ctx, "_encryption", slow)
+        return await _handle_hold(request, _ctx_req(), ctx, _AGENT, _authorization())
+
+    err = await _route(integration_context, handle, monkeypatch, deadline_s=0.02)
+    problem = broker_error_problem(err)
+    assert status_for_broker_error(err) == 503
+    assert problem["type"].endswith("encryption_unavailable")
+    assert err.directive is not None and err.directive.strategy == "wait"
+    assert err.pre_send is True
+
+
+async def test_route_reports_a_general_pre_dispatch_timeout_as_deadline_exceeded(
+    integration_context: Context, clean: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def handle(_request: Request, _method: str, ctx: Context, *_a: Any) -> Any:
+        await asyncio.sleep(0.05)  # credential resolution, a lock wait, ...
+        execute_router._ensure_predispatch_budget(ctx)
+        raise AssertionError("dispatch must not be reached")
+
+    err = await _route(integration_context, handle, monkeypatch, deadline_s=0.01)
+    assert status_for_broker_error(err) == 504
+    assert err.type == "deadline_exceeded"
+    assert err.directive is not None and err.directive.strategy == "wait"
+    assert err.pre_send is True

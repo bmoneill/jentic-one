@@ -8,6 +8,14 @@ from dataclasses import dataclass
 from jentic_one.broker.services.credentials.resolver import ResolvedCredential
 from jentic_one.shared.aws.sigv4 import SigV4Material
 from jentic_one.shared.context import Context
+from jentic_one.shared.crypto.contexts import (
+    FIELD_API_KEY,
+    FIELD_PASSWORD,
+    FIELD_SECRET_ACCESS_KEY,
+    FIELD_SESSION_TOKEN,
+    FIELD_TOKEN_VALUE,
+    credential_secret_context,
+)
 from jentic_one.shared.models.credentials import CredentialLocation, CredentialType
 
 
@@ -26,7 +34,7 @@ class InjectionResult:
     signing: SigV4Material | None = None
 
 
-def inject_auth(
+async def inject_auth(
     resolved: ResolvedCredential, *, ctx: Context, access_token: str | None = None
 ) -> InjectionResult:
     """Produce auth headers/query from a resolved credential.
@@ -34,18 +42,18 @@ def inject_auth(
     For OAuth2: the caller must supply a pre-validated access_token (from TokenRefresher).
     """
     if resolved.wire_type == CredentialType.BEARER_TOKEN:
-        return _inject_bearer(resolved, ctx)
+        return await _inject_bearer(resolved, ctx)
     if resolved.wire_type == CredentialType.API_KEY:
-        return _inject_api_key(resolved, ctx)
+        return await _inject_api_key(resolved, ctx)
     if resolved.wire_type == CredentialType.BASIC:
-        return _inject_basic(resolved, ctx)
+        return await _inject_basic(resolved, ctx)
     if resolved.wire_type == CredentialType.OAUTH2:
         return _inject_oauth2(access_token)
     if resolved.wire_type == CredentialType.NO_AUTH:
         # A no-auth credential injects nothing — the API needs no secret (#603).
         return InjectionResult(headers={}, query_params={}, cookies={})
     if resolved.wire_type == CredentialType.SIGV4:
-        return _inject_sigv4(resolved, ctx)
+        return await _inject_sigv4(resolved, ctx)
     # An unknown wire type must fail loudly rather than silently inject nothing:
     # a quiet empty injection would send an unauthenticated request and surface
     # as a confusing upstream 401/403 far from the cause. Every known type is
@@ -53,19 +61,25 @@ def inject_auth(
     raise ValueError(f"Unsupported credential wire_type for injection: {resolved.wire_type!r}")
 
 
-def _inject_bearer(resolved: ResolvedCredential, ctx: Context) -> InjectionResult:
+async def _decrypt_secret(resolved: ResolvedCredential, ctx: Context, blob: str, field: str) -> str:
+    return await ctx.encryption.decrypt(
+        blob, context=credential_secret_context(resolved.credential_id, field)
+    )
+
+
+async def _inject_bearer(resolved: ResolvedCredential, ctx: Context) -> InjectionResult:
     if resolved.encrypted_secret is None:
         raise ValueError(f"Bearer credential {resolved.credential_id} missing encrypted_secret")
-    token = ctx.encryption.decrypt(resolved.encrypted_secret)
+    token = await _decrypt_secret(resolved, ctx, resolved.encrypted_secret, FIELD_TOKEN_VALUE)
     return InjectionResult(
         headers={"Authorization": f"Bearer {token}"}, query_params={}, cookies={}
     )
 
 
-def _inject_api_key(resolved: ResolvedCredential, ctx: Context) -> InjectionResult:
+async def _inject_api_key(resolved: ResolvedCredential, ctx: Context) -> InjectionResult:
     if resolved.encrypted_secret is None:
         raise ValueError(f"API key credential {resolved.credential_id} missing encrypted_secret")
-    key = ctx.encryption.decrypt(resolved.encrypted_secret)
+    key = await _decrypt_secret(resolved, ctx, resolved.encrypted_secret, FIELD_API_KEY)
     location = resolved.location or CredentialLocation.HEADER
     field_name = resolved.field_name or "Authorization"
 
@@ -76,12 +90,12 @@ def _inject_api_key(resolved: ResolvedCredential, ctx: Context) -> InjectionResu
     return InjectionResult(headers={field_name: key}, query_params={}, cookies={})
 
 
-def _inject_basic(resolved: ResolvedCredential, ctx: Context) -> InjectionResult:
+async def _inject_basic(resolved: ResolvedCredential, ctx: Context) -> InjectionResult:
     if resolved.username is None:
         raise ValueError(f"Basic credential {resolved.credential_id} missing username")
     if resolved.encrypted_password is None:
         raise ValueError(f"Basic credential {resolved.credential_id} missing encrypted_password")
-    password = ctx.encryption.decrypt(resolved.encrypted_password)
+    password = await _decrypt_secret(resolved, ctx, resolved.encrypted_password, FIELD_PASSWORD)
     encoded = base64.b64encode(f"{resolved.username}:{password}".encode()).decode()
     return InjectionResult(
         headers={"Authorization": f"Basic {encoded}"}, query_params={}, cookies={}
@@ -96,7 +110,7 @@ def _inject_oauth2(access_token: str | None) -> InjectionResult:
     )
 
 
-def _inject_sigv4(resolved: ResolvedCredential, ctx: Context) -> InjectionResult:
+async def _inject_sigv4(resolved: ResolvedCredential, ctx: Context) -> InjectionResult:
     """Decrypt SigV4 material for the runner to sign with (no static header here).
 
     SigV4 signs the final method/URL/body, which are only fixed at the runner, so
@@ -110,13 +124,16 @@ def _inject_sigv4(resolved: ResolvedCredential, ctx: Context) -> InjectionResult
     if not resolved.aws_region or not resolved.aws_service:
         raise ValueError(f"SigV4 credential {resolved.credential_id} missing region/service")
     session_token = (
-        ctx.encryption.decrypt(resolved.encrypted_session_token)
+        await _decrypt_secret(resolved, ctx, resolved.encrypted_session_token, FIELD_SESSION_TOKEN)
         if resolved.encrypted_session_token
         else None
     )
+    secret_access_key = await _decrypt_secret(
+        resolved, ctx, resolved.encrypted_secret_access_key, FIELD_SECRET_ACCESS_KEY
+    )
     material = SigV4Material(
         access_key_id=resolved.access_key_id or "",
-        secret_access_key=ctx.encryption.decrypt(resolved.encrypted_secret_access_key),
+        secret_access_key=secret_access_key,
         region=resolved.aws_region,
         service=resolved.aws_service,
         session_token=session_token,
