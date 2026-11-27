@@ -51,6 +51,11 @@ from jentic_one.control.services.credentials.errors import (
 )
 from jentic_one.control.services.credentials.mapping import to_stored, to_wire
 from jentic_one.control.services.credentials.providers.base import UnknownProviderError
+from jentic_one.control.services.credentials.read_audit import (
+    LIST_TARGET_ID,
+    ReadCredential,
+    record_credential_read,
+)
 from jentic_one.control.services.credentials.schemas.credentials import (
     ApiKeyFull,
     ApiKeyRedacted,
@@ -624,11 +629,27 @@ class CredentialService(_CredentialAccessMixin):
                 session, credential_id, filters=access_filters
             )
             if credential is None:
+                # Name the actor: a 404 here may be a probe for another owner's id.
+                logger.warning(
+                    "credential_read_not_found",
+                    credential_id=credential_id,
+                    actor_id=identity.sub,
+                    actor_type=identity.actor_type.value,
+                )
                 raise CredentialNotFoundError(credential_id)
             names = await OAuthAppRegistrationRepository.get_names_by_ids(
                 session, _registration_ids([credential])
             )
-            return self._to_redacted(credential, registration_names=names)
+            view = self._to_redacted(credential, registration_names=names)
+        await record_credential_read(
+            self._ctx,
+            identity,
+            action=AuditAction.READ,
+            credentials=[ReadCredential(credential.id, credential.created_by)],
+            target_id=credential.id,
+            view="detail",
+        )
+        return view
 
     async def visible_creator_ids(
         self, actor_ids: Sequence[str], *, identity: Identity
@@ -732,6 +753,14 @@ class CredentialService(_CredentialAccessMixin):
                 last = rows[-1]
                 next_cursor = encode_cursor(last.created_at, last.id)
 
+        await record_credential_read(
+            self._ctx,
+            identity,
+            action=AuditAction.LIST,
+            credentials=[ReadCredential(r.id, r.created_by) for r in rows],
+            target_id=LIST_TARGET_ID,
+            view="list",
+        )
         return CredentialPage(data=data, has_more=has_more, next_cursor=next_cursor)
 
     async def _validated_oauth2_url(self, field: str, url: str | None) -> str | None:

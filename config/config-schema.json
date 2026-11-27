@@ -580,6 +580,31 @@
       "title": "ControlSurfaceConfig",
       "type": "object"
     },
+    "CredentialReadAuditConfig": {
+      "description": "Audit-log entries for credential reads (the redacted metadata, never secrets).",
+      "properties": {
+        "dedupe_seconds": {
+          "default": 60.0,
+          "description": "Within this many seconds, an identical read by the same actor (same action and the same credentials returned) is recorded once per process. 0 records every read.",
+          "minimum": 0,
+          "title": "Dedupe Seconds",
+          "type": "number"
+        },
+        "policy": {
+          "default": "cross_owner",
+          "description": "Which credential reads (``GET /credentials``, ``GET /credentials/{id}``, ``GET /credentials/{id}/agents``) write an audit entry. ``cross_owner`` (the default) records a read only when it returns a credential the caller did not create, such as an admin listing every owner's credentials or a shared-with-me read, so a single-user install writes none. ``all`` records every read; ``off`` records none.",
+          "enum": [
+            "off",
+            "cross_owner",
+            "all"
+          ],
+          "title": "Policy",
+          "type": "string"
+        }
+      },
+      "title": "CredentialReadAuditConfig",
+      "type": "object"
+    },
     "CredentialsConfig": {
       "description": "Credentials subsystem configuration.",
       "properties": {
@@ -610,6 +635,9 @@
           "description": "Credential providers keyed by provider id, which credentials name in their ``provider`` field; ``kind`` selects the provider type. The built-in ``static`` and ``device_authorization`` providers are always present, and the connect flow uses the ``direct_oauth2`` entry.",
           "title": "Providers",
           "type": "object"
+        },
+        "read_audit": {
+          "$ref": "#/$defs/CredentialReadAuditConfig"
         }
       },
       "title": "CredentialsConfig",

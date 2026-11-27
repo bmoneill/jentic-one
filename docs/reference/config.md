@@ -371,6 +371,8 @@ Credentials subsystem configuration.
 | `credentials.providers.<name>.connect_base_url` | string | `"https://api.pipedream.com/v1"` | `JENTIC__CREDENTIALS__PROVIDERS__<NAME>__CONNECT_BASE_URL` | Base URL of the Pipedream Connect API. |
 | `credentials.connect.state_secret` | string (secret) | `""` | `JENTIC__CREDENTIALS__CONNECT__STATE_SECRET` | Key that signs the OAuth connect `state` parameter. Required in production (empty or placeholder values are rejected at startup); in development an ephemeral per-process value is generated when empty. |
 | `credentials.connect.state_ttl_seconds` | integer | `600` | `JENTIC__CREDENTIALS__CONNECT__STATE_TTL_SECONDS` | Seconds a signed connect `state` (and its browser-binding cookie) stays valid, i.e. how long a user has to finish the provider's consent screen. |
+| `credentials.read_audit.policy` | "off" \| "cross_owner" \| "all" | `"cross_owner"` | `JENTIC__CREDENTIALS__READ_AUDIT__POLICY` | Which credential reads (`GET /credentials`, `GET /credentials/{id}`, `GET /credentials/{id}/agents`) write an audit entry. `cross_owner` (the default) records a read only when it returns a credential the caller did not create, such as an admin listing every owner's credentials or a shared-with-me read, so a single-user install writes none. `all` records every read; `off` records none. |
+| `credentials.read_audit.dedupe_seconds` | number (>= 0) | `60.0` | `JENTIC__CREDENTIALS__READ_AUDIT__DEDUPE_SECONDS` | Within this many seconds, an identical read by the same actor (same action and the same credentials returned) is recorded once per process. 0 records every read. |
 
 ## `vendors`
 

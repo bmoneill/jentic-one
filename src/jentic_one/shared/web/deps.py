@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any, Protocol
 
+import structlog
 from fastapi import Depends, Request
 from jentic.problem_details import Forbidden, Unauthorized
 
@@ -18,6 +19,8 @@ from jentic_one.shared.events.mcp_session import SESSION_ID_HEADER, schedule_mcp
 from jentic_one.shared.models import ActorType
 from jentic_one.shared.models.actors import Origin
 from jentic_one.shared.web.auth import extract_credential
+
+_logger = structlog.get_logger(__name__)
 
 
 def get_ctx(request: Request) -> Context:
@@ -193,6 +196,14 @@ def enforce_identity_requirements(
         # via an access token (expanded by PermissionService) would pass.
         caller_perms = compute_effective(set(identity.permissions))
         if "org:admin" not in caller_perms and not caller_perms.intersection(required_permissions):
+            # The problem response carries no actor; log who was refused what.
+            _logger.warning(
+                "permission_denied",
+                actor_id=identity.sub,
+                actor_type=identity.actor_type.value,
+                required=list(required_permissions),
+                path=instance,
+            )
             raise Forbidden(
                 detail=f"This action requires one of: {', '.join(required_permissions)}",
                 instance=instance,

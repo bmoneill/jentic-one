@@ -59,7 +59,12 @@ Two append-only records, both in the **admin database** (which is why
   operator aggregates, gated behind `org:admin`); from the CLI via
   `jentic history`.
 - **Audit entries** — one per admin/control-plane mutation: actor (type, id,
-  session), action, target, timestamp, and trace id. Append-only by
+  session), action, target, timestamp, and trace id. Credential reads add
+  `credential.list` and `credential.read` entries per
+  `credentials.read_audit.policy` (default `cross_owner`: only reads that
+  return another owner's credentials), carrying the returned credential ids;
+  an identical read by the same actor within `dedupe_seconds` is recorded
+  once. Append-only by
   construction (the table carries no update column). Over the API via
   `GET /audit` (requires `audit:read`), which filters on `target_type`,
   `target_id`, `actor_id`, `origin`, `since`, and `until` (cursor-paginated

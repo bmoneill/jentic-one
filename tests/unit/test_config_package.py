@@ -34,6 +34,7 @@ _EXPECTED_PUBLIC: frozenset[str] = frozenset(
         "ControlConnectConfig",
         "ControlEgressConfig",
         "ControlSurfaceConfig",
+        "CredentialReadAuditConfig",
         "CredentialsConfig",
         "DEFAULT_LATENCY_BUCKETS_MS",
         "DatabaseConfig",

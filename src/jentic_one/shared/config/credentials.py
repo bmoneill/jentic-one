@@ -148,6 +148,31 @@ class ConnectConfig(BaseModel):
         return self
 
 
+class CredentialReadAuditConfig(BaseModel):
+    """Audit-log entries for credential reads (the redacted metadata, never secrets)."""
+
+    policy: Literal["off", "cross_owner", "all"] = Field(
+        default="cross_owner",
+        description=(
+            "Which credential reads (``GET /credentials``, ``GET /credentials/{id}``, "
+            "``GET /credentials/{id}/agents``) write an audit entry. ``cross_owner`` "
+            "(the default) records a read only when it returns a credential the caller "
+            "did not create, such as an admin listing every owner's credentials or a "
+            "shared-with-me read, so a single-user install writes none. ``all`` "
+            "records every read; ``off`` records none."
+        ),
+    )
+    dedupe_seconds: float = Field(
+        default=60.0,
+        ge=0,
+        description=(
+            "Within this many seconds, an identical read by the same actor (same "
+            "action and the same credentials returned) is recorded once per "
+            "process. 0 records every read."
+        ),
+    )
+
+
 class CredentialsConfig(BaseModel):
     """Credentials subsystem configuration."""
 
@@ -162,6 +187,7 @@ class CredentialsConfig(BaseModel):
         ),
     )
     connect: ConnectConfig = Field(default_factory=ConnectConfig)
+    read_audit: CredentialReadAuditConfig = Field(default_factory=CredentialReadAuditConfig)
 
 
 # ---------------------------------------------------------------------------

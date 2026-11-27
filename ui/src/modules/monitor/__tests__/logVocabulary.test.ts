@@ -26,6 +26,23 @@ describe('audit sentences', () => {
 		);
 	});
 
+	it('describes credential reads', () => {
+		expect(auditSentence({ action: 'credential.read', target_type: 'credential' })).toBe(
+			'Viewed a credential',
+		);
+		expect(auditSentence({ action: 'credential.list', target_type: 'credential' })).toBe(
+			'Listed credentials',
+		);
+		// The audit API returns the bare verb with the target type.
+		expect(auditSentence({ action: 'read', target_type: 'credential' })).toBe(
+			'Viewed a credential',
+		);
+		expect(auditSentence({ action: 'list', target_type: 'credential' })).toBe(
+			'Listed credentials',
+		);
+		expect(auditTone({ action: 'credential.list' })).toBe('neutral');
+	});
+
 	it('degrades unknown actions to readable words', () => {
 		expect(auditSentence({ action: 'widget.re_index', target_type: 'widget' })).toBe(
 			'Re index a widget',

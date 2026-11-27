@@ -134,9 +134,13 @@ warrants:
 7. **Network segmentation** between the agent and Jentic One/DB (host firewall,
    Kubernetes NetworkPolicy, or cloud security groups).
 8. **Keep the audit log.** Every admin/control-plane **mutation** is recorded
-   (create/update/delete, approvals, grants); reads are not, and credential
-   *use* surfaces as execution records and `credential.accessed` events
-   rather than audit rows ([monitoring.md](../operations/monitoring.md)).
+   (create/update/delete, approvals, grants). Credential **reads** are
+   recorded according to `credentials.read_audit.policy`: by default
+   (`cross_owner`) whenever a read returns a credential the caller did not
+   create, such as an admin listing every owner's credentials; set `all` to
+   record every read. Other reads are not audited. Credential *use* surfaces
+   as execution records and `credential.accessed` events rather than audit
+   rows ([monitoring.md](../operations/monitoring.md)).
    Export what you need somewhere durable — there is no built-in exporter or
    retention control yet.
 9. **Rotate the encryption keyset** on a schedule (the keyset supports multiple

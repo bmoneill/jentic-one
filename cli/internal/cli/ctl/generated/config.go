@@ -971,6 +971,78 @@ type ControlSurfaceConfig struct {
 	Egress *ControlEgressConfig `json:"egress,omitempty,omitzero" yaml:"egress,omitempty" mapstructure:"egress,omitempty"`
 }
 
+// Audit-log entries for credential reads (the redacted metadata, never secrets).
+type CredentialReadAuditConfig struct {
+	// Within this many seconds, an identical read by the same actor (same action and
+	// the same credentials returned) is recorded once per process. 0 records every
+	// read.
+	DedupeSeconds float64 `json:"dedupe_seconds" yaml:"dedupe_seconds" mapstructure:"dedupe_seconds"`
+
+	// Which credential reads (``GET /credentials``, ``GET /credentials/{id}``, ``GET
+	// /credentials/{id}/agents``) write an audit entry. ``cross_owner`` (the default)
+	// records a read only when it returns a credential the caller did not create,
+	// such as an admin listing every owner's credentials or a shared-with-me read, so
+	// a single-user install writes none. ``all`` records every read; ``off`` records
+	// none.
+	Policy CredentialReadAuditConfigPolicy `json:"policy" yaml:"policy" mapstructure:"policy"`
+}
+
+type CredentialReadAuditConfigPolicy string
+
+const CredentialReadAuditConfigPolicyAll CredentialReadAuditConfigPolicy = "all"
+const CredentialReadAuditConfigPolicyCrossOwner CredentialReadAuditConfigPolicy = "cross_owner"
+const CredentialReadAuditConfigPolicyOff CredentialReadAuditConfigPolicy = "off"
+
+var enumValues_CredentialReadAuditConfigPolicy = []interface{}{
+	"off",
+	"cross_owner",
+	"all",
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *CredentialReadAuditConfigPolicy) UnmarshalJSON(value []byte) error {
+	var v string
+	if err := json.Unmarshal(value, &v); err != nil {
+		return err
+	}
+	var ok bool
+	for _, expected := range enumValues_CredentialReadAuditConfigPolicy {
+		if reflect.DeepEqual(v, expected) {
+			ok = true
+			break
+		}
+	}
+	if !ok {
+		return fmt.Errorf("invalid value (expected one of %#v): %#v", enumValues_CredentialReadAuditConfigPolicy, v)
+	}
+	*j = CredentialReadAuditConfigPolicy(v)
+	return nil
+}
+
+// UnmarshalJSON implements json.Unmarshaler.
+func (j *CredentialReadAuditConfig) UnmarshalJSON(value []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(value, &raw); err != nil {
+		return err
+	}
+	type Plain CredentialReadAuditConfig
+	var plain Plain
+	if err := json.Unmarshal(value, &plain); err != nil {
+		return err
+	}
+	if v, ok := raw["dedupe_seconds"]; !ok || v == nil {
+		plain.DedupeSeconds = 60.0
+	}
+	if 0 > plain.DedupeSeconds {
+		return fmt.Errorf("field %s: must be >= %v", "dedupe_seconds", 0)
+	}
+	if v, ok := raw["policy"]; !ok || v == nil {
+		plain.Policy = "cross_owner"
+	}
+	*j = CredentialReadAuditConfig(plain)
+	return nil
+}
+
 // Credentials subsystem configuration.
 type CredentialsConfig struct {
 	// Connect corresponds to the JSON schema field "connect".
@@ -984,6 +1056,9 @@ type CredentialsConfig struct {
 	// and ``device_authorization`` providers are always present, and the connect flow
 	// uses the ``direct_oauth2`` entry.
 	Providers CredentialsConfigProviders `json:"providers,omitempty,omitzero" yaml:"providers,omitempty" mapstructure:"providers,omitempty"`
+
+	// ReadAudit corresponds to the JSON schema field "read_audit".
+	ReadAudit *CredentialReadAuditConfig `json:"read_audit,omitempty,omitzero" yaml:"read_audit,omitempty" mapstructure:"read_audit,omitempty"`
 }
 
 // Credential providers keyed by provider id, which credentials name in their

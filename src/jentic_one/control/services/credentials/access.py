@@ -40,6 +40,10 @@ from jentic_one.control.services.credentials.errors import (
     RuleSetNameConflictError,
     RuleSetNotFoundError,
 )
+from jentic_one.control.services.credentials.read_audit import (
+    ReadCredential,
+    record_credential_read,
+)
 from jentic_one.control.services.credentials.schemas.permission_test import PermissionTestResult
 from jentic_one.shared.audit import AuditAction, AuditTargetType, record_audit_best_effort
 from jentic_one.shared.auth.identity import Identity
@@ -121,7 +125,21 @@ class _CredentialAccessMixin:
                 session, credential_id, filters=access_filters
             )
             if credential is None:
+                logger.warning(
+                    "credential_read_not_found",
+                    credential_id=credential_id,
+                    actor_id=identity.sub,
+                    actor_type=identity.actor_type.value,
+                )
                 raise CredentialNotFoundError(credential_id)
+        await record_credential_read(
+            self._ctx,
+            identity,
+            action=AuditAction.READ,
+            credentials=[ReadCredential(credential.id, credential.created_by)],
+            target_id=credential.id,
+            view="agents",
+        )
 
         decoded_cursor = decode_cursor(cursor, id_kind="str") if cursor is not None else None
 

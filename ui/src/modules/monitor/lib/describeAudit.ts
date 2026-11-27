@@ -34,6 +34,7 @@ const VERB: Record<string, string> = {
 	claim: 'Claimed',
 	start: 'Started',
 	cancel: 'Cancelled',
+	read: 'Viewed',
 };
 
 /** Verbs that already say everything — the noun would only repeat itself. */
@@ -73,6 +74,11 @@ const NOUN: Record<string, string> = {
 	oauth_grant: 'an OAuth grant',
 };
 
+/** Plural nouns for actions over many targets ("Listed credentials"). */
+const PLURAL: Record<string, string> = {
+	credential: 'credentials',
+};
+
 /** Actions worth a second look — shown with a warning glyph. */
 const WARN_VERBS = new Set(['delete', 'revoke', 'disable', 'deny', 'cancel', 'api_key_revoked']);
 const FAIL_VERBS = new Set(['login_failed']);
@@ -102,6 +108,10 @@ function splitAction(action: string): { noun: string; verb: string } {
 export function auditSentence(row: Pick<AuditResponse, 'action' | 'target_type'>): string {
 	const { noun: actionNoun, verb } = splitAction(row.action);
 	if (WHOLE[verb]) return WHOLE[verb];
+	if (verb === 'list') {
+		const target = actionNoun || row.target_type;
+		return `Listed ${PLURAL[target] ?? `${humanise(target)}s`}`;
+	}
 	const noun = nounPhrase(actionNoun || row.target_type);
 	const past = VERB[verb] ?? capitalise(`${humanise(verb)}`);
 	return `${past} ${noun}`;

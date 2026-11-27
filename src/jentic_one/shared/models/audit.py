@@ -30,6 +30,8 @@ class AuditAction(StrEnum):
     DEPRECATE = "deprecate"
     REGISTER = "register"
     CLAIM = "claim"
+    READ = "read"
+    LIST = "list"
 
 
 class AuditReason(StrEnum):
