@@ -789,6 +789,7 @@ async def test_spawn_sweep_detaches_and_runs_task() -> None:
 async def test_context_aexit_cancels_and_drains_sweep_tasks_before_db_close() -> None:
     """Context.__aexit__ cancels and drains active catalog sweep tasks before closing DB pools."""
     cfg = MagicMock()
+    cfg.credentials.encryption.backend = "local"
     cfg.credentials.encryption.entries = []
     cfg.catalog.update_check_interval_seconds = 86400
     ctx = Context(cfg, allowed_dbs=set(), refresh_providers_on_boot=False)

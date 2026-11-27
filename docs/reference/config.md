@@ -351,6 +351,7 @@ Credentials subsystem configuration.
 
 | Key | Type | Default | Env var | Description |
 | --- | ---- | ------- | ------- | ----------- |
+| `credentials.encryption.backend` | string | `"local"` | `JENTIC__CREDENTIALS__ENCRYPTION__BACKEND` | Encryption backend for credentials at rest. `local` (the default) uses the keyset below. Other names select a backend registered by an extension package, which reads its settings from its own config section; an unregistered name fails startup. |
 | `credentials.encryption.active_id` | string | `"v1"` | `JENTIC__CREDENTIALS__ENCRYPTION__ACTIVE_ID` | Id of the key that encrypts new values; must match an entry in `entries`. Older keys stay usable for decryption, so rotate by adding a key and switching this id. |
 | `credentials.encryption.entries` | list of EncryptionKey | — | `JENTIC__CREDENTIALS__ENCRYPTION__ENTRIES` | AES-256-GCM keys (32 bytes, base64) for credentials at rest. Every entry can decrypt; ids must be unique. Empty still boots, but credential writes and approval-gated executions then fail. Never remove a key that still has data encrypted under it. |
 | `credentials.encryption.entries.<n>.id` | string | *required* | `JENTIC__CREDENTIALS__ENCRYPTION__ENTRIES__<N>__ID` | Key id (`[a-zA-Z0-9_-]+`), stored as the prefix of every value encrypted with this key so it can be decrypted after rotation. |

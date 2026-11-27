@@ -217,7 +217,10 @@ def sa_retirement_pending() -> bool:
 async def _retire_service_accounts_async() -> int:
     config = load_config()
     async with Context(
-        config, allowed_dbs=set(_SA_RETIREMENT_DBS), refresh_providers_on_boot=False
+        config,
+        allowed_dbs=set(_SA_RETIREMENT_DBS),
+        refresh_providers_on_boot=False,
+        start_encryption=False,
     ) as ctx:
         try:
             outcome = await ServiceAccountMigrationService(ctx).retire()
@@ -322,7 +325,9 @@ def _run_check(order: list[str]) -> int:
 
 async def _pending_upgrade_steps_async() -> list[str]:
     config = load_config()
-    async with Context(config, allowed_dbs={"control"}, refresh_providers_on_boot=False) as ctx:
+    async with Context(
+        config, allowed_dbs={"control"}, refresh_providers_on_boot=False, start_encryption=False
+    ) as ctx:
         return await UpgradeStepService(ctx).pending()
 
 
@@ -339,11 +344,15 @@ def pending_upgrade_steps() -> list[str]:
 
 async def _run_upgrade_steps_async(skip: Collection[str]) -> int:
     config = load_config()
-    # The upgrade steps never resolve a credential provider, and the migrate
-    # Job is not handed the credential keyset, so skip the boot-time provider
-    # refresh rather than have it fail to decrypt stored client secrets.
+    # The upgrade steps never resolve a credential provider or encrypt, and the
+    # migrate Job is not handed the credential keyset, so skip the boot-time
+    # provider refresh and open a DB-only context: an encryption backend's
+    # availability must never block migrations.
     async with Context(
-        config, allowed_dbs=set(_UPGRADE_STEP_DBS), refresh_providers_on_boot=False
+        config,
+        allowed_dbs=set(_UPGRADE_STEP_DBS),
+        refresh_providers_on_boot=False,
+        start_encryption=False,
     ) as ctx:
         outcomes = await UpgradeStepService(ctx).run(skip=skip)
     failed = False

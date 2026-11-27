@@ -42,10 +42,19 @@ from jentic_one.migrations.targets import DB_TARGETS
 from jentic_one.shared.config import AppConfig, EncryptionConfig, EncryptionKey
 from jentic_one.shared.crypto import (
     EncryptedStorageRotator,
-    EncryptionService,
     KeyRetirementError,
     KeyRotationReport,
+    LocalEncryptionService,
+    app_registration_client_secret_context,
     assert_only_active_key,
+    cookie_context,
+    credential_client_secret_context,
+    credential_secret_context,
+    device_code_context,
+    held_payload_context,
+    oauth_access_token_context,
+    oauth_refresh_token_context,
+    provider_config_secret_context,
     rotate_encrypted_storage,
     verify_key_retired,
 )
@@ -330,7 +339,7 @@ async def _clean_rotation_tables(
 async def _seed_all_encrypted_families_on_migrated_dbs(
     control_db: DatabaseSession,
     admin_db: DatabaseSession,
-    v1_svc: EncryptionService,
+    v1_svc: LocalEncryptionService,
 ) -> None:
     async with control_db.transaction() as session:
         c_apikey = Credential(id="cred_apikey", type="api_key", name="k1", api_vendor="acme")
@@ -339,7 +348,10 @@ async def _seed_all_encrypted_families_on_migrated_dbs(
             CustomerAPIKey(
                 id="cak_1",
                 credential_id=c_apikey.id,
-                encrypted_key=v1_svc.encrypt("apikey-secret-1"),
+                encrypted_key=await v1_svc.encrypt(
+                    "apikey-secret-1",
+                    context=credential_secret_context(c_apikey.id, "encrypted_key"),
+                ),
             )
         )
 
@@ -348,7 +360,10 @@ async def _seed_all_encrypted_families_on_migrated_dbs(
         session.add(
             TokenValueCredential(
                 credential_id=c_bearer.id,
-                encrypted_token_value=v1_svc.encrypt("bearer-secret-1"),
+                encrypted_token_value=await v1_svc.encrypt(
+                    "bearer-secret-1",
+                    context=credential_secret_context(c_bearer.id, "encrypted_token_value"),
+                ),
             )
         )
 
@@ -358,7 +373,10 @@ async def _seed_all_encrypted_families_on_migrated_dbs(
             BasicCredential(
                 credential_id=c_basic.id,
                 username="alice",
-                encrypted_password=v1_svc.encrypt("basic-password-1"),
+                encrypted_password=await v1_svc.encrypt(
+                    "basic-password-1",
+                    context=credential_secret_context(c_basic.id, "encrypted_password"),
+                ),
             )
         )
 
@@ -369,8 +387,14 @@ async def _seed_all_encrypted_families_on_migrated_dbs(
                 id="sigv4_1",
                 credential_id=c_sigv4.id,
                 access_key_id="AKIAIO...MPLE",  # pragma: allowlist secret
-                encrypted_secret_access_key=v1_svc.encrypt("sigv4-secret-key"),
-                encrypted_session_token=v1_svc.encrypt("sigv4-session-token"),
+                encrypted_secret_access_key=await v1_svc.encrypt(
+                    "sigv4-secret-key",
+                    context=credential_secret_context(c_sigv4.id, "encrypted_secret_access_key"),
+                ),
+                encrypted_session_token=await v1_svc.encrypt(
+                    "sigv4-session-token",
+                    context=credential_secret_context(c_sigv4.id, "encrypted_session_token"),
+                ),
                 region="us-east-1",
                 service="s3",
                 created_by="usr_rotation_test",
@@ -385,7 +409,9 @@ async def _seed_all_encrypted_families_on_migrated_dbs(
                 client_id="dev-client",
                 token_url="https://example.com/token",
                 authorization_endpoint="https://example.com/device",
-                encrypted_device_code=v1_svc.encrypt("device-code-secret"),
+                encrypted_device_code=await v1_svc.encrypt(
+                    "device-code-secret", context=device_code_context(c_device.id)
+                ),
             )
         )
 
@@ -398,7 +424,10 @@ async def _seed_all_encrypted_families_on_migrated_dbs(
                 id=c_oauth_client.id,
                 token_url="https://example.com/oauth/token",
                 client_id="oauth-client",
-                encrypted_client_secret=v1_svc.encrypt("oauth-client-secret"),
+                encrypted_client_secret=await v1_svc.encrypt(
+                    "oauth-client-secret",
+                    context=credential_client_secret_context(c_oauth_client.id),
+                ),
             )
         )
 
@@ -415,7 +444,9 @@ async def _seed_all_encrypted_families_on_migrated_dbs(
         session.add(
             AuthorizationCodeAppRegistrationDetails(
                 id=reg.id,
-                encrypted_client_secret=v1_svc.encrypt("app-reg-client-secret"),
+                encrypted_client_secret=await v1_svc.encrypt(
+                    "app-reg-client-secret", context=app_registration_client_secret_context(reg.id)
+                ),
                 authorize_url="https://example.com/authorize",
                 token_url="https://example.com/token",
             )
@@ -427,8 +458,12 @@ async def _seed_all_encrypted_families_on_migrated_dbs(
             OAuthToken(
                 id="oat_1",
                 credential_id=c_oauth_tok.id,
-                encrypted_access_token=v1_svc.encrypt("oauth-access-token"),
-                encrypted_refresh_token=v1_svc.encrypt("oauth-refresh-token"),
+                encrypted_access_token=await v1_svc.encrypt(
+                    "oauth-access-token", context=oauth_access_token_context(c_oauth_tok.id)
+                ),
+                encrypted_refresh_token=await v1_svc.encrypt(
+                    "oauth-refresh-token", context=oauth_refresh_token_context(c_oauth_tok.id)
+                ),
             )
         )
 
@@ -439,7 +474,10 @@ async def _seed_all_encrypted_families_on_migrated_dbs(
                 name="auth0-prod",
                 config_json={
                     "issuer": "https://auth.example.com",
-                    "client_secret": v1_svc.encrypt("provider-client-secret"),
+                    "client_secret": await v1_svc.encrypt(
+                        "provider-client-secret",
+                        context=provider_config_secret_context("auth0-prod", "client_secret"),
+                    ),
                 },
             )
         )
@@ -453,7 +491,10 @@ async def _seed_all_encrypted_families_on_migrated_dbs(
                 attempts=0,
                 payload={
                     "operation_id": "op_1",
-                    "inbound_cookie_enc": v1_svc.encrypt("async-job-cookie"),
+                    "inbound_cookie_enc": await v1_svc.encrypt(
+                        "async-job-cookie",
+                        context=cookie_context(execution_id=None, job_id="job_async_1"),
+                    ),
                 },
             )
         )
@@ -461,7 +502,9 @@ async def _seed_all_encrypted_families_on_migrated_dbs(
         held_inner = {
             "method": "POST",
             "path": "/v1/Charges",
-            "inbound_cookie_enc": v1_svc.encrypt("held-nested-cookie"),
+            "inbound_cookie_enc": await v1_svc.encrypt(
+                "held-nested-cookie", context=cookie_context(execution_id=None, job_id="job_held_1")
+            ),
         }
         held_job = Job(
             id="job_held_1",
@@ -469,7 +512,12 @@ async def _seed_all_encrypted_families_on_migrated_dbs(
             status="held",
             actor_type="agent",
             attempts=0,
-            payload={"_enc": v1_svc.encrypt(json.dumps(held_inner))},
+            payload={
+                "_enc": await v1_svc.encrypt(
+                    json.dumps(held_inner),
+                    context=held_payload_context(execution_id=None, job_id="job_held_1"),
+                )
+            },
         )
         session.add(held_job)
         await session.flush()
@@ -496,12 +544,12 @@ async def test_rotation_all_families_on_migrated_schema(
     control_db: DatabaseSession,
     admin_db: DatabaseSession,
 ) -> None:
-    """All 13 encrypted columns across 11 families rotate and retire on the migrated schema."""
+    """All 14 encrypted values across 11 families rotate and retire on the migrated schema."""
     old_key = _make_key("v1")
     new_key = _make_key("v2")
-    v1_svc = EncryptionService(EncryptionConfig(active_id="v1", entries=[old_key]))
-    v2_svc = EncryptionService(EncryptionConfig(active_id="v2", entries=[old_key, new_key]))
-    v2_only_svc = EncryptionService(EncryptionConfig(active_id="v2", entries=[new_key]))
+    v1_svc = LocalEncryptionService(EncryptionConfig(active_id="v1", entries=[old_key]))
+    v2_svc = LocalEncryptionService(EncryptionConfig(active_id="v2", entries=[old_key, new_key]))
+    v2_only_svc = LocalEncryptionService(EncryptionConfig(active_id="v2", entries=[new_key]))
 
     await _clean_rotation_tables(control_db, admin_db)
     try:
@@ -518,13 +566,13 @@ async def test_rotation_all_families_on_migrated_schema(
         assert dry_report.dry_run is True
         assert dry_report.batches_executed == 0
         assert dry_report.scanned_rows == 11
-        assert dry_report.scanned_values == 13
+        assert dry_report.scanned_values == 14
         assert dry_report.rotated_rows == 0
         assert dry_report.rotated_values == 0
-        assert dry_report.needs_rotation_values == 13
-        assert dry_report.remaining_non_active_values == 13
-        assert dry_report.counts_by_key_before == {"v1": 13}
-        assert dry_report.counts_by_key_after == {"v1": 13}
+        assert dry_report.needs_rotation_values == 14
+        assert dry_report.remaining_non_active_values == 14
+        assert dry_report.counts_by_key_before == {"v1": 14}
+        assert dry_report.counts_by_key_after == {"v1": 14}
         assert dry_report.completed is False
 
         for family_or_table, expected_values in (
@@ -541,7 +589,7 @@ async def test_rotation_all_families_on_migrated_schema(
             ("oauth_tokens", 2),
             ("provider_configs", 1),
             ("jobs", 1),
-            ("held_executions", 1),
+            ("held_executions", 2),
         ):
             assert dry_report.by_family[family_or_table].scanned_values == expected_values
             assert dry_report.by_table[family_or_table].needs_rotation_values == expected_values
@@ -553,7 +601,7 @@ async def test_rotation_all_families_on_migrated_schema(
                 control_db=control_db,
                 admin_db=admin_db,
             )
-        assert exc_info.value.remaining_by_key == {"v1": 13}
+        assert exc_info.value.remaining_by_key == {"v1": 14}
         assert len(exc_info.value.remaining_by_family) == 11
 
         with pytest.raises(KeyRetirementError):
@@ -577,7 +625,7 @@ async def test_rotation_all_families_on_migrated_schema(
         assert partial_report.batches_executed == 4
         assert partial_report.rotated_rows == 4
         assert partial_report.rotated_values == 5
-        assert partial_report.remaining_non_active_values == 8
+        assert partial_report.remaining_non_active_values == 9
         assert partial_report.completed is False
 
         with pytest.raises(KeyRetirementError) as partial_exc:
@@ -587,7 +635,7 @@ async def test_rotation_all_families_on_migrated_schema(
                 control_db=control_db,
                 admin_db=admin_db,
             )
-        assert partial_exc.value.remaining_by_key == {"v1": 8}
+        assert partial_exc.value.remaining_by_key == {"v1": 9}
 
         rotator = EncryptedStorageRotator(
             v2_svc,
@@ -598,15 +646,15 @@ async def test_rotation_all_families_on_migrated_schema(
         resumed_report = await rotator.rotate(dry_run=False)
         assert resumed_report.completed is True
         assert resumed_report.rotated_rows == 7
-        assert resumed_report.rotated_values == 8
+        assert resumed_report.rotated_values == 9
         assert resumed_report.remaining_non_active_values == 0
-        assert resumed_report.counts_by_key_before == {"v2": 5, "v1": 8}
-        assert resumed_report.counts_by_key_after == {"v2": 13}
+        assert resumed_report.counts_by_key_before == {"v2": 5, "v1": 9}
+        assert resumed_report.counts_by_key_after == {"v2": 14}
 
         retired_report = await rotator.verify_key_retired("v1")
         assert retired_report.completed is True
         active_only_report = await rotator.assert_only_active_key()
-        assert active_only_report.counts_by_key == {"v2": 13}
+        assert active_only_report.counts_by_key == {"v2": 14}
 
         final_check = await assert_only_active_key(
             v2_only_svc,
@@ -625,9 +673,15 @@ async def test_rotation_all_families_on_migrated_schema(
                 if isinstance(held_payload_raw, str)
                 else held_payload_raw
             )
-            inner_decrypted = json.loads(v2_only_svc.decrypt(held_payload["_enc"]))
-            assert v2_only_svc.decrypt(inner_decrypted["inbound_cookie_enc"]) == (
-                "held-nested-cookie"
+            inner_decrypted = json.loads(
+                await v2_only_svc.decrypt(
+                    held_payload["_enc"],
+                    context=held_payload_context(execution_id=None, job_id="job_held_1"),
+                )
             )
+            assert await v2_only_svc.decrypt(
+                inner_decrypted["inbound_cookie_enc"],
+                context=cookie_context(execution_id=None, job_id="job_held_1"),
+            ) == ("held-nested-cookie")
     finally:
         await _clean_rotation_tables(control_db, admin_db)

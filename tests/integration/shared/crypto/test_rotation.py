@@ -16,7 +16,7 @@ from tests.harness.postgres import superuser_config
 
 from jentic_one.admin.core.schema.jobs import Job
 from jentic_one.shared.config import AppConfig, DatabaseConfig, EncryptionConfig, EncryptionKey
-from jentic_one.shared.crypto import EncryptionService
+from jentic_one.shared.crypto import LocalEncryptionService, cookie_context
 from jentic_one.shared.crypto.rotation import (
     FamilyRotationStats,
     KeyRotationReport,
@@ -135,12 +135,12 @@ async def test_job_payload_compare_and_set_handles_json_and_concurrent_updates(
             await session.execute(delete(Job).where(Job.id == job_id))
 
 
-def _encryption(active_id: str) -> EncryptionService:
+def _encryption(active_id: str) -> LocalEncryptionService:
     entries = [
         EncryptionKey(id="v1", material=SecretStr(base64.b64encode(b"1" * 32).decode())),
         EncryptionKey(id="v2", material=SecretStr(base64.b64encode(b"2" * 32).decode())),
     ]
-    return EncryptionService(
+    return LocalEncryptionService(
         EncryptionConfig(active_id=active_id, entries=entries if active_id == "v2" else entries[:1])
     )
 
@@ -188,7 +188,13 @@ async def test_jobs_rotation_recovers_when_held_table_is_absent(
                 ),
                 {
                     "id": job_id,
-                    "payload": json.dumps({"inbound_cookie_enc": old.encrypt("cookie")}),
+                    "payload": json.dumps(
+                        {
+                            "inbound_cookie_enc": await old.encrypt(
+                                "cookie", context=cookie_context(execution_id=None, job_id=job_id)
+                            )
+                        }
+                    ),
                 },
             )
 
@@ -212,7 +218,13 @@ async def test_jobs_rotation_recovers_when_held_table_is_absent(
         assert report.by_family["jobs"].rotated_values == 1
         assert report.failures == []
         payload = _json_dict(await _raw_job_payload(db, job_id))
-        assert new.decrypt(payload["inbound_cookie_enc"]) == "cookie"
+        assert (
+            await new.decrypt(
+                payload["inbound_cookie_enc"],
+                context=cookie_context(execution_id=None, job_id=job_id),
+            )
+            == "cookie"
+        )
     finally:
         try:
             if postgres:

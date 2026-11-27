@@ -9,7 +9,13 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from jentic_one.shared.config import AppConfig, load_config
-from jentic_one.shared.crypto import EncryptionService
+from jentic_one.shared.crypto import (
+    LOCAL_BACKEND,
+    EncryptionService,
+    build_encryption_service,
+    build_local_encryption_service,
+    provider_config_secret_context,
+)
 from jentic_one.shared.db import DatabaseSession
 from jentic_one.shared.provider_config_store import load_provider_configs
 from jentic_one.shared.release_check import ReleaseChecker
@@ -47,14 +53,22 @@ class Context:
         config: AppConfig | None = None,
         *,
         allowed_dbs: set[str] | None = None,
+        surfaces: frozenset[str] | None = None,
         refresh_providers_on_boot: bool = True,
+        start_encryption: bool = True,
     ) -> None:
         self._config = config if config is not None else load_config()
+        # False opens a DB-only context (migrations, ledger work, DB-only CLI
+        # commands): startup() never builds or checks the encryption backend,
+        # so a remote backend's availability cannot block them, and
+        # ``encryption`` raises if anything reaches for it.
+        self._start_encryption = start_encryption
+        self._surfaces = frozenset(self._config.apps) if surfaces is None else surfaces
         # Whether startup() merges the DB-backed provider configs into the
         # provider registry. Only processes that resolve providers (control,
         # broker) need it; the composition root turns it off for the rest, which
         # may not even hold the keyset those configs' client secrets decrypt with.
-        self._refresh_providers_on_boot = refresh_providers_on_boot
+        self._refresh_providers_on_boot = refresh_providers_on_boot and start_encryption
         self._allowed_dbs: frozenset[str] | None = (
             frozenset(allowed_dbs) if allowed_dbs is not None else None
         )
@@ -94,25 +108,45 @@ class Context:
         return getattr(self, f"_{name}_db") is not None
 
     @property
-    def has_encryption_keyset(self) -> bool:
-        """Whether a credentials encryption keyset is configured.
+    def encryption_enabled(self) -> bool:
+        """Whether this process can encrypt credentials.
 
-        The one predicate for "can this process encrypt": the broker files a
-        held execution only when it is true, and the worker decrypts held
-        payloads with :attr:`encryption` under the same condition.
+        True when a non-``local`` backend is selected or the ``local`` keyset
+        has entries. The one predicate for "can this process encrypt": the
+        broker files a held execution only when it is true, and the worker
+        decrypts held payloads with :attr:`encryption` under the same condition.
         """
-        return bool(self._config.credentials.encryption.entries)
+        cfg = self._config.credentials.encryption
+        return cfg.backend != LOCAL_BACKEND or bool(cfg.entries)
 
     @property
     def encryption(self) -> EncryptionService:
-        """Lazily-constructed encryption service.
+        """The credential encryption backend selected by ``credentials.encryption.backend``.
 
-        When a keyset is configured, :meth:`startup` touches this property so
-        an invalid keyset fails at boot; without one, the ConfigError surfaces
-        here at first credential use.
+        The ``local`` backend is constructed lazily: when a keyset is
+        configured, :meth:`startup` touches this property so an invalid keyset
+        fails at boot; without one, the ConfigError surfaces here at first
+        credential use. Any other backend is built and checked by
+        :meth:`startup`, and accessing it earlier raises.
+
+        Raises:
+            RuntimeError: The context was opened DB-only (``start_encryption=False``),
+                or a non-local backend is accessed before :meth:`startup`.
         """
-        if self._encryption is None:
-            self._encryption = EncryptionService(self._config.credentials.encryption)
+        if self._encryption is not None:
+            return self._encryption
+        if not self._start_encryption:
+            raise RuntimeError(
+                "Encryption is not available in this DB-only context "
+                "(opened with start_encryption=False)"
+            )
+        backend = self._config.credentials.encryption.backend
+        if backend != LOCAL_BACKEND:
+            raise RuntimeError(
+                f"Encryption backend {backend!r} is built by Context.startup(); "
+                "it is not available before startup"
+            )
+        self._encryption = build_local_encryption_service(self._config.credentials.encryption)
         return self._encryption
 
     @property
@@ -158,13 +192,17 @@ class Context:
         async with self.admin_db.session() as session:
             stored = await load_provider_configs(session)
 
-        decrypted = {name: self.decrypt_provider_config(cfg) for name, cfg in stored.items()}
+        decrypted = {
+            name: await self.decrypt_provider_config(name, cfg) for name, cfg in stored.items()
+        }
         self._providers = ProviderRegistry.from_config_and_dynamic(
             self._config.credentials, decrypted
         )
         return self._providers
 
-    def decrypt_provider_config(self, cfg: dict[str, object]) -> dict[str, object]:
+    async def decrypt_provider_config(
+        self, provider: str, cfg: dict[str, object]
+    ) -> dict[str, object]:
         """Return a copy of a stored provider config with secret fields decrypted.
 
         Stored configs persist secret fields (currently ``client_secret``) as
@@ -173,7 +211,9 @@ class Context:
         result = dict(cfg)
         secret = result.get("client_secret")
         if isinstance(secret, str) and secret:
-            result["client_secret"] = self.encryption.decrypt(secret)
+            result["client_secret"] = await self.encryption.decrypt(
+                secret, context=provider_config_secret_context(provider, "client_secret")
+            )
         return result
 
     @property
@@ -333,14 +373,8 @@ class Context:
         return self._state_backend
 
     async def startup(self) -> None:
-        """Connect allowed databases (validating the encryption keyset first)."""
-        # A configured-but-invalid keyset (wrong-length key, duplicate id,
-        # dangling active_id) must fail boot loudly, not surface as scattered
-        # per-credential errors at first use. Checked before the DB connects so
-        # a failure leaves nothing to unwind. A config without a keyset still
-        # boots — credential writes then fail with the lazy ConfigError below.
-        if self._config.credentials.encryption.entries:
-            _ = self.encryption
+        """Start the encryption backend, then connect allowed databases."""
+        await self._start_encryption_backend()
         connected: list[DatabaseSession] = []
         try:
             for name in ("registry", "admin", "control"):
@@ -348,28 +382,62 @@ class Context:
                     db = getattr(self, f"{name}_db")
                     await db.connect()
                     connected.append(db)
-        except Exception:
-            for db in reversed(connected):
-                await db.close()
-            raise
-        # Pick up runtime (DB-backed) provider configs on boot so a fresh
-        # process reflects DB state without a restart. Only meaningful where the
-        # admin DB is available (the registry owner) and the process resolves
-        # providers at all (refresh_providers_on_boot); any other process keeps
-        # the YAML-only registry from the lazy `providers` property.
-        #
-        # Best-effort: a transient admin-DB blip at boot must not crash startup.
-        # On failure we keep the lazy YAML-only registry and let the next admin
-        # write (which calls refresh_providers explicitly) reconcile DB state.
-        if (
-            self._refresh_providers_on_boot
-            and self._is_allowed("admin")
-            and self._admin_db is not None
-        ):
+            # Pick up runtime (DB-backed) provider configs on boot so a fresh
+            # process reflects DB state without a restart. Only meaningful where the
+            # admin DB is available (the registry owner) and the process resolves
+            # providers at all (refresh_providers_on_boot); any other process keeps
+            # the YAML-only registry from the lazy `providers` property.
+            #
+            # Best-effort: a transient admin-DB blip at boot must not crash startup.
+            # On failure we keep the lazy YAML-only registry and let the next admin
+            # write (which calls refresh_providers explicitly) reconcile DB state.
+            if (
+                self._refresh_providers_on_boot
+                and self._is_allowed("admin")
+                and self._admin_db is not None
+            ):
+                try:
+                    await self.refresh_providers()
+                except Exception as exc:
+                    logger.warning("provider_refresh_on_boot_failed", error=str(exc))
+        except BaseException:
             try:
-                await self.refresh_providers()
-            except Exception as exc:
-                logger.warning("provider_refresh_on_boot_failed", error=str(exc))
+                for db in reversed(connected):
+                    await db.close()
+            finally:
+                await self.close_encryption()
+            raise
+
+    async def _start_encryption_backend(self) -> None:
+        """Build and check the encryption backend before any database connects.
+
+        A configured-but-invalid keyset (wrong-length key, duplicate id,
+        dangling active_id) or backend must fail boot loudly, not surface as
+        scattered per-credential errors at first use. Runs before the DBs
+        connect so a failure leaves little to unwind. A ``local`` config without
+        a keyset still boots; credential writes then fail with the lazy
+        ConfigError from :attr:`encryption`. DB-only contexts skip this.
+        """
+        if not self._start_encryption or self._encryption is not None:
+            return
+        cfg = self._config.credentials.encryption
+        if cfg.backend == LOCAL_BACKEND:
+            if cfg.entries:
+                _ = self.encryption
+            return
+        service = await build_encryption_service(self._config, surfaces=self._surfaces)
+        try:
+            await service.check()
+        except BaseException:
+            await _aclose_quietly(service, backend=cfg.backend)
+            raise
+        self._encryption = service
+
+    async def close_encryption(self) -> None:
+        """Release the encryption backend's resources. Idempotent and best-effort."""
+        service, self._encryption = self._encryption, None
+        if service is not None:
+            await _aclose_quietly(service, backend=self._config.credentials.encryption.backend)
 
     def register_background_task(self, task: asyncio.Task[Any]) -> None:
         """Track a detached background task so shutdown drains it before closing DBs."""
@@ -389,13 +457,15 @@ class Context:
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def shutdown(self) -> None:
-        """Drain tracked background tasks and close all connected databases.
+        """Drain tracked background tasks, close the encryption backend and the databases.
 
-        The shared-state backend is closed separately, by
-        :meth:`close_state_backend`, so the app lifespan can close it after
+        The encryption backend closes after background work drains, since that
+        work may still decrypt. The shared-state backend is closed separately,
+        by :meth:`close_state_backend`, so the app lifespan can close it after
         every surface teardown that may still touch it.
         """
         await self.drain_background_tasks()
+        await self.close_encryption()
         for db in (self._control_db, self._admin_db, self._registry_db):
             if db is not None:
                 await db.close()
@@ -435,3 +505,11 @@ class Context:
             await self.shutdown()
         finally:
             await self.close_state_backend()
+
+
+async def _aclose_quietly(service: EncryptionService, *, backend: str) -> None:
+    """Close *service*, logging rather than raising so teardown never masks another error."""
+    try:
+        await service.aclose()
+    except Exception:
+        logger.warning("encryption_backend_close_failed", backend=backend, exc_info=True)

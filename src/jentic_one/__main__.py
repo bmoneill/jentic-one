@@ -115,6 +115,7 @@ def _build_context(config: AppConfig, apps: list[str]) -> Context:
     return Context(
         config,
         allowed_dbs=_expand_allowed_dbs(apps, config),
+        surfaces=frozenset(apps),
         refresh_providers_on_boot=not PROVIDER_REGISTRY_SURFACES.isdisjoint(apps),
     )
 
@@ -356,7 +357,7 @@ async def _create_admin(
         )
         return 2
 
-    async with Context(config, allowed_dbs={"admin"}) as ctx:
+    async with Context(config, allowed_dbs={"admin"}, start_encryption=False) as ctx:
         auth_svc = AuthService(ctx)
         try:
             await auth_svc.bootstrap_admin(
@@ -418,7 +419,7 @@ async def _reset_password(
         )
         return 2
 
-    async with Context(config, allowed_dbs={"admin"}) as ctx:
+    async with Context(config, allowed_dbs={"admin"}, start_encryption=False) as ctx:
         auth_svc = AuthService(ctx)
         try:
             await auth_svc.reset_password(email=email, temporary_password=password)
@@ -465,7 +466,7 @@ async def _flatten_toolkits(
     config = load_config()
     configure_logging(config)
 
-    async with Context(config, allowed_dbs={"admin", "control"}) as ctx:
+    async with Context(config, allowed_dbs={"admin", "control"}, start_encryption=False) as ctx:
         svc = ToolkitFlatteningService(ctx)
         if verify:
             result = await svc.verify(acknowledge=acknowledge)
@@ -525,7 +526,9 @@ async def _rewrite_rule_base_paths(*, diff_only: bool, report_path: str | None) 
     config = load_config()
     configure_logging(config)
 
-    async with Context(config, allowed_dbs={"admin", "control", "registry"}) as ctx:
+    async with Context(
+        config, allowed_dbs={"admin", "control", "registry"}, start_encryption=False
+    ) as ctx:
         svc = RuleBasePathRewriteService(ctx, shapes=RegistryApiPathShapeReader(ctx))
         run = await svc.run(diff_only=diff_only)
     lines = [json.dumps(f.as_dict()) for f in run.findings]
@@ -552,7 +555,7 @@ async def _export_toolkits(*, out_path: str | None, import_path: str | None) -> 
     config = load_config()
     configure_logging(config)
 
-    async with Context(config, allowed_dbs={"admin", "control"}) as ctx:
+    async with Context(config, allowed_dbs={"admin", "control"}, start_encryption=False) as ctx:
         svc = ToolkitExportService(ctx)
         if import_path is not None:
             try:
@@ -604,7 +607,10 @@ async def _repair_credential_identities(
     configure_logging(config)
 
     async with Context(
-        config, allowed_dbs={"admin", "control", "registry"}, refresh_providers_on_boot=False
+        config,
+        allowed_dbs={"admin", "control", "registry"},
+        refresh_providers_on_boot=False,
+        start_encryption=False,
     ) as ctx:
         svc = CredentialIdentityRepairService(ctx)
         if restore_path is not None:

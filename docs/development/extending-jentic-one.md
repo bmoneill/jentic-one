@@ -25,6 +25,7 @@ plug into (the surfaces, the `AppContainer` composition root, the broker's
 | `ACTIVE_REVISION_STATES` / `search_filter_clause` | `jentic_one.registry.repos.search` | The shared pin/active-state/api-filter contract every strategy applies, so composite strategies fuse filter-identical result sets. Use `search_filter_clause(api_filters=..., revision_pins=...)` on a statement that joins `ApiRevision`; hand-written SQL builds its state predicate from `ACTIVE_REVISION_STATES`. |
 | `register_pipeline_stage` | `jentic_one.registry.ingest.pipeline.stage_registry` | Append extra ingest stages that run after the built-in pipeline, inside the same transaction. |
 | `register_state_backend` | `jentic_one.shared.state` | Register a shared-state backend (rate-limit buckets, circuit counters, `Idempotency-Key` records, auth single-use markers) under a name operators select with `state.backend`. The builder receives a `StateBackendBuildContext` (the `state:` section, whose free-form `options` mapping it validates itself, and the process's surface set) and returns a `SharedStateBackend`. The process builds one backend at app assembly, shares it across every surface it serves, and closes it once at shutdown; an unregistered name fails startup listing the registered ones. `memory` (the default) and `redis` (deprecated) are built in. Prove it with `BaseStateBackendContract`. |
+| `register_encryption_backend` | `jentic_one.shared.crypto` | Register a credential encryption backend under a name operators select with `credentials.encryption.backend`. The async builder receives an `EncryptionBuildContext` (the `credentials.encryption` section, the whole `AppConfig` so the backend reads its own `register_config` section, the process's surface set, and `build_local()` for reading values written under the built-in keyset) and returns an `EncryptionService`. `Context.startup()` builds it and awaits `check()`, `Context.shutdown()` awaits `aclose()`, and DB-only contexts (migrations) never build it; an unregistered name fails startup listing the registered ones. `local` (the AES-256-GCM keyset, the default) is built in. Raise `EncryptionUnavailableError` or `EncryptionAccessDeniedError` for backend failures so they surface as 503s, never as `DecryptionError`. Prove it with `BaseEncryptionServiceContract`. |
 | `register_access_filter_provider` | `jentic_one.control.scoping.filters` | OR an extra read-only visibility clause into control-surface read filters (`include_shared=True` call sites only; writes stay owner-scoped). Any table the clause references must be readable by the control DB role. Inspect registered providers via `access_filter_providers()`. |
 | `register_user_deleted_hook` | `jentic_one.admin.services.user_hooks` | Run an async `fn(ctx, user_id, identity)` after a user delete commits, e.g. to clean up the extension's own per-user rows. Hooks run inside the delete request, each bounded by `USER_DELETED_HOOK_TIMEOUT_S` (10 s). Best effort, not durable: a hook that raises or times out is logged, counted (`admin.user_deleted_hook.failures`) and skipped, and nothing retries it automatically. Hooks must be idempotent: deleting an already-deleted user runs them again. |
 | `jentic_one.composition` | `jentic_one.composition` | Public composition and CLI entrypoints (`build_app`, `build_context`, `build_default_container`, `expand_allowed_dbs`, `run_cli`) that assemble an `AppContainer`, `Context`, and `FastAPI` app through the same path `jentic-one serve` uses. |
@@ -148,6 +149,47 @@ mapping, so the config never redacts it: type a credential in it as
 (set it with a `JENTIC__STATE__OPTIONS__*` env var). The backend must implement
 every `SharedStateBackend` method atomically across processes; subclass
 `BaseStateBackendContract` (step 3) to prove it.
+
+A **credential encryption backend** is registered the same way. Every
+encrypted value is written and read through `ctx.encryption` with an
+`EncryptionContext` naming its purpose, owner and field (see
+`jentic_one.shared.crypto.contexts`), so a backend can bind or record what it
+protects. Its settings live in its own config section, never under
+`credentials.encryption`:
+
+```python
+from pydantic import BaseModel
+
+from jentic_one.shared.config import register_config
+from jentic_one.shared.crypto import (
+    EncryptionBuildContext,
+    EncryptionService,
+    register_encryption_backend,
+)
+
+
+class MyVaultConfig(BaseModel):
+    url: str
+
+
+register_config("my_vault", MyVaultConfig)
+
+
+async def build_vault_backend(ctx: EncryptionBuildContext) -> EncryptionService:
+    settings = ctx.app_config.extension("my_vault")
+    # build_local() reads values written by the built-in keyset, for migration.
+    return MyVaultEncryptionService(settings, legacy=ctx.build_local())
+
+
+register_encryption_backend("my-vault", build_vault_backend)
+```
+
+Operators select it with `credentials.encryption.backend: my-vault`. Build the
+backend on the public helpers in `jentic_one.shared.crypto` (`aead` for
+AES-256-GCM, `blob` for the `<key_id>:<format>:<payload>` wire format and the
+envelope layout) rather than importing a crypto library directly. Every blob
+must start with a key id the backend lists in `key_ids`, and every encrypt
+must return a fresh ciphertext.
 
 ### 2. Build an `AppContainer` and compose the app
 
@@ -291,6 +333,31 @@ class TestMyHandlerCompliance(BaseUnregisteredUrlHandlerComplianceTest):
 These `Test*` subclasses are collected by pytest and fail loudly if your
 implementation diverges from the built-in contract — the same guard the OSS
 suite runs against its own defaults ([`tests/unit/testing/test_compliance_oss.py`](../../tests/unit/testing/test_compliance_oss.py)).
+
+An encryption backend has one too: `BaseEncryptionServiceContract` checks the
+method signatures, the blob prefix rules, fresh ciphertext per write, prepared
+writes, MCP state separation and idempotent `aclose`. Set `binds_context = True`
+when the backend rejects a blob opened under a different context, and override
+`legacy_service_factory()` when it must read values written by the built-in
+keyset. `FakeEncryptionBackend` wraps the built-in keyset with injectable
+latency and failures for your own unit and perf tests:
+
+```python
+from jentic_one.shared.crypto import EncryptionService, LocalEncryptionService
+from jentic_one.testing import BaseEncryptionServiceContract
+from jentic_one.testing.encryption import keyset_config
+
+
+class TestMyVaultContract(BaseEncryptionServiceContract):
+    binds_context = True
+    legacy = LocalEncryptionService(keyset_config("v1"))
+
+    async def service_factory(self) -> EncryptionService:
+        return MyVaultEncryptionService(TEST_SETTINGS, legacy=self.legacy)
+
+    def legacy_service_factory(self) -> LocalEncryptionService:
+        return self.legacy
+```
 
 A shared-state backend also has a behavioural contract: claims are won once,
 counters keep their first deadline, buckets refill at their rate, entries

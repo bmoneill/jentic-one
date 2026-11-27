@@ -1,7 +1,37 @@
 """Credential encryption facade — the single sanctioned path for cryptographic operations."""
 
+from jentic_one.shared.crypto.backends import (
+    BuildLocalEncryptionService,
+    EncryptionBackendBuilder,
+    EncryptionBuildContext,
+    build_encryption_service,
+    build_local_encryption_service,
+    register_encryption_backend,
+    registered_encryption_backends,
+)
+from jentic_one.shared.crypto.contexts import (
+    app_registration_client_secret_context,
+    cookie_context,
+    credential_client_secret_context,
+    credential_secret_context,
+    credential_secret_scope,
+    device_code_context,
+    held_payload_context,
+    mcp_request_state_context,
+    oauth_access_token_context,
+    oauth_refresh_token_context,
+    oauth_token_scope,
+    provider_config_secret_context,
+    transient_scope,
+)
 from jentic_one.shared.crypto.digest import hash_secret
-from jentic_one.shared.crypto.encryption import DecryptionError, EncryptionService
+from jentic_one.shared.crypto.encryption import LOCAL_BACKEND, LocalEncryptionService
+from jentic_one.shared.crypto.errors import (
+    DecryptionError,
+    EncryptionAccessDeniedError,
+    EncryptionBackendError,
+    EncryptionUnavailableError,
+)
 from jentic_one.shared.crypto.rotation import (
     EncryptedStorageRotator,
     FamilyRotationStats,
@@ -14,22 +44,58 @@ from jentic_one.shared.crypto.rotation import (
     rotate_encrypted_storage,
     verify_key_retired,
 )
+from jentic_one.shared.crypto.service import (
+    EncryptionContext,
+    EncryptionScope,
+    EncryptionService,
+    PreparedWrite,
+    Purpose,
+)
 from jentic_one.shared.crypto.signing import ec_public_key_to_jwk, load_es256_private_key
 
 __all__ = [
+    "LOCAL_BACKEND",
+    "BuildLocalEncryptionService",
     "DecryptionError",
     "EncryptedStorageRotator",
+    "EncryptionAccessDeniedError",
+    "EncryptionBackendBuilder",
+    "EncryptionBackendError",
+    "EncryptionBuildContext",
+    "EncryptionContext",
+    "EncryptionScope",
     "EncryptionService",
+    "EncryptionUnavailableError",
     "FamilyRotationStats",
     "FamilyStatsMap",
     "KeyRetirementError",
     "KeyRotationReport",
+    "LocalEncryptionService",
+    "PreparedWrite",
+    "Purpose",
     "RotationFailure",
     "RotationReport",
+    "app_registration_client_secret_context",
     "assert_only_active_key",
+    "build_encryption_service",
+    "build_local_encryption_service",
+    "cookie_context",
+    "credential_client_secret_context",
+    "credential_secret_context",
+    "credential_secret_scope",
+    "device_code_context",
     "ec_public_key_to_jwk",
     "hash_secret",
+    "held_payload_context",
     "load_es256_private_key",
+    "mcp_request_state_context",
+    "oauth_access_token_context",
+    "oauth_refresh_token_context",
+    "oauth_token_scope",
+    "provider_config_secret_context",
+    "register_encryption_backend",
+    "registered_encryption_backends",
     "rotate_encrypted_storage",
+    "transient_scope",
     "verify_key_retired",
 ]

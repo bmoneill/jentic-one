@@ -1,4 +1,4 @@
-"""Enforce that no module outside shared/crypto/encryption.py imports cryptography directly."""
+"""Enforce that only the shared/crypto AEAD and signing modules import cryptography directly."""
 
 from __future__ import annotations
 
@@ -9,14 +9,14 @@ import pytest
 
 from tests.arch.conftest import SRC_ROOT, python_files_in
 
-ENCRYPTION_MODULE = SRC_ROOT / "shared" / "crypto" / "encryption.py"
+AEAD_MODULE = SRC_ROOT / "shared" / "crypto" / "aead.py"
 SIGNING_MODULE = SRC_ROOT / "shared" / "crypto" / "signing.py"
 
 FORBIDDEN_IMPORTS = {"cryptography"}
 
 
 def _is_exempt(path: Path) -> bool:
-    return path in (ENCRYPTION_MODULE, SIGNING_MODULE)
+    return path in (AEAD_MODULE, SIGNING_MODULE)
 
 
 def _violating_imports(path: Path) -> list[str]:
@@ -43,7 +43,7 @@ def _violating_imports(path: Path) -> list[str]:
 
 @pytest.mark.arch
 def test_no_direct_cryptography_imports():
-    """No source file outside shared/crypto/encryption.py may import cryptography."""
+    """No source file outside shared/crypto/aead.py and signing.py may import cryptography."""
     violations: list[tuple[str, list[str]]] = []
     for path in python_files_in(SRC_ROOT):
         if _is_exempt(path):

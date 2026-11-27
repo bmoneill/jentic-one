@@ -144,6 +144,29 @@ warrants:
    entry, flip `active_id`, and keep the retired keys, per the
    [key-rotation contract](../operations/upgrades.md#what-an-upgrade-never-does)).
 
+### Choosing an encryption backend
+
+`credentials.encryption.backend` selects how credentials are encrypted at rest.
+The default, `local`, encrypts with the AES-256-GCM keyset under
+`credentials.encryption.entries`: the key lives with the process (file, env or
+config), so anyone holding both the database and that key can decrypt every
+stored credential offline. That is the only backend OSS ships, and every
+recommendation above applies to it.
+
+An extension package can register another backend (for example one that wraps
+per-credential data keys with an external key-management service) and an
+operator selects it by name. Startup calls the selected backend's health check.
+The backend defines which conditions prevent it from serving. DB-only operator
+commands and migrations skip encryption startup.
+
+A transient outage returns `503 encryption_unavailable`. For
+`503 encryption_access_denied`, an operator must restore key access. A
+`424 credential_undecryptable` means the stored value could not be decrypted
+with the configured keys. Keep the local key entries needed for existing
+values and retained backups. The current rotation inventory needs additional
+checks before it can verify retirement across multiple write targets and
+nested encrypted cookies.
+
 ### Feeding the encryption key with `material_file` — two worked patterns
 
 systemd (`LoadCredential` places the secret on a private tmpfs, readable only

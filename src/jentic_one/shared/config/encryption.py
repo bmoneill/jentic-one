@@ -223,6 +223,16 @@ class EncryptionKey(BaseModel):
 class EncryptionConfig(BaseModel):
     """Envelope-encryption keyset configuration."""
 
+    backend: str = Field(
+        default="local",
+        pattern=r"^[a-z0-9][a-z0-9_-]*$",
+        description=(
+            "Encryption backend for credentials at rest. ``local`` (the default) "
+            "uses the keyset below. Other names select a backend registered by an "
+            "extension package, which reads its settings from its own config "
+            "section; an unregistered name fails startup."
+        ),
+    )
     active_id: str = Field(
         default="v1",
         description=(

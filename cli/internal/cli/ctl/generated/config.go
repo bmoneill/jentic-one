@@ -1363,6 +1363,12 @@ type EncryptionConfig struct {
 	// this id.
 	ActiveId string `json:"active_id" yaml:"active_id" mapstructure:"active_id"`
 
+	// Encryption backend for credentials at rest. ``local`` (the default) uses the
+	// keyset below. Other names select a backend registered by an extension package,
+	// which reads its settings from its own config section; an unregistered name
+	// fails startup.
+	Backend string `json:"backend" yaml:"backend" mapstructure:"backend"`
+
 	// AES-256-GCM keys (32 bytes, base64) for credentials at rest. Every entry can
 	// decrypt; ids must be unique. Empty still boots, but credential writes and
 	// approval-gated executions then fail. Never remove a key that still has data
@@ -1383,6 +1389,12 @@ func (j *EncryptionConfig) UnmarshalJSON(value []byte) error {
 	}
 	if v, ok := raw["active_id"]; !ok || v == nil {
 		plain.ActiveId = "v1"
+	}
+	if v, ok := raw["backend"]; !ok || v == nil {
+		plain.Backend = "local"
+	}
+	if matched, _ := regexp.MatchString(`^[a-z0-9][a-z0-9_-]*$`, string(plain.Backend)); !matched {
+		return fmt.Errorf("field %s pattern match: must match %s", "Backend", `^[a-z0-9][a-z0-9_-]*$`)
 	}
 	*j = EncryptionConfig(plain)
 	return nil

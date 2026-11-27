@@ -216,3 +216,14 @@ def redact_event(
     through the formatter, so this is the single app-wide redaction chokepoint.
     """
     return {key: _redact_member(key, value) for key, value in event_dict.items()}
+
+
+def secret_preview(cleartext: str) -> str:
+    """Return a redacted preview of a secret: an ellipsis plus its last 3 characters.
+
+    Secrets of 3 characters or fewer are fully masked. Stored next to a
+    credential so a user can recognise it without revealing it.
+    """
+    if len(cleartext) <= 3:
+        return "…***"
+    return "…" + cleartext[-3:]

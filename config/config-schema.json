@@ -859,6 +859,13 @@
           "title": "Active Id",
           "type": "string"
         },
+        "backend": {
+          "default": "local",
+          "description": "Encryption backend for credentials at rest. ``local`` (the default) uses the keyset below. Other names select a backend registered by an extension package, which reads its settings from its own config section; an unregistered name fails startup.",
+          "pattern": "^[a-z0-9][a-z0-9_-]*$",
+          "title": "Backend",
+          "type": "string"
+        },
         "entries": {
           "description": "AES-256-GCM keys (32 bytes, base64) for credentials at rest. Every entry can decrypt; ids must be unique. Empty still boots, but credential writes and approval-gated executions then fail. Never remove a key that still has data encrypted under it.",
           "items": {

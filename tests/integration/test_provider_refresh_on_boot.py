@@ -90,3 +90,17 @@ async def test_provider_surfaces_still_refresh_on_boot(
         await ctx.shutdown()
     events = await _boot_logs(_without_keyset(integration_config), apps)
     assert "provider_refresh_on_boot_failed" in events
+
+
+@pytest.mark.asyncio
+async def test_db_only_context_skips_the_provider_refresh(
+    integration_config: AppConfig, _encrypted_provider_config: None
+) -> None:
+    """A DB-only context (admin CLI commands) cannot decrypt, so it never refreshes providers."""
+    with structlog.testing.capture_logs() as logs:
+        async with Context(
+            integration_config, allowed_dbs={"admin", "control"}, start_encryption=False
+        ):
+            pass
+
+    assert not [e for e in logs if e.get("event") == "provider_refresh_on_boot_failed"]
